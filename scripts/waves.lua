@@ -1,13 +1,13 @@
 local WaveManager = {}
-local Enemy = require("scripts/enemy")
+local Enemy = require("scripts/enemies/zombie")
 local Tilemap = require("scripts/tilemap")
 
 require("scripts/utils")
 
 function WaveManager:load()
-    math.randomseed(os.time())
+    
     self.wave = 1
-    self.enemiesPerWave = 10
+    self.enemiesPerWave = 4
     self.spawnInterval = 1
     self.spawnTimer = 0
     self.enemiesSpawned = 0

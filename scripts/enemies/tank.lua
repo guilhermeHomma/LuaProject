@@ -13,7 +13,7 @@ bulletSound:setLooping(true)
 function Player:load(camera)
     self.x = 0
     self.y = 20
-    self.speed = 45
+    self.speed = 40
     self.currentVelocity = 10
     self.size = 40
     self.angle = 0
@@ -47,7 +47,7 @@ function Player:update(dt)
     end
 
     local moveX, moveY = 0, 0
-    local acceleration = 35
+    local acceleration = 30
     local deceleration = 40
     local moving = false
 
@@ -95,7 +95,7 @@ function Player:update(dt)
 
     if collidedX then moveX = 0 end
     if collidedY then moveY = 0 end
-    if collidedX or collidedY then self.currentVelocity = self.currentVelocity * 0.96 end
+    if collidedX or collidedY then self.currentVelocity = self.currentVelocity * 0.9 end
     self.x = self.x + moveX
     self.y = self.y + moveY
 
@@ -300,7 +300,7 @@ function Player:draw()
           
     end
 
-    if DEBUG or true then
+    if DEBUG then
         love.graphics.rectangle("line", self.x - 11, self.y - 11, 22, 22)
     end
     

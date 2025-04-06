@@ -5,6 +5,7 @@ Enemy.states = { idle = 1, walk = 2, damage = 3 }
 local Particle = require("scripts/particle")
 local Tilemap = require("scripts/tilemap")
 
+
 require("scripts/utils")
 
 function Enemy:new(x, y)
@@ -21,13 +22,9 @@ function Enemy:new(x, y)
     enemy.kbdy = 0
 
     enemy.isAlive = true
-    if math.random(1,5) % 4 == 0 then
 
-        enemy.spriteSheet = love.graphics.newImage("assets/sprites/enemy/enemy2.png")
-    else
-        enemy.spriteSheet = love.graphics.newImage("assets/sprites/enemy/enemy.png")
+    enemy.spriteSheet = love.graphics.newImage("assets/sprites/enemy/enemy.png")
         
-    end
     enemy.spriteSheet:setFilter("nearest", "nearest")
 
     enemy.spriteOutline = love.graphics.newImage("assets/sprites/enemy/enemyOutline.png")
@@ -40,9 +37,14 @@ function Enemy:new(x, y)
     enemy.frameHeight = 32
     enemy.frames = {}
 
+    self.pathUpdateInterval = 120
+    self.pathUpdateCounter = love.math.random(0, self.pathUpdateInterval)
+
     local angle = math.random() * (2 * math.pi)
     enemy.randomDirX = math.cos(angle)
-    enemy.randomDirY = math.sin(angle) 
+    enemy.randomDirY = math.sin(angle)
+
+    self.path = nil
 
     local sheetWidth = enemy.spriteSheet:getWidth()
     local sheetHeight = enemy.spriteSheet:getHeight()
@@ -71,54 +73,59 @@ function Enemy:new(x, y)
     return enemy
 end
 
+local function sign(n)
+    if n > 0 then return 1
+    elseif n < 0 then return -1
+    else return 0 end
+end
+
 function Enemy:update(dt)
+    self.pathUpdateCounter = self.pathUpdateCounter + 1
 
     local velocityX = 0
     local velocityY = 0
-    
-    if true then
-        local collidedX, collidedY = self:isColliding(self.randomDirX, self.randomDirY)
 
-        if collidedX then 
-            self.randomDirX = -self.randomDirX
+    if self.pathUpdateCounter >= self.pathUpdateInterval or self.path == nil or #self.path < 2 then
+        self.pathUpdateCounter = 0
 
-        end
-        if collidedY then 
-            self.randomDirY = -self.randomDirY
-        end
-
-        if collidedX or collidedY then
-            self.randomDirX = self.randomDirX + (math.random() - 0.5) * 0.1
-            self.randomDirY = self.randomDirY + (math.random() - 0.5) * 0.1
-        end
-
-        velocityX = self.randomDirX
-        velocityY = self.randomDirY
-
-    elseif self:playerDistance() > 10 then
-        if Player.x > self.x+1 then
-            velocityX = 1
-        end
-
-        if Player.x < self.x-1 then
-            velocityX = -1
-        end
-
-        if Player.y > self.y+1 then
-            velocityY = 1
-        end
-        if Player.y < self.y-1 then
-            velocityY = -1
-        end
+        local posMapX, posMapY = Tilemap:worldToMap(self.x, self.y)
+        local playerMapX, playerMapY = Tilemap:worldToMap(Player.x, Player.y)
+        self.path = Tilemap.finder:getPath(posMapX, posMapY, playerMapX, playerMapY)
+ 
     end
 
+    local nextTileX, nextTileY = self.x, self.y
+    
+    if self.path and #self.path > 1 then
+
+        local nextNode = self.path[2] -- porque path[1] é o tile atual
+
+        nextTileX, nextTileY = Tilemap:mapToWorld(nextNode.x, nextNode.y)
+
+        nextTileY = nextTileY + 8
+
+        local distance = math.sqrt((self.x - nextTileX)^2 + (self.y - nextTileY)^2)
+        if distance < 4 then
+            table.remove(self.path, 1)
+
+        end
+        if math.abs(nextTileX - self.x) < 2 then self.x = nextTileX end
+        
+        local moveX = sign(nextTileX - self.x)
+        local moveY = sign(nextTileY - self.y)
+
+        local collidedX, collidedY = self:isColliding(moveX,moveY)
+        collidedX, collidedY = false, false
+        if not collidedX then velocityX = moveX end
+        if not collidedY then velocityY = moveY end
+        
+    end 
 
     local length = math.sqrt(velocityX * velocityX + velocityY * velocityY)
     if length > 0 then
         velocityX = velocityX / length
         velocityY = velocityY / length
     end
-
 
     local animationDuration = self.idleDuration
     if self.state == Enemy.states.walk then 
@@ -132,6 +139,11 @@ function Enemy:update(dt)
         if self.state == Enemy.states.idle then
             self.walkDuration = math.random(4, 6)
             self.state = Enemy.states.walk
+            if not Player.isAlive then
+                self.state = Enemy.states.idle
+                self.stateTimer = 0
+                local negative = 0
+            end
         elseif Player.isAlive then
             self.idleDuration = math.random(0.7, 1.3)
             self.state = Enemy.states.idle
@@ -170,12 +182,9 @@ function Enemy:update(dt)
         
         local negative = 1
         if not Player.isAlive then
-            negative = -1
-            if self.x > Player.x then
-                self.flipH = true
-            else 
-                self.flipH = false
-            end
+            self.state = Enemy.states.idle
+            self.stateTimer = 0
+            local negative = 0
         end
 
         self.x = self.x + velocityX*negative * self.speed * dt
@@ -292,7 +301,7 @@ function Enemy:draw()
         love.graphics.draw(self.spriteSheet, self.frames[self.currentFrame], self.x, self.y, 0, scaleX, 0.7, self.frameWidth / 2, self.frameHeight)
     end
 
-    if showCollision then 
+    if DEBUG then 
         love.graphics.rectangle("line", self.x - 3.5, self.y - 3.5, 7, 7)
     end
 end

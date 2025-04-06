@@ -13,11 +13,14 @@ local Tilemap = require("scripts/tilemap")
 drawQueue = {}
 enemies = {}
 particles = {}
-showCollision = false
+
+DEBUG = false
+FPS = true
 
 local music 
 
 function love.load()
+    math.randomseed(os.time())
     WaveManager:load()
     Player:load(camera)
     Ground:load()
@@ -98,5 +101,9 @@ function love.draw()
     camera:detach()
     Player:drawLife()
     WaveManager:draw()
+
+    if FPS then 
+        love.graphics.print("FPS: " .. love.timer.getFPS(), 10, 10)
+    end
 end
 

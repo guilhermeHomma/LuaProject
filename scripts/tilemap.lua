@@ -9,7 +9,8 @@ local sheetWidth, sheetHeight = tilesetImage:getDimensions()
 local tilemapWorldX = -40 * tileSize
 local tilemapWorldY = -40 * tileSize
 
-
+local Grid = require("jumper.grid")
+local Pathfinder = require("jumper.pathfinder")
 
 function loadTilemapFromImage()
     local imageData = love.image.newImageData("assets/sprites/map.png")
@@ -20,10 +21,12 @@ function loadTilemapFromImage()
         tilemap[y] = {}
         for x = 1, width do
             local r, g, b, a = imageData:getPixel(x - 1, y - 1) -- Pega a cor do pixel
-
+            print(r)
             -- Se for branco (255, 255, 255) -> tile sólido (1), senão vazio (0)
             if r == 1 and g == 1 and b == 1 then  
                 tilemap[y][x] = 1
+            elseif g == 0 and r == 1 then
+                tilemap[y][x] = 2 
             else
                 tilemap[y][x] = 0
             end
@@ -53,9 +56,18 @@ end
 function Tile:draw()
     
     --love.graphics.rectangle("fill", self.xWorld, self.yWorld, tileSize, tileSize)
-    love.graphics.draw(tilesetImage, self.quad, self.xWorld, self.yWorld, 0, 1, 1, tileSize/2, tileSize)
+    if self.quadIndex == 14 then
+        love.graphics.draw(tilesetImage, self.quad, self.xWorld, self.yWorld, 0, 1, 1, tileSize/2, tileSize*2)
+
+    elseif self.quadIndex == 1 or self.quadIndex == 2 or self.quadIndex == 3  then
+        love.graphics.draw(tilesetImage, self.quad, self.xWorld, self.yWorld, 0, 1, 1, tileSize/2, tileSize+10)
+
+    else
+        love.graphics.draw(tilesetImage, self.quad, self.xWorld, self.yWorld, 0, 1, 1, tileSize/2, tileSize)
+        
+    end
     
-    if self.quadIndex ~= 5 and showCollision then
+    if self.quadIndex ~= 5 and DEBUG then
         love.graphics.rectangle("line", self.xWorld-8, self.yWorld-16, 16, 16)
     end
 end
@@ -77,22 +89,30 @@ function Tilemap:getTilemap()
 end
 
 function Tilemap:mapToWorld(x,y)
-    --if y > #tilemap or y < 1 then return 0, 0 end
-    --if x > #tilemap[y] or x < 1 then return 0, 0 end
 
     local xWorld = tilemapWorldX + (x - 1) * tileSize
     local yWorld = tilemapWorldY + (y - 1) * tileSize
     return xWorld, yWorld- tileSize/2
 end
 
+function Tilemap:worldToMap(x, y)
+    local xMap = math.floor((x - tilemapWorldX) / tileSize + 0.5) + 1
+    local yMap = math.floor((y - tilemapWorldY) / tileSize + 0.5) + 1
+    return xMap, yMap
+end
+
 function Tilemap:createTileSet()
     for x = 1, 3 do
         for y = 1, 3 do
-            local tileX = (x - 1) * 16
-            local tileY = (y - 1) * 16
+            local tileX = (x - 1) * tileSize 
+            local tileY = (y - 1) * tileSize + 16
 
             local index = (y - 1) * 3 + x
-            tileSet[index] = love.graphics.newQuad(tileX, tileY, tileSize, tileSize, sheetWidth, sheetHeight)
+            if y == 1 then 
+                tileSet[index] = love.graphics.newQuad(tileX, tileY-10, tileSize, tileSize+10, sheetWidth, sheetHeight)
+            else
+                tileSet[index] = love.graphics.newQuad(tileX, tileY, tileSize, tileSize, sheetWidth, sheetHeight)
+            end
         end
     end
 
@@ -100,6 +120,8 @@ function Tilemap:createTileSet()
     tileSet[11] = love.graphics.newQuad(64 + 16, 0, tileSize, tileSize, sheetWidth, sheetHeight)
     tileSet[12] = love.graphics.newQuad(48 + 16, 16, tileSize, tileSize, sheetWidth, sheetHeight)
     tileSet[13] = love.graphics.newQuad(64 + 16, 16, tileSize, tileSize, sheetWidth, sheetHeight)
+
+    tileSet[14] = love.graphics.newQuad(16, 64, tileSize, tileSize*2, sheetWidth, sheetHeight)
 
 
 end
@@ -140,13 +162,21 @@ end
 
 function Tilemap:load()
     self:createTileSet()
+    self.sharedGrid = Grid(tilemap)
+    self.finder = Pathfinder(self.sharedGrid, 'JPS', 0)
+
     self.tiles = {}
     for y = 1, #tilemap do
         for x = 1, #tilemap[y] do
             local tile = tilemap[y][x]
             if tileSet[tile] then
-                
-                local t = Tile:new(x, y, self:autoTile(x, y))
+                local index = 5
+                if tile == 1 then 
+                    index = self:autoTile(x, y)
+                elseif tile == 2 then
+                    index = 14
+                end
+                local t = Tile:new(x, y, index)
                 table.insert(self.tiles, t)
                 
             end
