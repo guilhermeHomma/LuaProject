@@ -1,4 +1,4 @@
-Player = require "scripts/player"
+Player = require "scripts/player/player"
 local stretchFactor = 0.65
 
 local Camera = require("scripts/camera")
@@ -15,7 +15,7 @@ enemies = {}
 particles = {}
 
 DEBUG = false
-FPS = true
+FPS = false
 
 local music 
 
@@ -42,7 +42,7 @@ function love.update(dt)
     for _, enemy in ipairs(enemies) do
         if enemy.isAlive then
             enemy:update(dt) 
-            addToDrawQueue(enemy.y, enemy)
+            addToDrawQueue(enemy.y -1 + enemy.drawPriority, enemy)
         else
             table.remove(enemies, _)
 
@@ -102,7 +102,7 @@ function love.draw()
     Player:drawLife()
     WaveManager:draw()
 
-    if FPS then 
+    if FPS or DEBUG then 
         love.graphics.print("FPS: " .. love.timer.getFPS(), 10, 10)
     end
 end

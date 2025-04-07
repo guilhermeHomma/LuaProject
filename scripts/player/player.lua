@@ -118,7 +118,7 @@ function Player:update(dt)
         if distance < 15 then
             enemy.life = 0
             enemy:death()
-            camera:shake(5, 0.95)
+            camera:shake(2, 0.95)
             self.life = self.life - 1
             local bulletSound = love.audio.newSource("assets/sfx/damage.wav", "static")
 
@@ -129,6 +129,11 @@ function Player:update(dt)
     end
 
     Player:death()
+end
+
+
+function Player:getCollisionBox()
+    return { x = self.x - 22/2, y = self.y - 22/2, width = 22, height = 22 }
 end
 
 function Player:isColliding(moveX, moveY, size)
@@ -144,13 +149,15 @@ function Player:isColliding(moveX, moveY, size)
     local collidedY = false
 
     for _, tile in ipairs(Tilemap.tiles) do
-        local tileBox = { x = tile.xWorld - tile.size/2, y = tile.yWorld - tile.size, width = tile.size, height = tile.size }
+        if tile.quadIndex ~= 5 and tile.quadIndex ~= 15 then
+            local tileBox = { x = tile.xWorld - tile.size/2, y = tile.yWorld - tile.size, width = tile.size, height = tile.size }
 
-        if checkCollision(playerBoxX, tileBox) then
-            collidedX = true
-        end
-        if checkCollision(playerBoxY, tileBox) then
-            collidedY = true
+            if checkCollision(playerBoxX, tileBox) then
+                collidedX = true
+            end
+            if checkCollision(playerBoxY, tileBox) then
+                collidedY = true
+            end
         end
     end
 
@@ -196,7 +203,7 @@ function Player:shoot()
     local offsetY = math.sin(angle) * 5
 
     local bullet = Bullet:new(self.x + offsetX, self.y + offsetY, angle, 15,self.bulletSpeed)
-    camera:shake(3, 0.88)
+    camera:shake(1, 0.88)
     table.insert(self.bullets, bullet)
 end
 
@@ -300,7 +307,7 @@ function Player:draw()
           
     end
 
-    if DEBUG or true then
+    if DEBUG then
         love.graphics.rectangle("line", self.x - 11, self.y - 11, 22, 22)
     end
     

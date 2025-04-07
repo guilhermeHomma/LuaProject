@@ -14,10 +14,11 @@ end
 function Camera:update(targetX, targetY)
     self.x = self.x + (targetX - self.x) * self.smoothSpeed
     self.y = self.y + (targetY -40- self.y) * self.smoothSpeed
-
     if self.shakeIntensity > 0 then
-        self.x = self.x + (math.random() * 2 - 1) * self.shakeIntensity
-        self.y = self.y + (math.random() * 2 - 1) * self.shakeIntensity
+        local dx = love.math.randomNormal(-1, 1) * self.shakeIntensity
+        local dy = love.math.randomNormal(-1, 1) * self.shakeIntensity
+        self.x = self.x + dx
+        self.y = self.y + dy
         self.shakeIntensity = self.shakeIntensity * self.shakeDecay
     end
 

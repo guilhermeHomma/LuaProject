@@ -1,7 +1,10 @@
 local Bullet = {}
 Bullet.__index = Bullet
 
+require("scripts/utils")
+
 local Particle = require("scripts/particle")
+local Tilemap = require("scripts/tilemap")
 
 function Bullet:new(x, y, angle, height, speed)
     local angle = angle
@@ -31,7 +34,27 @@ function Bullet:checkCollisionWithEnemy(enemy)
 end
 
 
+function Bullet:isColliding(size)
+    if not size then size = 4 end
+
+    local box = { x = self.x - size/2, y = self.y - size/2, width = size, height = size }
+    
+    for _, tile in ipairs(Tilemap.tiles) do
+        if tile.quadIndex ~= 5 and tile.quadIndex ~= 15 then
+            local tileBox = { x = tile.xWorld - tile.size/2, y = tile.yWorld - tile.size, width = tile.size, height = tile.size }
+
+            if checkCollision(box, tileBox) then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
 function Bullet:update(dt)
+    if not self.isAlive then return end
+
     self.x = self.x + self.dx * dt
     self.y = self.y + self.dy * dt
 
@@ -40,6 +63,10 @@ function Bullet:update(dt)
     self.timer = self.timer + dt
 
     if self.timer >= 2 then
+        self.isAlive = false
+    end
+
+    if self:isColliding() then
         self.isAlive = false
     end
 
@@ -52,8 +79,6 @@ function Bullet:update(dt)
             enemy:takeDamage(10, self.dx, self.dy)
         end
     end
-
-
 end
 
 function Bullet:drawShadow()

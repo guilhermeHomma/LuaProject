@@ -13,13 +13,14 @@ function Enemy:new(x, y)
 
     enemy.x = x
     enemy.y = y
-    enemy.speed = 30
-
+    enemy.speed = math.random(25, 45)
     enemy.totalLife = 40
     enemy.life = enemy.totalLife
     enemy.damageTimer = 0.1
     enemy.kbdx = 0
     enemy.kbdy = 0
+
+    enemy.drawPriority = math.random()
 
     enemy.isAlive = true
 
@@ -45,6 +46,8 @@ function Enemy:new(x, y)
     enemy.randomDirY = math.sin(angle)
 
     self.path = nil
+    self.finder = "ASTAR"
+    if math.random(2) == 1 then self.finder = "JPS" end
 
     local sheetWidth = enemy.spriteSheet:getWidth()
     local sheetHeight = enemy.spriteSheet:getHeight()
@@ -85,12 +88,17 @@ function Enemy:update(dt)
     local velocityX = 0
     local velocityY = 0
 
-    if self.pathUpdateCounter >= self.pathUpdateInterval or self.path == nil or #self.path < 2 then
+    if (self.pathUpdateCounter >= self.pathUpdateInterval and self.state == Enemy.states.idle) or self.path == nil or #self.path < 2 then
         self.pathUpdateCounter = 0
-
+        --print("generate")
         local posMapX, posMapY = Tilemap:worldToMap(self.x, self.y)
         local playerMapX, playerMapY = Tilemap:worldToMap(Player.x, Player.y)
-        self.path = Tilemap.finder:getPath(posMapX, posMapY, playerMapX, playerMapY)
+        if self.finder == "ASTAR" then --varia o algoritmo
+            self.path = Tilemap.finder:getPath(posMapX, posMapY, playerMapX, playerMapY)
+        else
+            self.path = Tilemap.finderAstar:getPath(posMapX, posMapY, playerMapX, playerMapY)
+
+        end
  
     end
 
@@ -98,7 +106,7 @@ function Enemy:update(dt)
     
     if self.path and #self.path > 1 then
 
-        local nextNode = self.path[2] -- porque path[1] é o tile atual
+        local nextNode = self.path[2] -- porque path 1 e o tile atual
 
         nextTileX, nextTileY = Tilemap:mapToWorld(nextNode.x, nextNode.y)
 
@@ -109,12 +117,13 @@ function Enemy:update(dt)
             table.remove(self.path, 1)
 
         end
-        if math.abs(nextTileX - self.x) < 2 then self.x = nextTileX end
+        if math.abs(nextTileX - self.x) < 1.4 then self.x = nextTileX end
+        if math.abs(nextTileY - self.y) < 1.4 then self.y = nextTileY end
         
         local moveX = sign(nextTileX - self.x)
         local moveY = sign(nextTileY - self.y)
 
-        local collidedX, collidedY = self:isColliding(moveX,moveY)
+        local collidedX, collidedY = self:isColliding(moveX,moveY,5)
         collidedX, collidedY = false, false
         if not collidedX then velocityX = moveX end
         if not collidedY then velocityY = moveY end
@@ -159,7 +168,7 @@ function Enemy:update(dt)
             local movekbX = self.kbdx * dt * 0.1
             local movekbY = self.kbdy * dt * 0.1
             local collidedX, collidedY = self:isColliding(movekbX,movekbY)
-
+        
             if not collidedX then self.x = self.x + movekbX end
             if not collidedY then self.y = self.y + movekbY end
         end
@@ -192,8 +201,10 @@ function Enemy:update(dt)
     end
 end
 
+
 function Enemy:isColliding(moveX, moveY, size)
     if not size then size = 7 end
+
 
     local futureX = self.x + moveX
     local futureY = self.y + moveY
@@ -205,7 +216,7 @@ function Enemy:isColliding(moveX, moveY, size)
     local collidedY = false
 
     for _, tile in ipairs(Tilemap.tiles) do
-        if tile.quadIndex ~= 5 then
+        if tile.quadIndex ~= 5 and tile.quadIndex ~= 15 then
             local tileBox = { x = tile.xWorld - tile.size/2, y = tile.yWorld - tile.size, width = tile.size, height = tile.size }
 
             if checkCollision(selfBoxX, tileBox) then

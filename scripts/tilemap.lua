@@ -3,7 +3,14 @@ local tileSize = 16
 local tilesetImage
 local tileSet = {}
 
+require "scripts.utils"
+
 local tilesetImage = love.graphics.newImage("assets/sprites/tileset.png")
+local threeImage1 = love.graphics.newImage("assets/sprites/objects/three1.png")
+local threeImage2 = love.graphics.newImage("assets/sprites/objects/three2.png")
+
+threeImage1:setFilter("nearest", "nearest")
+threeImage2:setFilter("nearest", "nearest")
 tilesetImage:setFilter("nearest", "nearest")
 local sheetWidth, sheetHeight = tilesetImage:getDimensions()
 local tilemapWorldX = -40 * tileSize
@@ -21,12 +28,17 @@ function loadTilemapFromImage()
         tilemap[y] = {}
         for x = 1, width do
             local r, g, b, a = imageData:getPixel(x - 1, y - 1) -- Pega a cor do pixel
-            print(r)
+
             -- Se for branco (255, 255, 255) -> tile sólido (1), senão vazio (0)
             if r == 1 and g == 1 and b == 1 then  
                 tilemap[y][x] = 1
             elseif g == 0 and r == 1 then
                 tilemap[y][x] = 2 
+            elseif r == 0 and g == 1 then
+                tilemap[y][x] = 3
+            elseif r > 0.9 and g > 0.9 then
+                tilemap[y][x] = 4
+
             else
                 tilemap[y][x] = 0
             end
@@ -59,6 +71,19 @@ function Tile:draw()
     if self.quadIndex == 14 then
         love.graphics.draw(tilesetImage, self.quad, self.xWorld, self.yWorld, 0, 1, 1, tileSize/2, tileSize*2)
 
+    elseif self.quadIndex == 16 or self.quadIndex == 17 then
+        love.graphics.draw(tilesetImage, tileSet[5], self.xWorld, self.yWorld, 0, 1, 1, tileSize/2, tileSize)
+
+        local image = threeImage1
+        if self.quadIndex == 17 then image = threeImage2 end 
+        local box = {x = self.xWorld - 20, y = self.yWorld - 100, width = 40, height = 60}
+        if checkCollision(box, Player:getCollisionBox()) then 
+            love.graphics.setColor(1, 1, 1, 0.7)
+        end
+        love.graphics.draw(image, self.xWorld, self.yWorld, 0, 1, 1.6, 32, 93)
+        love.graphics.setColor(1, 1, 1)
+
+
     elseif self.quadIndex == 1 or self.quadIndex == 2 or self.quadIndex == 3  then
         love.graphics.draw(tilesetImage, self.quad, self.xWorld, self.yWorld, 0, 1, 1, tileSize/2, tileSize+10)
 
@@ -67,13 +92,13 @@ function Tile:draw()
         
     end
     
-    if self.quadIndex ~= 5 and DEBUG then
+    if self.quadIndex ~= 5 and self.quadIndex ~= 15 and DEBUG then
         love.graphics.rectangle("line", self.xWorld-8, self.yWorld-16, 16, 16)
     end
 end
 
 function Tile:drawShadow()
-    if self.quadIndex == 5 then 
+    if self.quadIndex == 5 or self.quadIndex == 15 then 
         return
     end
 
@@ -108,6 +133,7 @@ function Tilemap:createTileSet()
             local tileY = (y - 1) * tileSize + 16
 
             local index = (y - 1) * 3 + x
+
             if y == 1 then 
                 tileSet[index] = love.graphics.newQuad(tileX, tileY-10, tileSize, tileSize+10, sheetWidth, sheetHeight)
             else
@@ -122,8 +148,19 @@ function Tilemap:createTileSet()
     tileSet[13] = love.graphics.newQuad(64 + 16, 16, tileSize, tileSize, sheetWidth, sheetHeight)
 
     tileSet[14] = love.graphics.newQuad(16, 64, tileSize, tileSize*2, sheetWidth, sheetHeight)
+    tileSet[15] = love.graphics.newQuad(64, 32, tileSize, tileSize, sheetWidth, sheetHeight)
 
 
+end
+
+local function isNotSolid(y, x)
+    local v = tilemap[y] and tilemap[y][x]
+    return v ~= 1 and v ~= 3
+end
+
+local function isSolid(y, x)
+    local v = tilemap[y] and tilemap[y][x]
+    return v == 1 or v == 3
 end
 
 function Tilemap:autoTile(x, y)
@@ -131,28 +168,34 @@ function Tilemap:autoTile(x, y)
         return 5
     end
 
-    local top = tilemap[y - 1][x] ~= 1
-    local bottom = tilemap[y + 1][x] ~= 1
-    local left = tilemap[y][x - 1] ~= 1
-    local right = tilemap[y][x + 1] ~= 1
+    local top = isNotSolid(y - 1, x)
+    local bottom = isNotSolid(y + 1, x)
+    local left = isNotSolid(y, x - 1)
+    local right = isNotSolid(y, x + 1)
+    
+    local topLeft = isNotSolid(y - 1, x - 1)
+    local topRight = isNotSolid(y - 1, x + 1)
+    local bottomLeft = isNotSolid(y + 1, x - 1)
+    local bottomRight = isNotSolid(y + 1, x + 1)
 
-    local topLeft = tilemap[y - 1][x - 1] ~= 1
-    local topRight = tilemap[y - 1][x + 1] ~= 1
-    local bottomLeft = tilemap[y + 1][x - 1] ~= 1
-    local bottomRight = tilemap[y + 1][x + 1] ~= 1
+    local leftNoBottom = left and isSolid(y+1, x-1)
+    local rightNoBottom = right and isSolid(y+1, x+1)
 
     if top and left then return 1 end
     if top and right then return 3 end
     if bottom and left then return 7 end
     if bottom and right then return 9 end
 
+    if leftNoBottom then return 13 end
+    if rightNoBottom then return 12 end
+
     if top then return 2 end
     if bottom then return 8 end
     if left then return 4 end
     if right then return 6 end
 
-    if topLeft then return 13 end
-    if topRight then return 12 end
+    if topLeft then return 5 end --13
+    if topRight then return 5 end --12
     if bottomLeft then return 11 end
     if bottomRight then return 10 end
 
@@ -164,18 +207,29 @@ function Tilemap:load()
     self:createTileSet()
     self.sharedGrid = Grid(tilemap)
     self.finder = Pathfinder(self.sharedGrid, 'JPS', 0)
+    self.finderAstar = Pathfinder(self.sharedGrid, 'ASTAR', 0)
 
     self.tiles = {}
     for y = 1, #tilemap do
         for x = 1, #tilemap[y] do
             local tile = tilemap[y][x]
-            if tileSet[tile] then
+
+            if tile == 3 then -- three
+
+                local t = Tile:new(x, y, math.random(16, 17))
+                table.insert(self.tiles, t)
+            elseif tileSet[tile] then
                 local index = 5
                 if tile == 1 then 
                     index = self:autoTile(x, y)
                 elseif tile == 2 then
                     index = 14
                 end
+
+                if index == 5 and math.random(15) == 1 then
+                    index = 15
+                end
+
                 local t = Tile:new(x, y, index)
                 table.insert(self.tiles, t)
                 
@@ -186,7 +240,12 @@ end
 
 function Tilemap:update()
     for _, tile in ipairs(self.tiles) do
-        addToDrawQueue(tile.yWorld, tile)
+        if tile.quadIndex == 16 or tile.quadIndex == 17 then
+            addToDrawQueue(tile.yWorld+2, tile)
+
+        else
+            addToDrawQueue(tile.yWorld, tile)
+        end
     end
 end
 
