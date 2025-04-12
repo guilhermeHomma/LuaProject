@@ -8,9 +8,11 @@ require "scripts.utils"
 local tilesetImage = love.graphics.newImage("assets/sprites/tileset.png")
 local threeImage1 = love.graphics.newImage("assets/sprites/objects/three1.png")
 local threeImage2 = love.graphics.newImage("assets/sprites/objects/three2.png")
+local threeImage3 = love.graphics.newImage("assets/sprites/objects/three3.png")
 
 threeImage1:setFilter("nearest", "nearest")
 threeImage2:setFilter("nearest", "nearest")
+threeImage3:setFilter("nearest", "nearest")
 tilesetImage:setFilter("nearest", "nearest")
 local sheetWidth, sheetHeight = tilesetImage:getDimensions()
 local tilemapWorldX = -40 * tileSize
@@ -20,7 +22,7 @@ local Grid = require("jumper.grid")
 local Pathfinder = require("jumper.pathfinder")
 
 function loadTilemapFromImage()
-    local imageData = love.image.newImageData("assets/sprites/map.png")
+    local imageData = love.image.newImageData("assets/sprites/map5.png")
     local width, height = imageData:getDimensions()
     local tilemap = {}
 
@@ -54,12 +56,17 @@ Tile = {}
 Tile.__index = Tile
 
 function Tile:new(x, y, quadIndex)
+    if quadIndex == 14 and math.random() > 0.2 then
+        quadIndex = 18
+    end
+
     local tile = setmetatable({}, Tile)
     tile.quad = tileSet[quadIndex]
     tile.quadIndex = quadIndex
     tile.x = x
     tile.y = y
     tile.size = tileSize
+    tile.alpha = 1
     tile.xWorld = tilemapWorldX + (x - 1) * tileSize
     tile.yWorld = tilemapWorldY + (y - 1) * tileSize
     return tile
@@ -68,18 +75,22 @@ end
 function Tile:draw()
     
     --love.graphics.rectangle("fill", self.xWorld, self.yWorld, tileSize, tileSize)
-    if self.quadIndex == 14 then
+    if self.quadIndex == 14 or self.quadIndex == 18 then
         love.graphics.draw(tilesetImage, self.quad, self.xWorld, self.yWorld, 0, 1, 1, tileSize/2, tileSize*2)
 
-    elseif self.quadIndex == 16 or self.quadIndex == 17 then
+    elseif self.quadIndex == 16 or self.quadIndex == 17 or self.quadIndex == 19 then
         love.graphics.draw(tilesetImage, tileSet[5], self.xWorld, self.yWorld, 0, 1, 1, tileSize/2, tileSize)
-
+        local targetAlpha = 1
         local image = threeImage1
         if self.quadIndex == 17 then image = threeImage2 end 
+        if self.quadIndex == 19 then image = threeImage3 end 
         local box = {x = self.xWorld - 20, y = self.yWorld - 100, width = 40, height = 60}
         if checkCollision(box, Player:getCollisionBox()) then 
-            love.graphics.setColor(1, 1, 1, 0.7)
+            targetAlpha = 0.5
+            
         end
+        self.alpha = self.alpha + (targetAlpha - self.alpha) * 0.1
+        love.graphics.setColor(1, 1, 1, self.alpha)
         love.graphics.draw(image, self.xWorld, self.yWorld, 0, 1, 1.6, 32, 93)
         love.graphics.setColor(1, 1, 1)
 
@@ -147,8 +158,10 @@ function Tilemap:createTileSet()
     tileSet[12] = love.graphics.newQuad(48 + 16, 16, tileSize, tileSize, sheetWidth, sheetHeight)
     tileSet[13] = love.graphics.newQuad(64 + 16, 16, tileSize, tileSize, sheetWidth, sheetHeight)
 
-    tileSet[14] = love.graphics.newQuad(16, 64, tileSize, tileSize*2, sheetWidth, sheetHeight)
-    tileSet[15] = love.graphics.newQuad(64, 32, tileSize, tileSize, sheetWidth, sheetHeight)
+    tileSet[14] = love.graphics.newQuad(16, 64, tileSize, tileSize*2, sheetWidth, sheetHeight) --caixa
+    tileSet[15] = love.graphics.newQuad(64, 32, tileSize, tileSize, sheetWidth, sheetHeight) --variacao grama
+
+    tileSet[18] = love.graphics.newQuad(48, 64, tileSize, tileSize*2, sheetWidth, sheetHeight) --varia caixa
 
 
 end
@@ -215,8 +228,9 @@ function Tilemap:load()
             local tile = tilemap[y][x]
 
             if tile == 3 then -- three
-
-                local t = Tile:new(x, y, math.random(16, 17))
+                local indexes = {16, 17, 19}
+                local t = Tile:new(x, y, indexes[math.random(#indexes)])
+                
                 table.insert(self.tiles, t)
             elseif tileSet[tile] then
                 local index = 5
@@ -240,8 +254,8 @@ end
 
 function Tilemap:update()
     for _, tile in ipairs(self.tiles) do
-        if tile.quadIndex == 16 or tile.quadIndex == 17 then
-            addToDrawQueue(tile.yWorld+2, tile)
+        if tile.quadIndex == 16 or tile.quadIndex == 17 or tile.quadIndex == 19 then
+            addToDrawQueue(tile.yWorld+1, tile)
 
         else
             addToDrawQueue(tile.yWorld, tile)

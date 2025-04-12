@@ -3,7 +3,7 @@ local stretchFactor = 0.65
 
 local Camera = require("scripts/camera")
 
-camera = Camera:new(0, 0)
+camera = Camera:new()
 
 local Ground = require("scripts/ground")
 local WaveManager = require("scripts/waves")
@@ -34,6 +34,37 @@ function love.load()
     music:setLooping(true) 
     music:setVolume(0.8)
     --music:play()
+
+end
+
+
+local function restartGame()
+    enemies = {}
+    particles = {}
+    drawQueue = {}
+
+    camera = Camera:new()
+    WaveManager:load()
+    Player:load(camera)
+    Ground:load()
+    Clouds:load()
+    Tilemap:load()
+
+    
+end
+
+function love.keypressed(key)
+    if key == "r" then
+        restartGame()
+    end
+
+    if key == "f5" then
+        FPS = not FPS
+    end
+
+    if key == "f6" then
+        DEBUG = not DEBUG
+    end
 
 end
 
@@ -84,7 +115,10 @@ function love.draw()
 
     for _, item in ipairs(drawQueue) do
         if type(item.object.drawShadow) == "function" then
-            item.object:drawShadow()
+
+            if distance(Player, item.object) < 350 then 
+                item.object:drawShadow()
+            end
         end
     end
 
@@ -92,7 +126,9 @@ function love.draw()
     Player:drawSight()
 
     for _, item in ipairs(drawQueue) do
-        item.object:draw()
+        if distance(Player, item.object) < 350 then 
+            item.object:draw()
+        end
     end
     Clouds:draw()
     love.graphics.scale(1, 1)
@@ -103,7 +139,10 @@ function love.draw()
     WaveManager:draw()
 
     if FPS or DEBUG then 
-        love.graphics.print("FPS: " .. love.timer.getFPS(), 10, 10)
+        love.graphics.print("FPS: " .. love.timer.getFPS(), 10, 60)
+    end
+    if DEBUG then
+        love.graphics.print("enemies qty: " .. #enemies, 10, 80)
     end
 end
 

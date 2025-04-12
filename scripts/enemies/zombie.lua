@@ -88,7 +88,7 @@ function Enemy:update(dt)
     local velocityX = 0
     local velocityY = 0
 
-    if (self.pathUpdateCounter >= self.pathUpdateInterval and self.state == Enemy.states.idle) or self.path == nil or #self.path < 2 then
+    if (self.pathUpdateCounter >= self.pathUpdateInterval and self.state == Enemy.states.idle and Player.isAlive) or self.path == nil or #self.path < 2 then
         self.pathUpdateCounter = 0
         --print("generate")
         local posMapX, posMapY = Tilemap:worldToMap(self.x, self.y)

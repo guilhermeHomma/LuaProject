@@ -7,7 +7,7 @@ require("scripts/utils")
 function WaveManager:load()
     
     self.wave = 1
-    self.enemiesPerWave = 5
+    self.enemiesPerWave = 2
     self.spawnInterval = 1
     self.spawnTimer = 0
     self.enemiesSpawned = 0

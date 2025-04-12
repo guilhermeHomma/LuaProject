@@ -2,9 +2,13 @@ local Camera = {}
 Camera.__index = Camera
 
 function Camera:new(x, y)
+    if not x then x = 0 end
+    if not y then y = 0 end 
+    
     local cam = setmetatable({}, Camera)
-    cam.x = x or 0
-    cam.y = y or 0
+    cam.x = x - love.graphics.getWidth() / 2 or love.graphics.getWidth() / 2
+    cam.y = y - love.graphics.getHeight() / 2 or love.graphics.getHeight() / 2
+
     cam.smoothSpeed = 0.03
     cam.shakeIntensity = 0
     cam.shakeDecay = 0.5
