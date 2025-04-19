@@ -13,31 +13,71 @@ bulletSound:setLooping(true)
 function Player:load(camera)
     self.x = 0
     self.y = 20
-    self.speed = 45
-    self.currentVelocity = 10
+    self.speed = 55
     self.size = 40
-    self.angle = 0
+
     self.squareAngle = 0
-    self.currentSprites = {}
-    self.spriteSize = 32
-    self.playerSheet = love.graphics.newImage("assets/sprites/player/player.png")
-    self.playerOutlineSheet = love.graphics.newImage("assets/sprites/player/player-outline.png")
-    self.playerSheet:setFilter("nearest", "nearest")
-    self.playerOutlineSheet:setFilter("nearest", "nearest")
+    self.spriteSize = 40
     self.bullets = {}
     self.bulletSpeed = 340
     self.camera = camera
     self.totalLife = 4
     self.life = self.totalLife
     self.isAlive = true
+    self.flipX = false
+    self.playerSheet = love.graphics.newImage("assets/sprites/player/soldier/soldier.png")
+    self.playerShadow = love.graphics.newImage("assets/sprites/player/shadow.png")
+    self.playerSheet:setFilter("nearest", "nearest")
+    self.playerShadow:setFilter("nearest", "nearest")
 
-    local sheetWidth, sheetHeight = self.playerSheet:getDimensions()
+    self.spriteQuad = love.graphics.newQuad(0, 0, self.spriteSize, self.spriteSize, self.playerSheet:getDimensions())
 
-    for x = 0, sheetWidth - self.spriteSize, self.spriteSize do
+    self.animations = {
+        idle = { frames = {0, 1}, duration = 2 },
+        walk = { frames = {2, 3, 4, 5}, duration = 0.6 }
+    }
+    self.currentAnimation = "idle"
+    self.currentFrame = 1
+    self.animationTimer = 0
 
-        local quad = love.graphics.newQuad(x, 0, self.spriteSize, self.spriteSize, sheetWidth, sheetHeight)
-        table.insert(self.currentSprites, quad)
+    -- Pré-carrega os quads
+    self.quads = {}
+    local sheetWidth = self.playerSheet:getWidth()
+    for i = 0, 5 do
+        local quad = love.graphics.newQuad(
+            i * self.spriteSize, 0,
+            self.spriteSize, self.spriteSize,
+            sheetWidth, self.playerSheet:getHeight()
+        )
+        table.insert(self.quads, quad)
+    end
 
+end
+
+function Player:updateAnimation(dt, moving)
+    local newAnimation = moving and "walk" or "idle"
+
+    if self.currentAnimation ~= newAnimation then
+        self.currentAnimation = newAnimation
+        self.currentFrame = 1
+        self.animationTimer = 0
+    end
+
+    local anim = self.animations[self.currentAnimation]
+    local frameTime = anim.duration / #anim.frames
+
+    if self.currentAnimation == "idle" and self.currentFrame == 2 then
+        frameTime = 0.1
+    end
+
+    self.animationTimer = self.animationTimer + dt
+
+    if self.animationTimer >= frameTime then
+        self.animationTimer = self.animationTimer - frameTime
+        self.currentFrame = self.currentFrame + 1
+        if self.currentFrame > #anim.frames then
+            self.currentFrame = 1
+        end
     end
 end
 
@@ -46,58 +86,42 @@ function Player:update(dt)
         return
     end
 
+    self.squareAngle = self.squareAngle + 0.8*dt
+
     local moveX, moveY = 0, 0
-    local acceleration = 35
-    local deceleration = 40
-    local moving = false
 
-    if self.currentVelocity > 17 then
-        self.squareAngle = self.squareAngle + self.currentVelocity *0.04*dt
-    else 
-        self.squareAngle = self.squareAngle + 0.8*dt
-    end
-
+    -- Input WASD
     if love.keyboard.isDown("w") then
-        self.currentVelocity = math.min(self.currentVelocity + acceleration * dt, self.speed)
-        moving = true
-    elseif love.keyboard.isDown("s") then
-        self.currentVelocity = math.max(self.currentVelocity - acceleration * dt, -self.speed / 2)
-        moving = true
-    else
-        if self.currentVelocity > 0 then
-            self.currentVelocity = math.max(0, self.currentVelocity - deceleration * dt)
-        elseif self.currentVelocity < 0 then
-            self.currentVelocity = math.min(0, self.currentVelocity + deceleration * dt)
-        end
+        moveY = moveY - 1
     end
-
+    if love.keyboard.isDown("s") then
+        moveY = moveY + 1
+    end
     if love.keyboard.isDown("a") then
-        self.angle = self.angle - 0.02
-        moving = true
+        moveX = moveX - 1
     end
     if love.keyboard.isDown("d") then
-        self.angle = self.angle + 0.02
-        moving = true
+        moveX = moveX + 1
     end
 
-    if moving then
-        if bulletSound:isPlaying() == false then
-            love.audio.play(bulletSound)
-        end
-    else
-        love.audio.stop(bulletSound)
+    if moveX ~= 0 and moveY ~= 0 then
+        local diagFactor = 1 / math.sqrt(2)
+        moveX = moveX * diagFactor
+        moveY = moveY * diagFactor
     end
 
-    moveX = math.cos(self.angle) * self.currentVelocity * dt
-    moveY = math.sin(self.angle) * self.currentVelocity * dt
-    
     local collidedX, collidedY = self:isColliding(moveX, moveY)
 
     if collidedX then moveX = 0 end
     if collidedY then moveY = 0 end
-    if collidedX or collidedY then self.currentVelocity = self.currentVelocity * 0.96 end
-    self.x = self.x + moveX
-    self.y = self.y + moveY
+
+    --if moveX ~= 0 then
+        --if moveX > 0 then self.flipH = true
+        --else self.flipH = false end
+    --end
+    
+    self.x = self.x + moveX * self.speed * dt
+    self.y = self.y + moveY * self.speed * dt
 
 
     addToDrawQueue(self.y+7, Player)
@@ -110,12 +134,18 @@ function Player:update(dt)
         end
     end
 
+    self:checkDamage()
+    self:updateAnimation(dt, moveX ~= 0 or moveY ~= 0)
+    self:death()
+end
+
+function Player:checkDamage()
     for _, enemy in ipairs(enemies) do
         local dx = enemy.x - self.x
         local dy = enemy.y - self.y
         local distance = math.sqrt(dx * dx + dy * dy)
 
-        if distance < 15 then
+        if distance < 12 then
             enemy.life = 0
             enemy:death()
             camera:shake(2, 0.95)
@@ -127,24 +157,22 @@ function Player:update(dt)
             bulletSound:play()
         end
     end
-
-    Player:death()
 end
 
-
 function Player:getCollisionBox()
-    return { x = self.x - 22/2, y = self.y - 22/2, width = 22, height = 22 }
+    local size = 12
+    return { x = self.x - size/2, y = self.y - size/2, width = size, height = size, size = size }
 end
 
 function Player:isColliding(moveX, moveY, size)
-    if not size then size = 22 end
+    if not size then size = self:getCollisionBox().size end
 
-    local futureX = self.x + moveX
-    local futureY = self.y + moveY
 
-    local playerBoxX = { x = futureX - size/2, y = self.y - size/2, width = size, height = size }
-    local playerBoxY = { x = self.x - size/2, y = futureY - size/2, width = size, height = size }
-    
+    local playerBoxX = self:getCollisionBox()
+    playerBoxX.x = playerBoxX.x + moveX
+    local playerBoxY = self:getCollisionBox()
+    playerBoxY.y = playerBoxY.y + moveY
+
     local collidedX = false
     local collidedY = false
 
@@ -241,8 +269,18 @@ function Player:drawSight()
     end
 
     local mouseX, mouseY = love.mouse.getPosition()
+
+
+
     mouseX = mouseX/3 - self.x + self.camera.x/3 + self.x
     mouseY = mouseY/2 - self.y + self.camera.y/2 + self.y
+
+    if mouseX > self.x then
+        self.flipH = true
+    elseif mouseX < self.x then
+        self.flipH = false
+    end
+
     love.graphics.setColor(0.274, 0.4, 0.45, 1)
 
     self:drawSquare(mouseX, mouseY, self.squareAngle*3.5, 3)
@@ -254,9 +292,9 @@ function Player:drawS()
         return
     end
 
-    love.graphics.draw(self.playerSheet, self.currentSprites[1], self.x, self.y, self.angle, 1, 1, self.spriteSize/2, self.spriteSize/2)
-
-    self:drawSquare(self.x, self.y, self.squareAngle, 32 * 0.45)
+    love.graphics.draw(self.playerShadow, self.x, self.y, 0, 0.85, 0.85, 8, 8)
+    --love.graphics.draw(self.spriteShadow, self.x - 6, self.y - 6, 0 , 0.7, 0.7)
+    --self:drawSquare(self.x, self.y, self.squareAngle, 16 * 0.45)
 
 end
 
@@ -286,51 +324,30 @@ function Player:drawSquare(x, y, angle, halfSize)
 end
 
 function Player:draw()
-    if not self.isAlive then
-        return
-    end
+    if not self.isAlive then return end
 
-    local padding = 1
+    local anim = self.animations[self.currentAnimation]
+    local frameIndex = anim.frames[self.currentFrame]
 
-    for i, quad in ipairs(self.currentSprites) do
-        
-            local x = self.x
-            local y = self.y - i * padding
-    
-            local angle = self.angle
-    
-            if i >= 15 then
-                angle = self:mouseAngle()
-            end
+    local quad = self.quads[frameIndex + 1] -- +1 porque Lua começa em 1
 
-            love.graphics.draw(self.playerOutlineSheet, quad, x, y, angle, 1, 1, self.spriteSize/2, self.spriteSize/2)
-          
-    end
+    local scaleX = self.flipH and -0.85 or 0.85
+    local originX = self.flipH and (self.spriteSize - self.spriteSize / 2) or (self.spriteSize / 2)
+
+    love.graphics.draw(
+        self.playerSheet,
+        quad,
+        self.x,
+        self.y,
+        0,
+        scaleX, 1.2,
+        originX, self.spriteSize
+    )
 
     if DEBUG then
-        love.graphics.rectangle("line", self.x - 11, self.y - 11, 22, 22)
+        local collisionBox = self:getCollisionBox()
+        love.graphics.rectangle("line", collisionBox.x, collisionBox.y, collisionBox.width, collisionBox.height)
     end
-    
-    for i, quad in ipairs(self.currentSprites) do
-        if i == 1 then
-            do
-                goto continue
-            end
-        end
-        local x = self.x
-        local y = self.y - i * padding
-
-        local angle = self.angle
-
-        if i >= 15 then
-            angle = self:mouseAngle()
-        end
-
-        love.graphics.draw(self.playerSheet, quad, x, y, angle, 1, 1, self.spriteSize/2, self.spriteSize/2)
-        ::continue::
-    end
-
-    
 end
 
 return Player

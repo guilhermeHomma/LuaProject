@@ -48,7 +48,7 @@ function WaveManager:enemyPosition()
             if tilemap[y][x] == 0 then
 
                 local tilex, tiley = Tilemap:mapToWorld(x,y)
-                if distance({x=tilex, y=tiley}, Player) > 200 then
+                if distance({x=tilex, y=tiley}, Player) > 300 then
                     table.insert(posibleTiles, {x=tilex, y=tiley})
                 end
             end

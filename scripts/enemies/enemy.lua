@@ -281,15 +281,15 @@ function Enemy:draw()
         return
     end
 
-    local scaleX = 0.7
+    local scaleX = 1
     if self.flipH then
-        scaleX = -0.7
+        scaleX = -1
     end
 
     if self.state == Enemy.states.damage and Player.isAlive then
-        love.graphics.draw(self.spriteOutline, self.frames[self.currentFrame], self.x, self.y, 0, scaleX, 0.7, self.frameWidth / 2, self.frameHeight)
+        love.graphics.draw(self.spriteOutline, self.frames[self.currentFrame], self.x, self.y, 0, scaleX, 1, self.frameWidth / 2, self.frameHeight)
     else 
-        love.graphics.draw(self.spriteSheet, self.frames[self.currentFrame], self.x, self.y, 0, scaleX, 0.7, self.frameWidth / 2, self.frameHeight)
+        love.graphics.draw(self.spriteSheet, self.frames[self.currentFrame], self.x, self.y, 0, scaleX, 1, self.frameWidth / 2, self.frameHeight)
     end
 
     if DEBUG then 
