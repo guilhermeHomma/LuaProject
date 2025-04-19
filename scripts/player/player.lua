@@ -30,8 +30,6 @@ function Player:load(camera)
     self.playerSheet:setFilter("nearest", "nearest")
     self.playerShadow:setFilter("nearest", "nearest")
 
-    self.spriteQuad = love.graphics.newQuad(0, 0, self.spriteSize, self.spriteSize, self.playerSheet:getDimensions())
-
     self.animations = {
         idle = { frames = {0, 1}, duration = 2 },
         walk = { frames = {2, 3, 4, 5}, duration = 0.6 }
@@ -150,11 +148,11 @@ function Player:checkDamage()
             enemy:death()
             camera:shake(2, 0.95)
             self.life = self.life - 1
-            local bulletSound = love.audio.newSource("assets/sfx/damage.wav", "static")
+            local damageSound = love.audio.newSource("assets/sfx/damage.wav", "static")
 
-            bulletSound:setVolume(1.8)
-            bulletSound:setPitch(0.9 + math.random() * 0.2)
-            bulletSound:play()
+            damageSound:setVolume(1.8)
+            damageSound:setPitch(0.9 + math.random() * 0.2)
+            damageSound:play()
         end
     end
 end
@@ -347,6 +345,15 @@ function Player:draw()
     if DEBUG then
         local collisionBox = self:getCollisionBox()
         love.graphics.rectangle("line", collisionBox.x, collisionBox.y, collisionBox.width, collisionBox.height)
+
+        love.graphics.rectangle("line", self.x, self.y, 1, 1)
+
+        local tileX, tileY = Tilemap:worldToMap(self.x, self.y)
+        local worldX, worldY = Tilemap:mapToWorld(tileX, tileY)
+
+        love.graphics.setColor(0, 1, 1, 0.1)
+        love.graphics.rectangle("fill", worldX-8, worldY-16, 16, 16)
+        love.graphics.setColor(1, 1, 1, 1)
     end
 end
 

@@ -8,6 +8,21 @@ function checkCollision(a, b)
            a.y + a.height > b.y
 end
 
+function deepcopy(orig, copies)
+    copies = copies or {}
+    if type(orig) ~= 'table' then return orig end
+    if copies[orig] then return copies[orig] end
+
+    local copy = {}
+    copies[orig] = copy
+
+    for k, v in pairs(orig) do
+        copy[deepcopy(k, copies)] = deepcopy(v, copies)
+    end
+
+    setmetatable(copy, deepcopy(getmetatable(orig), copies))
+    return copy
+end
 
 function distance(a, b)
 

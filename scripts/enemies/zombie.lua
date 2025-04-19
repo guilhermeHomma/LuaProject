@@ -38,16 +38,16 @@ function Enemy:new(x, y)
     enemy.frameHeight = 32
     enemy.frames = {}
 
-    self.pathUpdateInterval = 120
-    self.pathUpdateCounter = love.math.random(0, self.pathUpdateInterval)
+    enemy.pathUpdateInterval = 120
+    enemy.pathUpdateCounter = love.math.random(0, enemy.pathUpdateInterval)
 
     local angle = math.random() * (2 * math.pi)
     enemy.randomDirX = math.cos(angle)
     enemy.randomDirY = math.sin(angle)
 
-    self.path = nil
-    self.finder = "ASTAR"
-    if math.random(2) == 1 then self.finder = "JPS" end
+    enemy.path = nil
+    enemy.finder = "ASTAR"
+    if math.random(0, 2) >= 1 then enemy.finder = "JPS" end
 
     local sheetWidth = enemy.spriteSheet:getWidth()
     local sheetHeight = enemy.spriteSheet:getHeight()
@@ -94,8 +94,10 @@ function Enemy:update(dt)
         local posMapX, posMapY = Tilemap:worldToMap(self.x, self.y)
         local playerMapX, playerMapY = Tilemap:worldToMap(Player.x, Player.y)
         if self.finder == "ASTAR" then --varia o algoritmo
+
             self.path = Tilemap.finder:getPath(posMapX, posMapY, playerMapX, playerMapY)
         else
+
             self.path = Tilemap.finderAstar:getPath(posMapX, posMapY, playerMapX, playerMapY)
 
         end
@@ -110,7 +112,7 @@ function Enemy:update(dt)
 
         nextTileX, nextTileY = Tilemap:mapToWorld(nextNode.x, nextNode.y)
 
-        nextTileY = nextTileY + 8
+        nextTileY = nextTileY - 8
 
         local distance = math.sqrt((self.x - nextTileX)^2 + (self.y - nextTileY)^2)
         if distance < 4 then
@@ -314,6 +316,25 @@ function Enemy:draw()
 
     if DEBUG then 
         love.graphics.rectangle("line", self.x - 3.5, self.y - 3.5, 7, 7)
+    
+        if self.path and #self.path > 1 then
+            love.graphics.setColor(0, 1, 0, 0.6)
+    
+            local points = {}
+    
+            for i = 1, #self.path do
+                local node = self.path[i]
+                local worldX, worldY = Tilemap:mapToWorld(node.x, node.y)
+
+                worldY = worldY - 8
+                
+                table.insert(points, worldX)
+                table.insert(points, worldY)
+            end
+    
+            love.graphics.line(points)
+            love.graphics.setColor(1, 1, 1, 1)
+        end
     end
 end
 

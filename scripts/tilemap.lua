@@ -67,8 +67,8 @@ function Tile:new(x, y, quadIndex)
     tile.y = y
     tile.size = tileSize
     tile.alpha = 1
-    tile.xWorld = tilemapWorldX + (x - 1) * tileSize
-    tile.yWorld = tilemapWorldY + (y - 1) * tileSize
+
+    tile.xWorld, tile.yWorld = Tilemap:mapToWorld(x,y)
     return tile
 end
 
@@ -104,7 +104,13 @@ function Tile:draw()
     end
     
     if self.quadIndex ~= 5 and self.quadIndex ~= 15 and DEBUG then
+
+        playerX, playerY = Tilemap:worldToMap(Player.x, Player.y)
+        if playerX == self.x and playerY == self.y then
+            love.graphics.setColor(1, 0.5, 0.5, 1)
+        end
         love.graphics.rectangle("line", self.xWorld-8, self.yWorld-16, 16, 16)
+        love.graphics.setColor(1, 1, 1, 1)
     end
 end
 
@@ -128,11 +134,12 @@ function Tilemap:mapToWorld(x,y)
 
     local xWorld = tilemapWorldX + (x - 1) * tileSize
     local yWorld = tilemapWorldY + (y - 1) * tileSize
-    return xWorld, yWorld- tileSize/2
+    --return xWorld, yWorld- tileSize/2
+    return xWorld, yWorld + tileSize/2
 end
 
 function Tilemap:worldToMap(x, y)
-    local xMap = math.floor((x - tilemapWorldX) / tileSize + 0.5) + 1
+    local xMap = math.floor((x - tilemapWorldX) / tileSize + 0.5 ) + 1
     local yMap = math.floor((y - tilemapWorldY) / tileSize + 0.5) + 1
     return xMap, yMap
 end
@@ -219,8 +226,11 @@ end
 function Tilemap:load()
     self:createTileSet()
     self.sharedGrid = Grid(tilemap)
+
     self.finder = Pathfinder(self.sharedGrid, 'JPS', 0)
     self.finderAstar = Pathfinder(self.sharedGrid, 'ASTAR', 0)
+    self.finder:setMode("ORTHOGONAL")
+    self.finderAstar:setMode("DIAGONAL")
 
     self.tiles = {}
     for y = 1, #tilemap do

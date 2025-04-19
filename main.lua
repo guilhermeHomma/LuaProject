@@ -116,9 +116,9 @@ function love.draw()
     for _, item in ipairs(drawQueue) do
         if type(item.object.drawShadow) == "function" then
 
-            --if distance(Player, item.object) < 350 then 
+            if distance(Player, item.object) < 300 then 
                 item.object:drawShadow()
-            --end
+            end
         end
     end
 
@@ -126,9 +126,9 @@ function love.draw()
     Player:drawSight()
 
     for _, item in ipairs(drawQueue) do
-        --if distance(Player, item.object) < 350 then 
+        if distance(Player, item.object) < 400 then 
             item.object:draw()
-        -- end
+        end
     end
     Clouds:draw()
     love.graphics.scale(1, 1)
