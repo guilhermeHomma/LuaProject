@@ -186,18 +186,10 @@ function Player:death()
     love.audio.stop(bulletSound)
 end
 
-function Player:mouseAngle()
-    local mouseX, mouseY = love.mouse.getPosition()
-    
-    mouseX = mouseX/3 - self.x + self.camera.x/3 + self.x
-    mouseY = mouseY/2 - self.y + self.camera.y/2 + self.y
-
-    return math.atan2(mouseY - self.y, mouseX - self.x)
-end
 
 function Player:shoot()
 
-    local angle = Player:mouseAngle()
+    local angle = mouseAngle()
 
     local offsetX = math.cos(angle) * 5
     local offsetY = math.sin(angle) * 5
@@ -300,7 +292,7 @@ function Player:draw()
             local angle = self.angle
     
             if i >= 15 then
-                angle = self:mouseAngle()
+                angle = mouseAngle()
             end
 
             love.graphics.draw(self.playerOutlineSheet, quad, x, y, angle, 1, 1, self.spriteSize/2, self.spriteSize/2)
@@ -323,7 +315,7 @@ function Player:draw()
         local angle = self.angle
 
         if i >= 15 then
-            angle = self:mouseAngle()
+            angle = mouseAngle()
         end
 
         love.graphics.draw(self.playerSheet, quad, x, y, angle, 1, 1, self.spriteSize/2, self.spriteSize/2)

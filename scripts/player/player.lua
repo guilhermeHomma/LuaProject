@@ -5,6 +5,7 @@ local Player = {}
 local Bullet = require("scripts/bullet")
 local Particle = require("scripts/particle")
 local Tilemap = require("scripts/tilemap")
+local Gun = require("scripts/player/gun")
 
 local bulletSound = love.audio.newSource("assets/sfx/tanksound.wav", "static")
 bulletSound:setVolume(0.4)
@@ -16,7 +17,6 @@ function Player:load(camera)
     self.speed = 55
     self.size = 40
 
-    self.squareAngle = 0
     self.spriteSize = 40
     self.bullets = {}
     self.bulletSpeed = 340
@@ -27,6 +27,8 @@ function Player:load(camera)
     self.flipX = false
     self.playerSheet = love.graphics.newImage("assets/sprites/player/soldier/soldier.png")
     self.playerShadow = love.graphics.newImage("assets/sprites/player/shadow.png")
+    self.handImage = love.graphics.newImage("assets/sprites/player/hand.png")
+    self.handImage:setFilter("nearest", "nearest")
     self.playerSheet:setFilter("nearest", "nearest")
     self.playerShadow:setFilter("nearest", "nearest")
 
@@ -38,7 +40,8 @@ function Player:load(camera)
     self.currentFrame = 1
     self.animationTimer = 0
 
-    -- Pré-carrega os quads
+    Gun:load()
+
     self.quads = {}
     local sheetWidth = self.playerSheet:getWidth()
     for i = 0, 5 do
@@ -84,7 +87,6 @@ function Player:update(dt)
         return
     end
 
-    self.squareAngle = self.squareAngle + 0.8*dt
 
     local moveX, moveY = 0, 0
 
@@ -113,24 +115,33 @@ function Player:update(dt)
     if collidedX then moveX = 0 end
     if collidedY then moveY = 0 end
 
-    --if moveX ~= 0 then
-        --if moveX > 0 then self.flipH = true
-        --else self.flipH = false end
-    --end
-    
+
+    local mouseX, mouseY = love.mouse.getPosition()
+
+    mouseX = mouseX/3 - self.x + self.camera.x/3 + self.x
+    mouseY = mouseY/2 - self.y + self.camera.y/2 + self.y
+
+    if not Gun.showGun and moveX ~= 0 then
+        if moveX > 0 then 
+            self.flipH = true
+        else 
+            self.flipH = false
+        end
+    elseif Gun.showGun then
+        if mouseX > self.x then
+            self.flipH = true
+        elseif mouseX < self.x then
+            self.flipH = false
+        end
+    end 
+
     self.x = self.x + moveX * self.speed * dt
     self.y = self.y + moveY * self.speed * dt
 
 
     addToDrawQueue(self.y+7, Player)
 
-    for i = #self.bullets, 1, -1 do
-        local bullet = self.bullets[i]
-        bullet:update(dt)
-        if not bullet.isAlive then
-            table.remove(self.bullets, i)
-        end
-    end
+    Gun:update(dt, self.x, self.y)
 
     self:checkDamage()
     self:updateAnimation(dt, moveX ~= 0 or moveY ~= 0)
@@ -175,7 +186,7 @@ function Player:isColliding(moveX, moveY, size)
     local collidedY = false
 
     for _, tile in ipairs(Tilemap.tiles) do
-        if tile.quadIndex ~= 5 and tile.quadIndex ~= 15 then
+        if tile.collider then
             local tileBox = { x = tile.xWorld - tile.size/2, y = tile.yWorld - tile.size, width = tile.size, height = tile.size }
 
             if checkCollision(playerBoxX, tileBox) then
@@ -212,30 +223,12 @@ function Player:death()
     love.audio.stop(bulletSound)
 end
 
-function Player:mouseAngle()
-    local mouseX, mouseY = love.mouse.getPosition()
-    
-    mouseX = mouseX/3 - self.x + self.camera.x/3 + self.x
-    mouseY = mouseY/2 - self.y + self.camera.y/2 + self.y
 
-    return math.atan2(mouseY - self.y, mouseX - self.x)
-end
 
-function Player:shoot()
-
-    local angle = Player:mouseAngle()
-
-    local offsetX = math.cos(angle) * 5
-    local offsetY = math.sin(angle) * 5
-
-    local bullet = Bullet:new(self.x + offsetX, self.y + offsetY, angle, 15,self.bulletSpeed)
-    camera:shake(1, 0.88)
-    table.insert(self.bullets, bullet)
-end
 
 function love.mousepressed(x, y, button)
     if button == 1 and Player.isAlive then
-        Player:shoot()
+        --Gun:shoot()
     end
 end
 
@@ -266,23 +259,7 @@ function Player:drawSight()
         return
     end
 
-    local mouseX, mouseY = love.mouse.getPosition()
-
-
-
-    mouseX = mouseX/3 - self.x + self.camera.x/3 + self.x
-    mouseY = mouseY/2 - self.y + self.camera.y/2 + self.y
-
-    if mouseX > self.x then
-        self.flipH = true
-    elseif mouseX < self.x then
-        self.flipH = false
-    end
-
-    love.graphics.setColor(0.274, 0.4, 0.45, 1)
-
-    self:drawSquare(mouseX, mouseY, self.squareAngle*3.5, 3)
-
+    Gun:drawSight()
 end
 
 function Player:drawS()
@@ -291,9 +268,6 @@ function Player:drawS()
     end
 
     love.graphics.draw(self.playerShadow, self.x, self.y, 0, 0.85, 0.85, 8, 8)
-    --love.graphics.draw(self.spriteShadow, self.x - 6, self.y - 6, 0 , 0.7, 0.7)
-    --self:drawSquare(self.x, self.y, self.squareAngle, 16 * 0.45)
-
 end
 
 function Player:drawSquare(x, y, angle, halfSize)
@@ -321,6 +295,28 @@ function Player:drawSquare(x, y, angle, halfSize)
     love.graphics.setLineWidth(1)
 end
 
+function Player:drawHand()
+    if not Gun.showGun then return end
+
+    local angle = mouseAngle()
+
+    local handX = self.x + math.cos(angle) * 7
+    local handY = self.y + math.sin(angle) * 7
+
+    local scaleX = (math.cos(angle) < 0) and -1 or 1
+
+    love.graphics.draw(
+        self.handImage,
+        handX-8,
+        handY - 1 ,
+        0,
+        1, 1.2,
+        0, 16
+    )
+    Gun:draw()
+
+end
+
 function Player:draw()
     if not self.isAlive then return end
 
@@ -331,16 +327,36 @@ function Player:draw()
 
     local scaleX = self.flipH and -0.85 or 0.85
     local originX = self.flipH and (self.spriteSize - self.spriteSize / 2) or (self.spriteSize / 2)
+    
+    
 
-    love.graphics.draw(
-        self.playerSheet,
-        quad,
-        self.x,
-        self.y,
-        0,
-        scaleX, 1.2,
-        originX, self.spriteSize
-    )
+
+    local mouseX, mouseY = mousePosition()
+
+    if mouseY > self.y then
+
+        love.graphics.draw(
+            self.playerSheet,
+            quad,
+            self.x,
+            self.y,
+            0,
+            scaleX, 1.2,
+            originX, self.spriteSize
+        )
+        self:drawHand()
+    else 
+        self:drawHand()
+        love.graphics.draw(
+            self.playerSheet,
+            quad,
+            self.x,
+            self.y,
+            0,
+            scaleX, 1.2,
+            originX, self.spriteSize
+        )
+    end
 
     if DEBUG then
         local collisionBox = self:getCollisionBox()

@@ -6,9 +6,10 @@ local Camera = require("scripts/camera")
 camera = Camera:new()
 
 local Ground = require("scripts/ground")
-local WaveManager = require("scripts/waves")
+local WaveManager = require("scripts/managers/waves")
 local Clouds = require("scripts/clouds")
 local Tilemap = require("scripts/tilemap")
+local DoorsManager = require("scripts/managers/doorsManager")
 
 drawQueue = {}
 enemies = {}
@@ -20,12 +21,15 @@ FPS = false
 local music 
 
 function love.load()
+
     math.randomseed(os.time())
     WaveManager:load()
+    camera = Camera:new()
     Player:load(camera)
     Ground:load()
     Clouds:load()
     Tilemap:load()
+    DoorsManager:load()
 
     local cursorImage = love.image.newImageData("assets/sprites/cursor.png")
     local cursor = love.mouse.newCursor(cursorImage, 8, 8) 
@@ -48,7 +52,9 @@ local function restartGame()
     Player:load(camera)
     Ground:load()
     Clouds:load()
+    DoorsManager:load()
     Tilemap:load()
+    
 
     
 end
@@ -56,6 +62,10 @@ end
 function love.keypressed(key)
     if key == "r" then
         restartGame()
+    end
+
+    if key == "o" then
+        DoorsManager:openSouth()
     end
 
     if key == "f5" then
@@ -76,7 +86,6 @@ function love.update(dt)
             addToDrawQueue(enemy.y -1 + enemy.drawPriority, enemy)
         else
             table.remove(enemies, _)
-
         end
     end
 
@@ -91,9 +100,11 @@ function love.update(dt)
     WaveManager:update(dt)
     Clouds:update(dt)
     Player:update(dt)
+    DoorsManager:update(dt)
+
     Tilemap:update()
 
-    camera:update(Player.x *3 - love.graphics.getWidth() / 2, Player.y*2 - love.graphics.getHeight() / 2)
+    camera:update(Player.x *3 - love.graphics.getWidth() / camera.scale / 2, Player.y*2 - love.graphics.getHeight() / camera.scale  / 2)
 end
 
 

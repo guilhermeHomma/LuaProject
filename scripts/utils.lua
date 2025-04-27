@@ -8,6 +8,33 @@ function checkCollision(a, b)
            a.y + a.height > b.y
 end
 
+function isColorMatch(r, g, b, target)
+    local tolerance = 0.04
+    return math.abs(r - target.r) < tolerance and
+           math.abs(g - target.g) < tolerance and
+           math.abs(b - target.b) < tolerance
+end
+
+function mousePosition()
+
+    local mouseX, mouseY = love.mouse.getPosition()
+
+    mouseX = mouseX/3/camera.scale+ camera.x/3
+    mouseY = mouseY/2/camera.scale + camera.y/2
+    return mouseX, mouseY
+end
+
+function mouseAngle()
+    local mouseX, mouseY = mousePosition()
+ 
+    return math.atan2(mouseY - Player.y, mouseX - Player.x)
+end
+
+function setColor255(r, g, b, a)
+    a = a or 255
+    love.graphics.setColor(r/255, g/255, b/255, a/255)
+end
+
 function deepcopy(orig, copies)
     copies = copies or {}
     if type(orig) ~= 'table' then return orig end
