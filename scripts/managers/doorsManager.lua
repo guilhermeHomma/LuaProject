@@ -15,7 +15,23 @@ function doorsManager:load()
 end
 
 function doorsManager:update(dt)
+    if self.southOpening then
+        self.southFrameAnimation = self.southFrameAnimation + 15 * dt -- velocidade da animação (10 fps)
 
+        for _, tile in ipairs(Tilemap.tiles) do
+            if tile.quadIndex == 20 or tile.quadIndex == 21 then
+                tile.frame = math.floor(self.southFrameAnimation)
+                tile:loadQuad()
+            end
+        end
+
+        if self.southFrameAnimation >= 7 then
+            self.southFrameAnimation = 7
+            self.southOpening = false
+            self:openTiles()
+            self.southOpen = true
+        end
+    end
 end
 
 function doorsManager:openTiles()
@@ -23,8 +39,6 @@ function doorsManager:openTiles()
     for _, tile in ipairs(Tilemap.tiles) do
         if tile.quadIndex == 20 or tile.quadIndex == 21 then 
             tile:openDoor()
-            tile.frame = self.southFrameAnimation
-            tile:loadQuad()
             tilemap[tile.y][tile.x] = 0
         end
     end
@@ -32,9 +46,8 @@ function doorsManager:openTiles()
 end
 
 function doorsManager:openSouth()
-    self.southFrameAnimation = 7
-    doorsManager:openTiles()
-    self.southOpen = true
+    self.southFrameAnimation = 0
+    self.southOpening = true
 end
 
 return doorsManager

@@ -24,7 +24,7 @@ function DoorTile:loadQuad()
 end
 
 function DoorTile:draw()
-    if self.quadIndex == 20 or self.quadIndex == 22 then return end
+    if self.quadIndex == 20 or self.quadIndex == 22 or not self.collider then return end
     local size = 16
     love.graphics.draw(sheetImage, self.quad, self.xWorld, self.yWorld - 4, 0, 1 ,1.3, size/2, size)
 end
