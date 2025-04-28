@@ -9,7 +9,7 @@ function checkCollision(a, b)
 end
 
 function isColorMatch(r, g, b, target)
-    local tolerance = 0.04
+    local tolerance = 0.1
     return math.abs(r - target.r) < tolerance and
            math.abs(g - target.g) < tolerance and
            math.abs(b - target.b) < tolerance

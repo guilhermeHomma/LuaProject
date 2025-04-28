@@ -63,7 +63,7 @@ end
 
 function WaveManager:startNextWave()
     self.wave = self.wave + 1
-    self.enemiesPerWave = self.enemiesPerWave + 3
+    self.enemiesPerWave = self.enemiesPerWave + 2
     self.enemiesSpawned = 0
 end
 

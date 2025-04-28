@@ -66,6 +66,7 @@ function love.keypressed(key)
 
     if key == "o" then
         DoorsManager:openSouth()
+        DoorsManager:openNorth()
     end
 
     if key == "f5" then
