@@ -38,16 +38,16 @@ function Enemy:new(x, y)
     enemy.frameHeight = 32
     enemy.frames = {}
 
-    self.pathUpdateInterval = 120
-    self.pathUpdateCounter = love.math.random(0, self.pathUpdateInterval)
+    enemy.pathUpdateInterval = 120
+    enemy.pathUpdateCounter = love.math.random(0, enemy.pathUpdateInterval)
 
     local angle = math.random() * (2 * math.pi)
     enemy.randomDirX = math.cos(angle)
     enemy.randomDirY = math.sin(angle)
 
-    self.path = nil
-    self.finder = "ASTAR"
-    if math.random(2) == 1 then self.finder = "JPS" end
+    enemy.path = nil
+    enemy.finder = "JPS"
+    --if math.random(0, 2) >= 1 then enemy.finder = "JPS" end
 
     local sheetWidth = enemy.spriteSheet:getWidth()
     local sheetHeight = enemy.spriteSheet:getHeight()
@@ -88,15 +88,18 @@ function Enemy:update(dt)
     local velocityX = 0
     local velocityY = 0
 
-    if (self.pathUpdateCounter >= self.pathUpdateInterval and self.state == Enemy.states.idle) or self.path == nil or #self.path < 2 then
+    if (self.pathUpdateCounter >= self.pathUpdateInterval and Player.isAlive) or self.path == nil or #self.path < 2 then
+    --if (self.pathUpdateCounter >= self.pathUpdateInterval and self.state == Enemy.states.idle and Player.isAlive) or self.path == nil or #self.path < 2 then
         self.pathUpdateCounter = 0
         --print("generate")
         local posMapX, posMapY = Tilemap:worldToMap(self.x, self.y)
         local playerMapX, playerMapY = Tilemap:worldToMap(Player.x, Player.y)
         if self.finder == "ASTAR" then --varia o algoritmo
-            self.path = Tilemap.finder:getPath(posMapX, posMapY, playerMapX, playerMapY)
-        else
+
             self.path = Tilemap.finderAstar:getPath(posMapX, posMapY, playerMapX, playerMapY)
+        else
+
+            self.path = Tilemap.finder:getPath(posMapX, posMapY, playerMapX, playerMapY)
 
         end
  
@@ -110,7 +113,7 @@ function Enemy:update(dt)
 
         nextTileX, nextTileY = Tilemap:mapToWorld(nextNode.x, nextNode.y)
 
-        nextTileY = nextTileY + 8
+        nextTileY = nextTileY - 8
 
         local distance = math.sqrt((self.x - nextTileX)^2 + (self.y - nextTileY)^2)
         if distance < 4 then
@@ -216,7 +219,7 @@ function Enemy:isColliding(moveX, moveY, size)
     local collidedY = false
 
     for _, tile in ipairs(Tilemap.tiles) do
-        if tile.quadIndex ~= 5 and tile.quadIndex ~= 15 then
+        if tile.collider then
             local tileBox = { x = tile.xWorld - tile.size/2, y = tile.yWorld - tile.size, width = tile.size, height = tile.size }
 
             if checkCollision(selfBoxX, tileBox) then
@@ -240,8 +243,8 @@ function Enemy:takeDamage(damage, dx, dy)
     self.life = self.life - damage
 
     local bulletSound = love.audio.newSource("assets/sfx/enemyDamage.wav", "static")
-    bulletSound:setVolume(4)
-    bulletSound:setPitch(0.9 + math.random() * 0.2)
+    bulletSound:setVolume(2)
+    bulletSound:setPitch(0.8 + math.random() * 0.1)
     bulletSound:play()
 end
 
@@ -251,12 +254,12 @@ function Enemy:death()
     end
 
     local bulletSound = love.audio.newSource("assets/sfx/bullet.wav", "static")
-    bulletSound:setVolume(1.5)
-    bulletSound:setPitch(1.2)
+    bulletSound:setVolume(0.5)
+    bulletSound:setPitch(0.8)
     bulletSound:play()
 
     self.isAlive = false
-    local particle = Particle:new(self.x, self.y, 13, 7,0.3)
+    local particle = Particle:new(self.x, self.y, 12, 7,0.3)
     table.insert(particles, particle)
     local particle = Particle:new(self.x +  math.random(-2, 2), self.y + math.random(-2, 2), math.random(5, 15), math.random(5, 7), math.random(0.2, 0.3))
     table.insert(particles, particle)
@@ -287,12 +290,10 @@ function Enemy:drawShadow()
         return
     end
 
-    local scaleX = 0.7
-    if self.flipH then
-        scaleX = -0.7
-    end
+    local width = 0.7
+    local height = 0.6
 
-    love.graphics.draw(self.spriteShadow, self.x - 6, self.y - 6, 0 , 0.7, 0.7)
+    love.graphics.draw(self.spriteShadow, self.x - (width/2) * 16, self.y- (height/2) * 16 , 0 , width, height)
 end
 
 function Enemy:draw()
@@ -314,6 +315,25 @@ function Enemy:draw()
 
     if DEBUG then 
         love.graphics.rectangle("line", self.x - 3.5, self.y - 3.5, 7, 7)
+    
+        if self.path and #self.path > 1 then
+            love.graphics.setColor(0, 1, 0, 0.6)
+    
+            local points = {}
+    
+            for i = 1, #self.path do
+                local node = self.path[i]
+                local worldX, worldY = Tilemap:mapToWorld(node.x, node.y)
+
+                worldY = worldY - 8
+                
+                table.insert(points, worldX)
+                table.insert(points, worldY)
+            end
+    
+            love.graphics.line(points)
+            love.graphics.setColor(1, 1, 1, 1)
+        end
     end
 end
 

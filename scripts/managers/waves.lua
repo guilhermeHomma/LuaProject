@@ -7,7 +7,7 @@ require("scripts/utils")
 function WaveManager:load()
     
     self.wave = 1
-    self.enemiesPerWave = 5
+    self.enemiesPerWave = 3
     self.spawnInterval = 1
     self.spawnTimer = 0
     self.enemiesSpawned = 0
@@ -48,7 +48,7 @@ function WaveManager:enemyPosition()
             if tilemap[y][x] == 0 then
 
                 local tilex, tiley = Tilemap:mapToWorld(x,y)
-                if distance({x=tilex, y=tiley}, Player) > 200 then
+                if distance({x=tilex, y=tiley}, Player) > 300 then
                     table.insert(posibleTiles, {x=tilex, y=tiley})
                 end
             end
@@ -63,7 +63,7 @@ end
 
 function WaveManager:startNextWave()
     self.wave = self.wave + 1
-    self.enemiesPerWave = self.enemiesPerWave + 3
+    self.enemiesPerWave = self.enemiesPerWave + 2
     self.enemiesSpawned = 0
 end
 

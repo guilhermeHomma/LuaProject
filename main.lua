@@ -3,12 +3,13 @@ local stretchFactor = 0.65
 
 local Camera = require("scripts/camera")
 
-camera = Camera:new(0, 0)
+camera = Camera:new()
 
 local Ground = require("scripts/ground")
-local WaveManager = require("scripts/waves")
+local WaveManager = require("scripts/managers/waves")
 local Clouds = require("scripts/clouds")
 local Tilemap = require("scripts/tilemap")
+local DoorsManager = require("scripts/managers/doorsManager")
 
 drawQueue = {}
 enemies = {}
@@ -20,12 +21,15 @@ FPS = false
 local music 
 
 function love.load()
+
     math.randomseed(os.time())
     WaveManager:load()
+    camera = Camera:new()
     Player:load(camera)
     Ground:load()
     Clouds:load()
     Tilemap:load()
+    DoorsManager:load()
 
     local cursorImage = love.image.newImageData("assets/sprites/cursor.png")
     local cursor = love.mouse.newCursor(cursorImage, 8, 8) 
@@ -37,6 +41,44 @@ function love.load()
 
 end
 
+
+local function restartGame()
+    enemies = {}
+    particles = {}
+    drawQueue = {}
+
+    camera = Camera:new()
+    WaveManager:load()
+    Player:load(camera)
+    Ground:load()
+    Clouds:load()
+    DoorsManager:load()
+    Tilemap:load()
+    
+
+    
+end
+
+function love.keypressed(key)
+    if key == "r" then
+        restartGame()
+    end
+
+    if key == "o" then
+        DoorsManager:openSouth()
+        DoorsManager:openNorth()
+    end
+
+    if key == "f5" then
+        FPS = not FPS
+    end
+
+    if key == "f6" then
+        DEBUG = not DEBUG
+    end
+
+end
+
 function love.update(dt)
 
     for _, enemy in ipairs(enemies) do
@@ -45,7 +87,6 @@ function love.update(dt)
             addToDrawQueue(enemy.y -1 + enemy.drawPriority, enemy)
         else
             table.remove(enemies, _)
-
         end
     end
 
@@ -60,9 +101,11 @@ function love.update(dt)
     WaveManager:update(dt)
     Clouds:update(dt)
     Player:update(dt)
+    DoorsManager:update(dt)
+
     Tilemap:update()
 
-    camera:update(Player.x *3 - love.graphics.getWidth() / 2, Player.y*2 - love.graphics.getHeight() / 2)
+    camera:update(Player.x *3 - love.graphics.getWidth() / camera.scale / 2, Player.y*2 - love.graphics.getHeight() / camera.scale  / 2)
 end
 
 
@@ -84,7 +127,10 @@ function love.draw()
 
     for _, item in ipairs(drawQueue) do
         if type(item.object.drawShadow) == "function" then
-            item.object:drawShadow()
+
+            if distance(Player, item.object) < 300 then 
+                item.object:drawShadow()
+            end
         end
     end
 
@@ -92,7 +138,9 @@ function love.draw()
     Player:drawSight()
 
     for _, item in ipairs(drawQueue) do
-        item.object:draw()
+        if distance(Player, item.object) < 400 then 
+            item.object:draw()
+        end
     end
     Clouds:draw()
     love.graphics.scale(1, 1)
@@ -103,7 +151,10 @@ function love.draw()
     WaveManager:draw()
 
     if FPS or DEBUG then 
-        love.graphics.print("FPS: " .. love.timer.getFPS(), 10, 10)
+        love.graphics.print("FPS: " .. love.timer.getFPS(), 10, 60)
+    end
+    if DEBUG then
+        love.graphics.print("enemies qty: " .. #enemies, 10, 80)
     end
 end
 
