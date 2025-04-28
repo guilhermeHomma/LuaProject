@@ -20,6 +20,8 @@ FPS = false
 
 local music 
 
+local VERSION = "0.1"
+
 function love.load()
 
     math.randomseed(os.time())
