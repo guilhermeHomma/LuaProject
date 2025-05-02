@@ -116,10 +116,14 @@ function Player:update(dt)
     if collidedY then moveY = 0 end
 
 
-    local mouseX, mouseY = love.mouse.getPosition()
+    local mouseX, mouseY = mousePosition()
+    self.x = self.x + moveX * self.speed * dt
+    self.y = self.y + moveY * self.speed * dt
 
-    mouseX = mouseX/3 - self.x + self.camera.x/3 + self.x
-    mouseY = mouseY/2 - self.y + self.camera.y/2 + self.y
+
+    addToDrawQueue(self.y+7, Player)
+
+    Gun:update(dt, self.x, self.y)
 
     if not Gun.showGun and moveX ~= 0 then
         if moveX > 0 then 
@@ -135,14 +139,7 @@ function Player:update(dt)
         end
     end 
 
-    self.x = self.x + moveX * self.speed * dt
-    self.y = self.y + moveY * self.speed * dt
-
-
-    addToDrawQueue(self.y+7, Player)
-
-    Gun:update(dt, self.x, self.y)
-
+    
     self:checkDamage()
     self:updateAnimation(dt, moveX ~= 0 or moveY ~= 0)
     self:death()
@@ -154,7 +151,7 @@ function Player:checkDamage()
         local dy = enemy.y - self.y
         local distance = math.sqrt(dx * dx + dy * dy)
 
-        if distance < 12 then
+        if distance < 18 then
             enemy.life = 0
             enemy:death()
             camera:shake(2, 0.95)
@@ -241,15 +238,24 @@ function Player:drawLife()
     local spacing = 5
     local startX = 15
     local startY = 15
+    local line = 4
+    local SquareLineSize = size - line
 
     for i = 1, self.totalLife do
         love.graphics.setColor(0.274, 0.4, 0.45)
-
+        local drawTipe = "fill"
+        local squareSize = size
+        local currentStartX = startX + (i - 1) * (size + spacing)
+        local currentStartY = startY
         if self.life < i then
-            love.graphics.setColor(0.70, 0.63, 0.52)
-
+            drawTipe = "line"
+            squareSize = SquareLineSize
+            currentStartX = currentStartX + line/2
+            currentStartY = currentStartY + line/2
         end
-        love.graphics.rectangle("fill", startX + (i - 1) * (size + spacing), startY, size, size)
+        love.graphics.setLineWidth(line)
+        love.graphics.rectangle(drawTipe, currentStartX, currentStartY, squareSize, squareSize)
+        love.graphics.setLineWidth(1)
     end
     love.graphics.setColor(1, 1, 1, 1)
 end
@@ -327,7 +333,6 @@ function Player:draw()
 
     local scaleX = self.flipH and -0.85 or 0.85
     local originX = self.flipH and (self.spriteSize - self.spriteSize / 2) or (self.spriteSize / 2)
-    
     
 
 

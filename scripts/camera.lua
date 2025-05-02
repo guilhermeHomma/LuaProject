@@ -1,7 +1,10 @@
 local Camera = {}
 Camera.__index = Camera
-local baseWidth = 960
-local baseHeight = 540
+--local baseWidth = 960
+--local baseHeight = 540
+local baseWidth = 1120
+local baseHeight = 630
+
 function Camera:new(x, y)
     if not x then x = 0 end
     if not y then y = 0 end 
@@ -19,12 +22,25 @@ function Camera:new(x, y)
     cam.shakeIntensity = 0
     cam.shakeDecay = 0.5
 
+    cam.targetDistanceX = 0.5
+    cam.targetDistanceY = 0.5
+
     local scaleX = cam.windowWidth / baseWidth
     local scaleY = cam.windowHeight / baseHeight
+
+    
 
     cam.scale = math.max(scaleX, scaleY)
 
     return cam
+end
+
+function Camera:setCenterDistance(targetX, targetY)
+
+    local dx = targetX - self.x
+    local dy = targetY - self.y 
+    self.targetDistanceX = self.windowWidth/2 + dx
+    self.targetDistanceY = self.windowHeight/2 + dy
 end
 
 function Camera:update(targetX, targetY)
@@ -35,6 +51,9 @@ function Camera:update(targetX, targetY)
     local scaleY = self.windowHeight / baseHeight
 
     self.scale = math.max(scaleX, scaleY)
+
+    self:setCenterDistance(targetX, targetY)
+
     self.x = self.x + (targetX - self.x) * self.smoothSpeed
     self.y = self.y + (targetY -40- self.y) * self.smoothSpeed
     if self.shakeIntensity > 0 then
@@ -50,7 +69,7 @@ end
 function Camera:attach()
     love.graphics.push()
 
-    love.graphics.scale(self.scale, self.scale)
+    --love.graphics.scale(self.scale, self.scale)
     
     love.graphics.translate(-self.x, -self.y)
 end

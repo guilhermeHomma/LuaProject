@@ -17,7 +17,7 @@ function Gun:load()
     self.gunSheet = love.graphics.newImage("assets/sprites/player/guns.png")
     self.gunSheet:setFilter("nearest", "nearest")
     self.squareAngle = 0
-    self.gunIndex = 1 -- 1 2 ou 3
+    self.gunIndex = 2 -- 1 2 ou 3
 
     self.gunConfig = {
         {shotCooldown = 0.54, damage = 10, bulletSpeed = 300, shootFunction = function() self:shootPistol() end},

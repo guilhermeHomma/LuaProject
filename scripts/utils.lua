@@ -35,6 +35,11 @@ function setColor255(r, g, b, a)
     love.graphics.setColor(r/255, g/255, b/255, a/255)
 end
 
+function hexToRGB(hex)
+    hex = hex:gsub("#", "")
+    return {tonumber("0x"..hex:sub(1,2))/255, tonumber("0x"..hex:sub(3,4))/255, tonumber("0x"..hex:sub(5,6))/255}
+end
+
 function deepcopy(orig, copies)
     copies = copies or {}
     if type(orig) ~= 'table' then return orig end
