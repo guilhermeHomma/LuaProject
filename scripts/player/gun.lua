@@ -81,10 +81,10 @@ function Gun:shootShotgun()
     local bullet = Bullet:new(self.x + offsetX, self.y + offsetY, angle- 0.15, 15, bulletSpeed, damage)
     table.insert(self.bullets, bullet)
 
-    local bulletSound = love.audio.newSource("assets/sfx/bullet.wav", "static")
+    local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
 
-    bulletSound:setVolume(0.9)
-    bulletSound:setPitch(0.7 + math.random() * 0.2)
+    bulletSound:setVolume(1)
+    bulletSound:setPitch(0.7 + math.random() * 0.1)
     bulletSound:play()
 
 end
@@ -101,10 +101,10 @@ function Gun:shootPistol()
     local bullet = Bullet:new(self.x + offsetX, self.y + offsetY, angle, 15, bulletSpeed, damage)
     table.insert(self.bullets, bullet)
 
-    local bulletSound = love.audio.newSource("assets/sfx/bullet.wav", "static")
+    local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
 
-    bulletSound:setVolume(0.6)
-    bulletSound:setPitch(0.9 + math.random() * 0.3)
+    bulletSound:setVolume(0.8)
+    bulletSound:setPitch(0.9 + math.random() * 0.1)
     bulletSound:play()
 
 end
@@ -112,10 +112,10 @@ end
 function Gun:shootRaygun()
 
 
-    local bulletSound = love.audio.newSource("assets/sfx/bullet.wav", "static")
+    local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
 
-    bulletSound:setVolume(0.9)
-    bulletSound:setPitch(0.9 + math.random() * 0.3)
+    bulletSound:setVolume(0.5)
+    bulletSound:setPitch(1.0 + math.random() * 0.1)
     bulletSound:play()
 
 end
@@ -124,7 +124,7 @@ function Gun:shoot()
     if self.gunConfig[self.gunIndex].shotCooldown >= self.shootTimer then return end
 
     self.showGun = true
-    self.shootTimer = 0
+    self.shootTimer = 0 - math.random() * 0.1
 
     self.gunConfig[self.gunIndex].shootFunction(self)
 

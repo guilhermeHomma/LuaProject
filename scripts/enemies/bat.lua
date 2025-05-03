@@ -230,7 +230,7 @@ function Enemy:death()
         return
     end
 
-    local bulletSound = love.audio.newSource("assets/sfx/bullet.wav", "static")
+    local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
     bulletSound:setVolume(1.5)
     bulletSound:setPitch(1.2)
     bulletSound:play()

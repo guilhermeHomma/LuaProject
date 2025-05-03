@@ -253,8 +253,8 @@ function Enemy:death()
         return
     end
 
-    local bulletSound = love.audio.newSource("assets/sfx/bullet.wav", "static")
-    bulletSound:setVolume(0.5)
+    local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
+    bulletSound:setVolume(0.3)
     bulletSound:setPitch(0.8)
     bulletSound:play()
 
@@ -301,16 +301,17 @@ function Enemy:draw()
     if not self.isAlive then
         return
     end
-
+    local xOffset = 0
     local scaleX = 0.7
     if self.flipH then
         scaleX = -0.7
+        xOffset = 1
     end
 
-    if self.state == Enemy.states.damage and Player.isAlive then
-        love.graphics.draw(self.spriteOutline, self.frames[self.currentFrame], self.x, self.y, 0, scaleX, 0.7, self.frameWidth / 2, self.frameHeight)
+    if self.state == Enemy.states.damage then
+        love.graphics.draw(self.spriteOutline, self.frames[self.currentFrame], xOffset + self.x, self.y, 0, scaleX, 0.7, self.frameWidth / 2, self.frameHeight)
     else 
-        love.graphics.draw(self.spriteSheet, self.frames[self.currentFrame], self.x, self.y, 0, scaleX, 0.7, self.frameWidth / 2, self.frameHeight)
+        love.graphics.draw(self.spriteSheet, self.frames[self.currentFrame], xOffset +self.x, self.y, 0, scaleX, 0.7, self.frameWidth / 2, self.frameHeight)
     end
 
     if DEBUG then 

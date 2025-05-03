@@ -79,7 +79,19 @@ function Player:updateAnimation(dt, moving)
         if self.currentFrame > #anim.frames then
             self.currentFrame = 1
         end
+
+        if moving and self.currentFrame % 2 == 0 then
+            
+            local stepsound = love.audio.newSource("assets/sfx/footsteps/foot-steps-0.mp3", "static")
+
+            stepsound:setVolume(0.75)
+            stepsound:setPitch(0.9 + math.random() * 0.4)
+            stepsound:play()
+
+        end
     end
+
+
 end
 
 function Player:update(dt)

@@ -71,7 +71,7 @@ function Bullet:update(dt)
     end
 
     if self:isColliding() then
-        local bulletSound = love.audio.newSource("assets/sfx/bullet.wav", "static")
+        local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
         bulletSound:setVolume(0.2)
         bulletSound:setPitch(1.4 + math.random() * 0.3)
         bulletSound:play()

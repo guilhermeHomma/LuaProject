@@ -12,6 +12,7 @@ local WaveManager = require("scripts/managers/waves")
 local Clouds = require("scripts/clouds")
 local Tilemap = require("scripts/tilemap")
 local DoorsManager = require("scripts/managers/doorsManager")
+local AmbienceSound = require("scripts/managers/ambienceSound")
 local shader = love.graphics.newShader("scripts/shaders/palette.glsl")
 local paletteList = require("scripts/shaders/paletteList")
 
@@ -27,7 +28,7 @@ FPS = false
 local music 
 
 function love.load()
-
+    --love.window.setMode(0, 0, { fullscreen = true })
     canvas = love.graphics.newCanvas(love.graphics.getWidth(), love.graphics.getHeight())
     math.randomseed(os.time())
     WaveManager:load()
@@ -37,7 +38,7 @@ function love.load()
     Clouds:load()
     Tilemap:load()
     DoorsManager:load()
-
+    AmbienceSound:load()
     
 
     local cursorImage = love.image.newImageData("assets/sprites/cursor.png")
@@ -109,7 +110,7 @@ function love.update(dt)
     for _, enemy in ipairs(enemies) do
         if enemy.isAlive then
             enemy:update(dt) 
-            addToDrawQueue(enemy.y +4 + enemy.drawPriority, enemy)
+            addToDrawQueue(enemy.y +6 + enemy.drawPriority, enemy)
         else
             table.remove(enemies, _)
         end
@@ -127,7 +128,7 @@ function love.update(dt)
     Clouds:update(dt)
     Player:update(dt)
     DoorsManager:update(dt)
-
+    AmbienceSound:update(dt)
     Tilemap:update()
 
     camera:update(Player.x *3 - love.graphics.getWidth() / camera.scale / 2, Player.y*2 - love.graphics.getHeight() / camera.scale  / 2)
