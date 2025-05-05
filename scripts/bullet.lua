@@ -79,9 +79,9 @@ function Bullet:update(dt)
     end
 
     local particle = Particle:new(self.x, self.y, self.height-2, 1.2, 0.07)
-    table.insert(particles, particle)
+    table.insert(Game.particles, particle)
 
-    for _, enemy in ipairs(enemies) do
+    for _, enemy in ipairs(Game.enemies) do
         if self:checkCollisionWithEnemy(enemy) and self.isAlive and enemy.isAlive then
             self.isAlive = false 
             enemy:takeDamage(self.damage, self.dx, self.dy)

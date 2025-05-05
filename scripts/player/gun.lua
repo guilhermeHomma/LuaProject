@@ -17,7 +17,9 @@ function Gun:load()
     self.gunSheet = love.graphics.newImage("assets/sprites/player/guns.png")
     self.gunSheet:setFilter("nearest", "nearest")
     self.squareAngle = 0
-    self.gunIndex = 2 -- 1 2 ou 3
+    self.gunIndex = 3 -- 1 2 ou 3
+
+    self.angle = 0
 
     self.gunConfig = {
         {shotCooldown = 0.54, damage = 10, bulletSpeed = 300, shootFunction = function() self:shootPistol() end},
@@ -36,7 +38,7 @@ end
 function Gun:update(dt, playerX, playerY)
     self.x = playerX
     self.y = playerY
-
+    self.angle = mouseAngle()
     self.squareAngle = self.squareAngle + 0.8*dt
     self.shootTimer = self.shootTimer + dt
 
@@ -148,8 +150,6 @@ end
 
 function Gun:draw()
 
-    local angle = mouseAngle()
-
     local quad = love.graphics.newQuad(
         (self.gunIndex - 1) * self.size, 
         0,
@@ -157,8 +157,8 @@ function Gun:draw()
         self.gunSheet:getDimensions()
     )
 
-    local offsetX = math.cos(angle) * self.centerDistance
-    local offsetY = math.sin(angle) * self.centerDistance
+    local offsetX = math.cos(self.angle) * self.centerDistance
+    local offsetY = math.sin(self.angle) * self.centerDistance
 
     for i = 0, 2, 1 do
 
@@ -167,7 +167,7 @@ function Gun:draw()
             quad,
             self.x + offsetX,
             self.y + offsetY - 14 + i,
-            angle,
+            self.angle,
             0.8, 0.8,
             0,
             self.size / 2

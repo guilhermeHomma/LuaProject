@@ -40,7 +40,7 @@ end
 function Particle:draw()
 
     local alpha = 0.8
-    love.graphics.setColor(1, 1, 1, alpha)
+    love.graphics.setColor(1, 1, 1, 1)
     love.graphics.circle("fill", self.x, self.y -self.height, self.radius)
     love.graphics.setColor(1, 1, 1)
 

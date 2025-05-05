@@ -15,6 +15,17 @@ function isColorMatch(r, g, b, target)
            math.abs(b - target.b) < tolerance
 end
 
+function getDistanceVolume(distance, maxVolume, maxDistance)
+    if maxVolume == nil then maxVolume = 1 end
+    if maxDistance == nil then maxDistance = 150 end
+
+    if distance >= maxDistance then
+        return 0
+    end
+    local factor = 1 - (distance / maxDistance)
+    return maxVolume * factor
+end
+
 function mousePosition()
 
     local mouseX, mouseY = love.mouse.getPosition()

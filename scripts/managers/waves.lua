@@ -12,8 +12,8 @@ function WaveManager:load()
     self.spawnTimer = 0
     self.enemiesSpawned = 0
 
-    self.font = love.graphics.newFont("assets/fonts/PixelGame.otf", 30)
-    love.graphics.setFont(self.font)
+    self.font = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 32)
+    self.font:setFilter("nearest", "nearest")
 
 end
 
@@ -26,7 +26,7 @@ function WaveManager:update(dt)
         end
     end
 
-    if #enemies == 0 and self.enemiesSpawned >= self.enemiesPerWave then
+    if #Game.enemies == 0 and self.enemiesSpawned >= self.enemiesPerWave then
         self:startNextWave()
     end
 end
@@ -34,7 +34,7 @@ end
 function WaveManager:instanceEnemy()
 
     local enemyX, enemyY = self:enemyPosition()
-    table.insert(enemies, Enemy:new(enemyX, enemyY) )
+    table.insert(Game.enemies, Enemy:new(enemyX, enemyY) )
     self.enemiesSpawned = self.enemiesSpawned + 1
 end
 
@@ -48,7 +48,7 @@ function WaveManager:enemyPosition()
             if tilemap[y][x] == 0 then
 
                 local tilex, tiley = Tilemap:mapToWorld(x,y)
-                if distance({x=tilex, y=tiley}, Player) > 200 then
+                if distance({x=tilex, y=tiley}, Player) > 240 then
                     table.insert(posibleTiles, {x=tilex, y=tiley})
                 end
             end
@@ -77,10 +77,10 @@ function WaveManager:draw()
     local text = "WAVE: " .. self.wave
     local textWidth = self.font:getWidth(text)
 
-    local x = love.graphics.getWidth() - textWidth - 15
+    local x = baseWidth - textWidth - 15
     --love.graphics.setColor(0.70, 0.63, 0.52)
     love.graphics.setColor(0.274, 0.4, 0.45, alpha)
-
+    love.graphics.setFont(self.font)
     love.graphics.print(text, x+ 2, 10 + 2)
     love.graphics.setColor(1, 1, 1)
     love.graphics.print(text, x, 10)

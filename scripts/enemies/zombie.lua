@@ -260,11 +260,11 @@ function Enemy:death()
 
     self.isAlive = false
     local particle = Particle:new(self.x, self.y, 12, 7,0.3)
-    table.insert(particles, particle)
+    table.insert(Game.particles, particle)
     local particle = Particle:new(self.x +  math.random(-2, 2), self.y + math.random(-2, 2), math.random(5, 15), math.random(5, 7), math.random(0.2, 0.3))
-    table.insert(particles, particle)
+    table.insert(Game.particles, particle)
     local particle = Particle:new(self.x +  math.random(-2,2), self.y + math.random(-2, 2), math.random(5, 15), math.random(5, 7), math.random(0.2, 0.3))
-    table.insert(particles, particle)
+    table.insert(Game.particles, particle)
 end
 
 function Enemy:animate(startFrame, endFrame, dt)
@@ -274,6 +274,19 @@ function Enemy:animate(startFrame, endFrame, dt)
         self.currentFrame = self.currentFrame + 1
         if self.currentFrame > endFrame then
             self.currentFrame = startFrame
+        end
+
+        if self.state == Enemy.states.walk and self.currentFrame % 2 == 0 then
+
+            local playerDistance = self:playerDistance()
+            if playerDistance <= 100 then
+                local stepsound = love.audio.newSource("assets/sfx/footsteps/foot-steps-0.mp3", "static")
+
+                stepsound:setVolume(getDistanceVolume(playerDistance, 0.64))
+                stepsound:setPitch(0.4 + math.random() * 0.4)
+                stepsound:play()
+            end
+
         end
     end
 end

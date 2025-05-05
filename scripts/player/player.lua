@@ -31,7 +31,7 @@ function Player:load(camera)
     self.handImage:setFilter("nearest", "nearest")
     self.playerSheet:setFilter("nearest", "nearest")
     self.playerShadow:setFilter("nearest", "nearest")
-
+    self.mouseAngle = 0
     self.animations = {
         idle = { frames = {0, 1}, duration = 2 },
         walk = { frames = {2, 3, 4, 5}, duration = 0.6 }
@@ -99,7 +99,7 @@ function Player:update(dt)
         return
     end
 
-
+    self.mouseAngle = mouseAngle()
     local moveX, moveY = 0, 0
 
     -- Input WASD
@@ -158,7 +158,7 @@ function Player:update(dt)
 end
 
 function Player:checkDamage()
-    for _, enemy in ipairs(enemies) do
+    for _, enemy in ipairs(Game.enemies) do
         local dx = enemy.x - self.x
         local dy = enemy.y - self.y
         local distance = math.sqrt(dx * dx + dy * dy)
@@ -217,7 +217,7 @@ function Player:death()
     
     self.isAlive = false 
     local particle = Particle:new(self.x, self.y, 13, 7,0.3)
-    table.insert(particles, particle)
+    table.insert(Game.particles, particle)
     for i = 1, 7 do
         local particle = Particle:new(
             self.x + math.random(-3, 3),
@@ -226,7 +226,7 @@ function Player:death()
             math.random(7, 8),
             math.random(0.4 + i*0.05, 0.5 + i*0.05)
         )
-        table.insert(particles, particle)
+        table.insert(Game.particles, particle)
     end
 
     love.audio.stop(bulletSound)
@@ -246,8 +246,8 @@ function Player:drawLife()
         return
     end
 
-    local size = 32
-    local spacing = 5
+    local size = 24
+    local spacing = 6
     local startX = 15
     local startY = 15
     local line = 4
@@ -316,12 +316,10 @@ end
 function Player:drawHand()
     if not Gun.showGun then return end
 
-    local angle = mouseAngle()
+    local handX = self.x + math.cos(self.mouseAngle) * 7
+    local handY = self.y + math.sin(self.mouseAngle) * 7
 
-    local handX = self.x + math.cos(angle) * 7
-    local handY = self.y + math.sin(angle) * 7
-
-    local scaleX = (math.cos(angle) < 0) and -1 or 1
+    local scaleX = (math.cos(self.mouseAngle) < 0) and -1 or 1
 
     love.graphics.draw(
         self.handImage,
