@@ -4,10 +4,12 @@ local Tilemap = require("scripts/tilemap")
 
 require("scripts/utils")
 
+local maxEnemiesAlive = 50
+
 function WaveManager:load()
     
     self.wave = 1
-    self.enemiesPerWave = 3
+    self.enemiesPerWave = 20
     self.spawnInterval = 1
     self.spawnTimer = 0
     self.enemiesSpawned = 0
@@ -18,7 +20,7 @@ function WaveManager:load()
 end
 
 function WaveManager:update(dt)
-    if self.enemiesSpawned < self.enemiesPerWave then
+    if self.enemiesSpawned < self.enemiesPerWave and #Game.enemies < maxEnemiesAlive then
         self.spawnTimer = self.spawnTimer + dt
         if self.spawnTimer >= self.spawnInterval then
             self.spawnTimer = 0
@@ -26,7 +28,7 @@ function WaveManager:update(dt)
         end
     end
 
-    if #Game.enemies == 0 and self.enemiesSpawned >= self.enemiesPerWave then
+    if #Game.enemies == 0 and self.enemiesSpawned >= self.enemiesPerWave and self.wave >= 0 then
         self:startNextWave()
     end
 end
@@ -70,7 +72,7 @@ end
 
 function WaveManager:draw()
 
-    if not Player.isAlive then
+    if not Player.isAlive or self.wave <= 0 then
         return
     end
 

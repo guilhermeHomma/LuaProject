@@ -15,7 +15,7 @@ local Grid = require("jumper.grid")
 local Pathfinder = require("jumper.pathfinder")
 
 function loadTilemapFromImage()
-    local imageData = love.image.newImageData("assets/sprites/map-closed.png")
+    local imageData = love.image.newImageData("assets/sprites/map3.png")
     local width, height = imageData:getDimensions()
     local tilemap = {}
 
@@ -139,10 +139,13 @@ end
 
 function Tilemap:loadfinders()
     self.sharedGrid = Grid(tilemap)
+
     self.finder = Pathfinder(self.sharedGrid, 'JPS', 0)
     self.finderAstar = Pathfinder(self.sharedGrid, 'ASTAR', 0)
-    self.finder:setMode("DIAGONAL")
-    self.finderAstar:setMode("ORTHOGONAL")
+    self.finder:setMode("DIAGONAL") -- ORTHOGONAL
+    self.finderAstar:setMode("DIAGONAL")
+
+
 end
 
 function Tilemap:load()
@@ -150,7 +153,7 @@ function Tilemap:load()
     tileSet:createTileSet()
     Tile:setTilemap(self)
     self:loadfinders()
-    
+
     self.tiles = {}
     for y = 1, #tilemap do
         for x = 1, #tilemap[y] do

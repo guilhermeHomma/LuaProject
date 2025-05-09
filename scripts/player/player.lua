@@ -40,6 +40,7 @@ function Player:load(camera)
     self.currentFrame = 1
     self.animationTimer = 0
 
+    self.damageTimer = 4
     Gun:load()
 
     self.quads = {}
@@ -98,6 +99,8 @@ function Player:update(dt)
     if not self.isAlive then
         return
     end
+
+    self.damageTimer = self.damageTimer + dt
 
     self.mouseAngle = mouseAngle()
     local moveX, moveY = 0, 0
@@ -158,21 +161,25 @@ function Player:update(dt)
 end
 
 function Player:checkDamage()
+    if self.damageTimer < 1 then return end 
+
     for _, enemy in ipairs(Game.enemies) do
         local dx = enemy.x - self.x
         local dy = enemy.y - self.y
         local distance = math.sqrt(dx * dx + dy * dy)
 
         if distance < 18 then
-            enemy.life = 0
-            enemy:death()
-            camera:shake(2, 0.95)
+            --enemy.life = 0
+            --enemy:death()
+            camera:shake(3, 0.95)
             self.life = self.life - 1
             local damageSound = love.audio.newSource("assets/sfx/damage.wav", "static")
 
+            self.damageTimer = 0
             damageSound:setVolume(1.8)
             damageSound:setPitch(0.9 + math.random() * 0.2)
             damageSound:play()
+            break
         end
     end
 end
@@ -246,11 +253,20 @@ function Player:drawLife()
         return
     end
 
+    if self.life == 1 or self.damageTimer < 2 then 
+        local time = love.timer.getTime()
+  
+        local blink = math.floor(time * 3) % 2 ~= 0 
+        if not blink then
+            return
+        end
+    end
+
     local size = 24
     local spacing = 6
     local startX = 15
     local startY = 15
-    local line = 4
+    local line = 3
     local SquareLineSize = size - line
 
     for i = 1, self.totalLife do

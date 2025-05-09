@@ -22,7 +22,7 @@ function Pause:draw()
     love.graphics.setColor(0, 0, 0, 0.5)
     love.graphics.rectangle("fill", 0, 0, baseWidth, baseHeight)
 
-    love.graphics.setColor(1, 1, 1)
+    love.graphics.setColor(hexToRGB("fbfaf7"))
     love.graphics.setFont(self.fontTitle)
     love.graphics.printf("PAUSED", 0, baseHeight / 2 - 60, baseWidth, "center")
 
@@ -30,9 +30,9 @@ function Pause:draw()
     for i, option in ipairs(menuOptions) do
         local y = (baseHeight / 2) + i * 25
         if i == selectedOption then
-            love.graphics.setColor(1, 1, 0)
+            love.graphics.setColor(hexToRGB("c7c093"))
         else
-            love.graphics.setColor(1, 1, 1)
+            love.graphics.setColor(hexToRGB("fbfaf7"))
         end
         love.graphics.printf(option, 0, y, baseWidth, "center")
     end

@@ -9,7 +9,9 @@ local Music = require("scripts/managers/music")
 local menuPause = require("scripts/managers/menuPause")
 local MainMenu = require("scripts/managers/mainMenu")
 
-STATES = {mainMenu = 1, game = 2, gamePause = 3}
+
+canvas = love.graphics.newCanvas(baseWidth, baseHeight)
+STATES = {mainMenu = 1, game = 2, gamePause = 3, gameDead = 4}
 state = STATES.mainMenu
 
 baseWidth = 1120
@@ -44,12 +46,18 @@ function loadGame()
 end
 
 function quitToMenu()
+    Music:closeGame()
+    Game:close()
     state=STATES.mainMenu
 end
 
 function changePause()
     if state == STATES.game or state == STATES.gamePause then
         state = (state == STATES.gamePause) and STATES.game or STATES.gamePause
+
+        local isPaused = state == STATES.gamePause
+        Music:changePause(isPaused)
+        Music:changePause(isPaused)
     end
 end
 
@@ -65,6 +73,10 @@ function love.keypressed(key)
         Game:keypressed(key)
     elseif state == STATES.gamePause then
         menuPause:keypressed(key)
+    end
+
+    if key == "f5" then
+        FPS = not FPS
     end
 end
 
@@ -90,7 +102,7 @@ function love.update(dt)
     elseif state == STATES.gamePause then
         menuPause:update(dt)
     end
-    
+
     AmbienceSound:update(dt)
     Music:update(dt)
     
@@ -99,9 +111,10 @@ end
 
 
 function love.draw()
+
     love.graphics.scale(1, 1)
     love.graphics.clear(0, 0, 0)
-    local canvas = love.graphics.newCanvas(baseWidth, baseHeight)
+    
     love.graphics.setCanvas(canvas)
     
     love.graphics.clear(0.2, 0.3, 0.3)

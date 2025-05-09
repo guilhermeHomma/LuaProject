@@ -37,13 +37,9 @@ function Enemy:new(x, y)
     enemy.frameWidth = 32
     enemy.frameHeight = 32
     enemy.frames = {}
-
+    enemy.noise = love.audio.newSource("assets/sfx/enemies/zombie.mp3", "static")
     enemy.pathUpdateInterval = 120
     enemy.pathUpdateCounter = love.math.random(0, enemy.pathUpdateInterval)
-
-    local angle = math.random() * (2 * math.pi)
-    enemy.randomDirX = math.cos(angle)
-    enemy.randomDirY = math.sin(angle)
 
     enemy.path = nil
     enemy.finder = "JPS"
@@ -72,6 +68,8 @@ function Enemy:new(x, y)
     enemy.flipTimer = 0
     enemy.flipH = false
 
+    enemy.soundTimer = 0
+
     enemy.state = (math.random(0, 1) == 0) and Enemy.states.idle or Enemy.states.walk
     return enemy
 end
@@ -88,20 +86,40 @@ function Enemy:update(dt)
     local velocityX = 0
     local velocityY = 0
 
+    self.soundTimer = self.soundTimer + dt
+    if self.soundTimer >= 10 then
+        self.soundTimer = 0
+        local playerDistance = self:playerDistance()
+        self.noise:setVolume(getDistanceVolume(playerDistance, 0.34))
+        self.noise:setPitch(1.2 + math.random() * 0.2)
+        self.noise:play()
+    end
+
     if (self.pathUpdateCounter >= self.pathUpdateInterval and Player.isAlive) or self.path == nil or #self.path < 2 then
     --if (self.pathUpdateCounter >= self.pathUpdateInterval and self.state == Enemy.states.idle and Player.isAlive) or self.path == nil or #self.path < 2 then
         self.pathUpdateCounter = 0
         --print("generate")
         local posMapX, posMapY = Tilemap:worldToMap(self.x, self.y)
+
+        if love.math.random() < 0.4 then
+            local offsetX = love.math.random(-1, 1)
+            local offsetY = love.math.random(-1, 1)
+            posMapX = posMapX + offsetX
+            posMapY = posMapY + offsetY
+        end      
+
         local playerMapX, playerMapY = Tilemap:worldToMap(Player.x, Player.y)
-        if self.finder == "ASTAR" then --varia o algoritmo
 
-            self.path = Tilemap.finderAstar:getPath(posMapX, posMapY, playerMapX, playerMapY)
-        else
+        if love.math.random() < 0.4 then
+            local offsetX = love.math.random(-1, 1)
+            local offsetY = love.math.random(-1, 1)
+            playerMapX = playerMapX + offsetX
+            playerMapY = playerMapY + offsetY
+        end        
 
-            self.path = Tilemap.finder:getPath(posMapX, posMapY, playerMapX, playerMapY)
 
-        end
+        self.path = Tilemap.finderAstar:getPath(posMapX, posMapY, playerMapX, playerMapY)
+
  
     end
 
@@ -126,8 +144,13 @@ function Enemy:update(dt)
         local moveX = sign(nextTileX - self.x)
         local moveY = sign(nextTileY - self.y)
 
+        local repulseX, repulseY = self:getRepulsionVector(moveX,moveY,5)
+
+        moveX = moveX + repulseX * 1.7
+        moveY = moveY + repulseY * 1.7
+
         local collidedX, collidedY = self:isColliding(moveX,moveY,5)
-        collidedX, collidedY = false, false
+
         if not collidedX then velocityX = moveX end
         if not collidedY then velocityY = moveY end
         
@@ -171,7 +194,7 @@ function Enemy:update(dt)
             local movekbX = self.kbdx * dt * 0.1
             local movekbY = self.kbdy * dt * 0.1
             local collidedX, collidedY = self:isColliding(movekbX,movekbY)
-        
+
             if not collidedX then self.x = self.x + movekbX end
             if not collidedY then self.y = self.y + movekbY end
         end
@@ -205,15 +228,51 @@ function Enemy:update(dt)
 end
 
 
+function Enemy:getRepulsionVector(size)
+    size = size or 4
+
+    local repulseX, repulseY = 0, 0
+    local selfBox = self:collisionBox(self.x - size / 2, self.y - size / 2, size)
+
+    for _, enemy in ipairs(Game.enemies) do
+        if enemy.isAlive and enemy ~= self and self.state == Enemy.states.walk then
+            local enemyBox = enemy:collisionBox()
+            local dx = self.x - enemy.x
+            local dy = self.y - enemy.y
+            local distSq = dx * dx + dy * dy
+            local minDist = 16
+
+            if distSq < minDist * minDist and distSq > 0 then
+                local dist = math.sqrt(distSq)
+                local strength = (minDist - dist) / minDist
+
+                repulseX = repulseX + (dx / dist) * strength
+                repulseY = repulseY + (dy / dist) * strength
+            end
+        end
+    end
+
+    return repulseX, repulseY
+end
+
+function Enemy:collisionBox(x, y, size)
+    if not x then x = self.x end
+    if not y then y = self.y end
+    if not size then size = 4 end
+
+    return {x = x - size/2, y = y - size/2, width = size, height = size}
+
+end
+
 function Enemy:isColliding(moveX, moveY, size)
-    if not size then size = 7 end
+    if size == nil then size = 7 end
 
 
     local futureX = self.x + moveX
     local futureY = self.y + moveY
 
-    local selfBoxX = { x = futureX - size/2, y = self.y - size/2, width = size, height = size }
-    local selfBoxY = { x = self.x - size/2, y = futureY - size/2, width = size, height = size }
+    local selfBoxX = self:collisionBox(futureX - size/2, self.y - size/2, size)
+    local selfBoxY = self:collisionBox(self.x - size/2, futureY - size/2, size)
 
     local collidedX = false
     local collidedY = false
@@ -258,7 +317,9 @@ function Enemy:death()
     bulletSound:setPitch(0.8)
     bulletSound:play()
 
-    self.isAlive = false
+    self.noise:stop()
+
+    self.isAlive = false    
     local particle = Particle:new(self.x, self.y, 12, 7,0.3)
     table.insert(Game.particles, particle)
     local particle = Particle:new(self.x +  math.random(-2, 2), self.y + math.random(-2, 2), math.random(5, 15), math.random(5, 7), math.random(0.2, 0.3))

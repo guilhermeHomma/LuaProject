@@ -17,7 +17,7 @@ end
 
 function getDistanceVolume(distance, maxVolume, maxDistance)
     if maxVolume == nil then maxVolume = 1 end
-    if maxDistance == nil then maxDistance = 150 end
+    if maxDistance == nil then maxDistance = 200 end
 
     if distance >= maxDistance then
         return 0
@@ -48,7 +48,7 @@ end
 
 function hexToRGB(hex)
     hex = hex:gsub("#", "")
-    return {tonumber("0x"..hex:sub(1,2))/255, tonumber("0x"..hex:sub(3,4))/255, tonumber("0x"..hex:sub(5,6))/255}
+    return tonumber("0x"..hex:sub(1,2))/255, tonumber("0x"..hex:sub(3,4))/255, tonumber("0x"..hex:sub(5,6))/255
 end
 
 function deepcopy(orig, copies)

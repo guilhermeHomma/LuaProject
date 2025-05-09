@@ -19,8 +19,9 @@ end
 
 function MainMenu:draw()
     love.graphics.setFont(fontTitle)
-
+    love.graphics.clear(hexToRGB("302c5e"))
     titleY = baseHeight / 2 - 60
+    love.graphics.setColor(hexToRGB("fbfaf7")) 
     love.graphics.printf("Lua Project", 0, titleY, baseWidth, "center")
 
     love.graphics.setFont(fontOptions)
@@ -28,14 +29,14 @@ function MainMenu:draw()
     for i, option in ipairs(menuOptions) do
         local y = titleY + 50 + i * 40
         if i == selectedOption then
-            love.graphics.setColor(1, 1, 0)
+            love.graphics.setColor(hexToRGB("c7c093"))
         else
-            love.graphics.setColor(1, 1, 1)
+            love.graphics.setColor(hexToRGB("fbfaf7")) 
         end
         love.graphics.printf(option, 0, y, baseWidth, "center")
     end
 
-    love.graphics.setColor(1, 1, 1)
+    love.graphics.setColor(hexToRGB("fbfaf7"))
 end
 
 function MainMenu:keypressed(key)

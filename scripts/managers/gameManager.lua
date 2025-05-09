@@ -8,7 +8,7 @@ local WaveManager = require("scripts/managers/waves")
 local Clouds = require("scripts/clouds")
 local Tilemap = require("scripts/tilemap")
 local DoorsManager = require("scripts/managers/doorsManager")
-
+local HeartSound = require("scripts/player/heartSound")
 local shader = love.graphics.newShader("scripts/shaders/palette.glsl")
 local paletteList = require("scripts/shaders/paletteList")
 
@@ -26,7 +26,7 @@ function Game:load()
     Clouds:load()
     Tilemap:load()
     DoorsManager:load()
-    
+    HeartSound:load()
 
     local cursorImage = love.image.newImageData("assets/sprites/cursor.png")
     local cursor = love.mouse.newCursor(cursorImage, 8, 8) 
@@ -42,6 +42,10 @@ function Game:load()
     self.particles = {}
 
     self:changeShaders(0)
+end
+
+function Game:close()
+    HeartSound:stop()
 end
 
 function Game:changeShaders(index)
@@ -77,7 +81,7 @@ function Game:update(dt)
     Clouds:update(dt)
     Player:update(dt)
     DoorsManager:update(dt)
-    
+    HeartSound:update(dt)
     Tilemap:update()
 
     camera:update()
@@ -93,7 +97,7 @@ function Game:draw()
 
     love.graphics.scale(3, 2) 
 
-    love.graphics.setShader(shader)
+    --love.graphics.setShader(shader)
 
     Ground:draw(Player)
     
@@ -123,7 +127,7 @@ function Game:draw()
     
     
     camera:detach()
-    love.graphics.setShader()
+    --love.graphics.setShader()
     
     
     Player:drawLife()
@@ -138,15 +142,11 @@ end
 function Game:keypressed(key)
     if key == "r" then
         self:load()
-    elseif key == "f5" then
-        FPS = not FPS
     elseif key == "f6" then
         DEBUG = not DEBUG
     elseif key == "o" then
         DoorsManager:openSouth()
         DoorsManager:openNorth()
-    elseif key == "g" then
-        shadersEnable = not shadersEnable
     elseif tonumber(key) then
         self:changeShaders(tonumber(key))
     end
