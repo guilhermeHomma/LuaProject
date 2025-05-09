@@ -146,8 +146,8 @@ function Enemy:update(dt)
 
         local repulseX, repulseY = self:getRepulsionVector(moveX,moveY,5)
 
-        moveX = moveX + repulseX * 1.7
-        moveY = moveY + repulseY * 1.7
+        moveX = moveX + repulseX * 2
+        moveY = moveY + repulseY * 2
 
         local collidedX, collidedY = self:isColliding(moveX,moveY,5)
 
@@ -235,7 +235,7 @@ function Enemy:getRepulsionVector(size)
     local selfBox = self:collisionBox(self.x - size / 2, self.y - size / 2, size)
 
     for _, enemy in ipairs(Game.enemies) do
-        if enemy.isAlive and enemy ~= self and self.state == Enemy.states.walk then
+        if enemy.isAlive and enemy ~= self and enemy.state == Enemy.states.walk then
             local enemyBox = enemy:collisionBox()
             local dx = self.x - enemy.x
             local dy = self.y - enemy.y

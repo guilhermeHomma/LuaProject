@@ -8,8 +8,8 @@ local maxEnemiesAlive = 50
 
 function WaveManager:load()
     
-    self.wave = 1
-    self.enemiesPerWave = 20
+    self.wave = 0
+    self.enemiesPerWave = 0
     self.spawnInterval = 1
     self.spawnTimer = 0
     self.enemiesSpawned = 0
