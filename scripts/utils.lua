@@ -26,6 +26,17 @@ function getDistanceVolume(distance, maxVolume, maxDistance)
     return maxVolume * factor
 end
 
+function normalize(dx, dy)
+    local mag = math.sqrt(dx * dx + dy * dy)
+    if mag == 0 then return 0, 0 end
+    return dx / mag, dy / mag
+end
+
+function soundPosition(player, soundObject) 
+    local playerDistanceX, playerDistanceY = vectorDistance(Player, soundObject)
+    return -playerDistanceX/30, -playerDistanceY/30
+end 
+
 function mousePosition()
 
     local mouseX, mouseY = love.mouse.getPosition()
@@ -78,6 +89,19 @@ function distance(a, b)
     end
 
     return math.sqrt(dx * dx + dy * dy)
+end
+
+
+function vectorDistance(a, b)
+    local dx = a.x - b.x
+    local dy = a.y - b.y
+
+    if b.xWorld and b.yWorld then
+        dx = a.x - b.xWorld
+        dy = a.y - b.yWorld
+    end
+
+    return dx, dy
 end
 
 

@@ -87,10 +87,12 @@ function Enemy:update(dt)
     local velocityY = 0
 
     self.soundTimer = self.soundTimer + dt
-    if self.soundTimer >= 10 then
+    if self.soundTimer >= 10 and Player.isAlive then
         self.soundTimer = 0
-        local playerDistance = self:playerDistance()
-        self.noise:setVolume(getDistanceVolume(playerDistance, 0.34))
+        local soundPositionX, soundPositionY = soundPosition(Player, self)
+
+        self.noise:setPosition(soundPositionX, soundPositionY, 0)
+        self.noise:setVolume(1)
         self.noise:setPitch(1.2 + math.random() * 0.2)
         self.noise:play()
     end
@@ -342,8 +344,10 @@ function Enemy:animate(startFrame, endFrame, dt)
             local playerDistance = self:playerDistance()
             if playerDistance <= 100 then
                 local stepsound = love.audio.newSource("assets/sfx/footsteps/foot-steps-0.mp3", "static")
+                local soundPositionX, soundPositionY = soundPosition(Player, self)
 
-                stepsound:setVolume(getDistanceVolume(playerDistance, 0.64))
+                self.noise:setPosition(soundPositionX, soundPositionY, 0)
+
                 stepsound:setPitch(0.4 + math.random() * 0.4)
                 stepsound:play()
             end

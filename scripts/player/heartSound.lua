@@ -6,8 +6,8 @@ soundPlayer = love.audio.newSource("assets/sfx/player/heart.wav", "stream")
 function HeartSound:load()    
     soundPlayer:stop()
     soundPlayer:setLooping(false) 
-    soundPlayer:setVolume(0.9)
-    soundPlayer:setPitch(0.7)
+    soundPlayer:setVolume(0.7)
+
 end
 
 function HeartSound:stop()
@@ -27,7 +27,7 @@ function HeartSound:update(dt)
     end
     
     if Player.life == 1 then 
-        soundPlayer:setVolume(0.9)
+        soundPlayer:setVolume(0.8)
     elseif Player.life == 2 then
         soundPlayer:setVolume(0.5)
     else 

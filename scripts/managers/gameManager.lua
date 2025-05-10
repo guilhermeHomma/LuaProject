@@ -59,6 +59,7 @@ end
 
 function Game:update(dt)
     self.drawQueue = {}
+    --love.audio.setPosition(Player.x, Player.y, 0)
 
     for _, enemy in ipairs(self.enemies) do
         if enemy.isAlive then
