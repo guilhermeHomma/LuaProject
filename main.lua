@@ -23,7 +23,7 @@ FPS = false
 
 scale = 1
 
-MUSIC_VOLUME = 1
+MUSIC_VOLUME = 0
 
 function love.load()
     --
