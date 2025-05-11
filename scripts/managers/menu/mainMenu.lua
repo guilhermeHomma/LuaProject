@@ -6,7 +6,7 @@ setmetatable(MainMenu, { __index = baseMenu })
 
 function MainMenu:load()
     baseMenu.load(self)
-    self.MenuTItle = "GAME OVER"
+    self.MenuTItle = "GAME CAT LUA"
     self.menuOptions = {"Start Game", "Exit"}
 end
 
