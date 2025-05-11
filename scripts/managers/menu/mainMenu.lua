@@ -10,7 +10,7 @@ function MainMenu:load()
     self.menuOptions = {"Start Game", "Exit"}
 end
 
-function MainMenu:draw()
+function MainMenu:draw()asd
     love.graphics.setColor(0, 0, 0, 0.5)
     love.graphics.rectangle("fill", 0, 0, baseWidth, baseHeight)
     baseMenu.draw(self)
