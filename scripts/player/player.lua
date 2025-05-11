@@ -168,7 +168,7 @@ function Player:checkDamage()
         local dy = enemy.y - self.y
         local distance = math.sqrt(dx * dx + dy * dy)
 
-        if distance < 18 then
+        if distance < 10 then
             --enemy.life = 0
             --enemy:death()
             camera:shake(3, 0.95)
@@ -235,7 +235,7 @@ function Player:death()
         )
         table.insert(Game.particles, particle)
     end
-
+    playerDeath()
     love.audio.stop(bulletSound)
 end
 

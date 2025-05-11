@@ -22,7 +22,7 @@ end
 
 function AmbienceSound:update(dt)
 
-    if state == STATES.game then
+    if state == STATES.game or state == STATES.gameDead then
         self.targetPitch = 1
         self.targetVolume = 0.03
     elseif state == STATES.gamePause then

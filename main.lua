@@ -6,8 +6,9 @@ love.graphics.setDefaultFilter("nearest", "nearest")
 
 local AmbienceSound = require("scripts/managers/ambienceSound")
 local Music = require("scripts/managers/music")
-local menuPause = require("scripts/managers/menuPause")
-local MainMenu = require("scripts/managers/mainMenu")
+local PauseMenu = require("scripts/managers/menu/pauseMenu")
+local GameoverMenu = require("scripts/managers/menu/gameoverMenu")
+local MainMenu = require("scripts/managers/menu/mainMenu")
 
 
 canvas = love.graphics.newCanvas(baseWidth, baseHeight)
@@ -22,9 +23,11 @@ FPS = false
 
 scale = 1
 
+MUSIC_VOLUME = 1
+
 function love.load()
     --
-
+    love.window.setMode(0, 0, { fullscreen = true })
     local scaleX = love.graphics.getWidth() / baseWidth
     local scaleY = love.graphics.getHeight() / baseHeight
 
@@ -33,8 +36,9 @@ function love.load()
     
     MainMenu:load()
     AmbienceSound:load()
-    menuPause:load()
+    PauseMenu:load()
     Music:load()
+    GameoverMenu:load()
 end
 
 function loadGame()
@@ -43,6 +47,11 @@ function loadGame()
     AmbienceSound:startGame()
     Music:startGame()
     
+end
+
+function playerDeath()
+    Music:death()
+    state=STATES.gameDead
 end
 
 function quitToMenu()
@@ -72,9 +81,10 @@ function love.keypressed(key)
     elseif state == STATES.game then
         Game:keypressed(key)
     elseif state == STATES.gamePause then
-        menuPause:keypressed(key)
+        PauseMenu:keypressed(key)
+    elseif state == STATES.gameDead then
+        GameoverMenu:keypressed(key)
     end
-
     if key == "f5" then
         FPS = not FPS
     end
@@ -100,7 +110,13 @@ function love.update(dt)
     elseif state == STATES.mainMenu then
         MainMenu:update(dt)
     elseif state == STATES.gamePause then
-        menuPause:update(dt)
+        PauseMenu:update(dt)
+    end
+
+    if state == STATES.gameDead then
+        Game:update(dt)
+        GameoverMenu:update(dt)
+
     end
 
     AmbienceSound:update(dt)
@@ -120,14 +136,17 @@ function love.draw()
     love.graphics.clear(0.2, 0.3, 0.3)
     
 
-    if state == STATES.game or state == STATES.gamePause then
+    if state == STATES.game or state == STATES.gamePause or state == STATES.gameDead then
         Game:draw()
     end
 
     if state == STATES.gamePause then
-        menuPause:draw()
+        PauseMenu:draw()
     elseif state == STATES.mainMenu then
         MainMenu:draw()
+    elseif state == STATES.gameDead then
+        GameoverMenu:draw()
+
     end
 
     if FPS or DEBUG then 

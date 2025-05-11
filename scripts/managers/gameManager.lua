@@ -141,9 +141,8 @@ function Game:draw()
 end
 
 function Game:keypressed(key)
-    if key == "r" then
-        self:load()
-    elseif key == "f6" then
+
+    if key == "f6" then
         DEBUG = not DEBUG
     elseif key == "o" then
         DoorsManager:openSouth()

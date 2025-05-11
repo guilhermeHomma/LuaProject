@@ -237,7 +237,7 @@ function Enemy:getRepulsionVector(size)
     local selfBox = self:collisionBox(self.x - size / 2, self.y - size / 2, size)
 
     for _, enemy in ipairs(Game.enemies) do
-        if enemy.isAlive and enemy ~= self and enemy.state == Enemy.states.walk then
+        if enemy.isAlive and enemy ~= self and enemy.state == Enemy.states.walk and self.speed < enemy.speed then
             local enemyBox = enemy:collisionBox()
             local dx = self.x - enemy.x
             local dy = self.y - enemy.y
@@ -302,6 +302,11 @@ function Enemy:takeDamage(damage, dx, dy)
     self.kbdx = dx
     self.kbdy = dy 
     self.life = self.life - damage
+    self.noise:stop()
+
+    if self.soundTimer <= 1 then
+        self.soundTimer = 1.1
+    end
 
     local bulletSound = love.audio.newSource("assets/sfx/enemyDamage.wav", "static")
     bulletSound:setVolume(2)
@@ -342,11 +347,12 @@ function Enemy:animate(startFrame, endFrame, dt)
         if self.state == Enemy.states.walk and self.currentFrame % 2 == 0 then
 
             local playerDistance = self:playerDistance()
-            if playerDistance <= 100 then
+            if playerDistance <= 150 then
                 local stepsound = love.audio.newSource("assets/sfx/footsteps/foot-steps-0.mp3", "static")
                 local soundPositionX, soundPositionY = soundPosition(Player, self)
 
                 self.noise:setPosition(soundPositionX, soundPositionY, 0)
+                stepsound:setVolume(0.4)
 
                 stepsound:setPitch(0.4 + math.random() * 0.4)
                 stepsound:play()
@@ -390,6 +396,17 @@ function Enemy:draw()
         love.graphics.draw(self.spriteOutline, self.frames[self.currentFrame], xOffset + self.x, self.y, 0, scaleX, 0.7, self.frameWidth / 2, self.frameHeight)
     else 
         love.graphics.draw(self.spriteSheet, self.frames[self.currentFrame], xOffset +self.x, self.y, 0, scaleX, 0.7, self.frameWidth / 2, self.frameHeight)
+    end
+
+    if self.state ~= Enemy.states.damage then
+        love.graphics.setColor(hexToRGB("302c5e"))
+        if self.soundTimer >= 0 and self.soundTimer <= 1 then
+            love.graphics.circle("fill", self.x , self.y - 9, 1.5)
+        else
+            love.graphics.rectangle("fill", self.x -0.7 ,self.y - 10, 1.4, 0.6 )
+
+        end
+        love.graphics.setColor(1, 1, 1, 1)
     end
 
     if DEBUG then 

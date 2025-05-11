@@ -4,8 +4,9 @@
 
 local MusicList = {
     love.audio.newSource("assets/sfx/musics/intro/stairway.wav", "stream"),
+    love.audio.newSource("assets/sfx/musics/horror/midnight.wav", "stream"),
     love.audio.newSource("assets/sfx/musics/default/late-song.wav", "stream"),
-    love.audio.newSource("assets/sfx/musics/horror/midnight.wav", "stream")
+
 
 }
 local MusicPlayer = MusicList[1]
@@ -20,13 +21,22 @@ function Music:load()
     self.volume = 1
 
     MusicPlayer:setLooping(false) 
-    MusicPlayer:setVolume(self.volume)
+    MusicPlayer:setVolume(self.volume * MUSIC_VOLUME)
 end
 
+function Music:death()
+    self.volume = 1
+    self.targetVolume = 1
+    self.targetPitch = 1
+    self.pitch = 1
+    self.musicIndex = 3
+    self:startMusic()
+
+end
 
 function Music:startGame()
     self.volume = 1
-    self.targetVolume = 1
+    self.targetVolume = 1 
     self.targetPitch = 1
     self.pitch = 1
     self.musicIndex = 1
@@ -34,9 +44,9 @@ function Music:startGame()
 end
 
 function Music:startMusic()
+    MusicPlayer:stop()
     MusicPlayer = MusicList[self.musicIndex]
     MusicPlayer:setLooping(false)
-    MusicPlayer:stop()
     MusicPlayer:play()
 end
 
@@ -76,11 +86,14 @@ function Music:update(dt)
         MusicPlayer:stop()
     end
     
-    MusicPlayer:setVolume(self.volume)
+    MusicPlayer:setVolume(self.volume * MUSIC_VOLUME)
     MusicPlayer:setPitch(self.pitch)
 
     if not MusicPlayer:isPlaying() and state == STATES.game then
-        self.musicIndex = (self.musicIndex + 1 ) % #MusicList + 1
+        self.musicIndex = self.musicIndex + 1
+        if self.musicIndex > #MusicList-1 then
+            self.musicIndex = 1
+        end
         self:startMusic()
     end
 
