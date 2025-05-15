@@ -4,7 +4,9 @@ local tileSize = 16
 require "scripts.utils"
 require "scripts.objects.tile"
 require "scripts.objects.door"
+require "scripts.objects.store"
 require "scripts.objects.tree"
+require "scripts.objects.grass"
 
 tileSet = require("scripts.objects.tileset")
 
@@ -15,6 +17,7 @@ local Grid = require("jumper.grid")
 local Pathfinder = require("jumper.pathfinder")
 
 function loadTilemapFromImage()
+    --map3 é o melhor
     local imageData = love.image.newImageData("assets/sprites/map3.png")
     local width, height = imageData:getDimensions()
     local tilemap = {}
@@ -33,6 +36,8 @@ function loadTilemapFromImage()
                 {r = 1,   g = 1,   b = 0,   tile = 4}, -- Yellow grass
                 {r = 0,   g = 0,   b = 1,   tile = 5}, -- Blue door south
                 {r = 1,   g = 0,   b = 1,   tile = 6}, -- Pink door north
+
+                {r = 0.5,   g = 1,   b = 1,   tile = 7}, -- store - shotgun
             }
 
             for _, def in ipairs(tileDefinitions) do
@@ -153,12 +158,24 @@ function Tilemap:load()
     tileSet:createTileSet()
     Tile:setTilemap(self)
     self:loadfinders()
-
+    self.grass = {}
     self.tiles = {}
     for y = 1, #tilemap do
         for x = 1, #tilemap[y] do
             local tile = tilemap[y][x]
             local collider = false
+
+            if tile == 0 and math.random() > 0.8 then
+                local gx, gy = self:mapToWorld(x,y)
+                local grass = Grass:new(gx - 1, gy - 5)
+                table.insert(self.grass, grass)
+                if math.random() > 0.4 then
+                    local gx, gy = self:mapToWorld(x,y)
+                    local grass = Grass:new(gx + 1, gy +2 )
+                    table.insert(self.grass, grass)
+                end
+            end
+
             if self:hasTileClose(x, y, 0) or 
                 self:hasTileClose(x, y, 5) or 
                 self:hasTileClose(x, y, 6) then 
@@ -168,6 +185,11 @@ function Tilemap:load()
             if tile == 3 then -- three
                 local indexes = {16, 17, 19}
                 local t = TreeTile:new(x, y, indexes[math.random(#indexes)], collider)
+                table.insert(self.tiles, t)
+            
+            elseif tile == 7 then --store
+                local index = 24
+                local t = Store:new(x, y, index, collider)
                 table.insert(self.tiles, t)
 
             elseif tile == 5 or tile == 6 then --door
@@ -201,13 +223,26 @@ function Tilemap:load()
     end
 end
 
-function Tilemap:update()
+function Tilemap:update(dt)
+    for _, g in ipairs(self.grass) do
+        g:update(dt)
+    end
+
     for _, tile in ipairs(self.tiles) do
+        tile:update(dt)
+
         if tile.quadIndex == 16 or tile.quadIndex == 17 or tile.quadIndex == 19 then
             addToDrawQueue(tile.yWorld+1, tile)
-
         else
             addToDrawQueue(tile.yWorld, tile)
+        end
+    end
+end
+
+function Tilemap:keypressed(key)
+    for _, tile in ipairs(self.tiles) do
+        if type(tile.performBuy) == "function" then
+            tile:performBuy()
         end
     end
 end

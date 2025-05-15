@@ -8,6 +8,23 @@ function checkCollision(a, b)
            a.y + a.height > b.y
 end
 
+function drawOutline(text, x, y, width, def, color)
+    if not color then color = "090909" end
+    love.graphics.setColor(hexToRGB(color))
+    local lineSize = 3
+
+    --right
+    love.graphics.printf(text, x+lineSize, y, width, def)
+    --left
+    love.graphics.printf(text, x-lineSize, y, width, def)
+    --up
+    love.graphics.printf(text, x, y-lineSize, width, def)
+    --up
+    love.graphics.printf(text, x, y+lineSize, width, def)
+    love.graphics.setColor(hexToRGB("fbfaf7"))
+
+end
+
 function isColorMatch(r, g, b, target)
     local tolerance = 0.1
     return math.abs(r - target.r) < tolerance and

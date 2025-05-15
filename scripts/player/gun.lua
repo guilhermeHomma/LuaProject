@@ -74,13 +74,13 @@ function Gun:shootShotgun()
     local damage = self.gunConfig[self.gunIndex].damage
     local bulletSpeed = self.gunConfig[self.gunIndex].bulletSpeed
 
-    local bullet = Bullet:new(self.x + offsetX, self.y + offsetY, angle, 15, bulletSpeed, damage)
+    local bullet = Bullet:new(self.x + offsetX, self.y + offsetY, angle + (math.random() * 0.1), 15, bulletSpeed, damage)
     table.insert(self.bullets, bullet)
 
-    local bullet = Bullet:new(self.x + offsetX, self.y + offsetY, angle + 0.15, 15, bulletSpeed, damage)
+    local bullet = Bullet:new(self.x + offsetX, self.y + offsetY, angle + (math.random() * 0.1) + 0.15, 15, bulletSpeed, damage)
     table.insert(self.bullets, bullet)
 
-    local bullet = Bullet:new(self.x + offsetX, self.y + offsetY, angle- 0.15, 15, bulletSpeed, damage)
+    local bullet = Bullet:new(self.x + offsetX, self.y + offsetY, angle + (math.random() * 0.1)- 0.15, 15, bulletSpeed, damage)
     table.insert(self.bullets, bullet)
 
     local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
@@ -92,7 +92,7 @@ function Gun:shootShotgun()
 end
 
 function Gun:shootPistol()
-    local angle = mouseAngle()
+    local angle = mouseAngle() + (math.random() * 0.1) - 0.05
 
     local offsetX = math.cos(angle) * 5
     local offsetY = math.sin(angle) * 5
@@ -146,6 +146,10 @@ function Gun:drawSight()
     love.graphics.setColor(0.274, 0.4, 0.45, 1)
 
     Player:drawSquare(mouseX, mouseY, self.squareAngle*3.5, 3)
+end
+
+function Gun:drawUI()
+    
 end
 
 function Gun:draw()

@@ -1,14 +1,9 @@
-
-
-
-
 local MusicList = {
     love.audio.newSource("assets/sfx/musics/intro/stairway.wav", "stream"),
     love.audio.newSource("assets/sfx/musics/horror/midnight.wav", "stream"),
     love.audio.newSource("assets/sfx/musics/default/late-song.wav", "stream"),
-
-
 }
+
 local MusicPlayer = MusicList[1]
 Music = {}
 
@@ -31,7 +26,6 @@ function Music:death()
     self.pitch = 1
     self.musicIndex = 3
     self:startMusic()
-
 end
 
 function Music:startGame()

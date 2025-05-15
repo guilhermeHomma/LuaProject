@@ -28,6 +28,11 @@ function Tile:new(x, y, quadIndex, collider)
     return tile
 end
 
+function Tile:update(dt) 
+
+end
+
+
 function Tile:draw()
     local tileSet = TileSet:getTileSet()
     local tileSize = TileSet.tileSize

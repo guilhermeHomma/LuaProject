@@ -5,7 +5,6 @@ local Player = {}
 local Bullet = require("scripts/bullet")
 local Particle = require("scripts/particle")
 local Tilemap = require("scripts/tilemap")
-local Gun = require("scripts/player/gun")
 
 local bulletSound = love.audio.newSource("assets/sfx/tanksound.wav", "static")
 bulletSound:setVolume(0.4)
@@ -14,9 +13,9 @@ bulletSound:setLooping(true)
 function Player:load(camera)
     self.x = 0
     self.y = 20
-    self.speed = 55
+    self.speed = 50
     self.size = 40
-
+    self.gun = require("scripts/player/gun")
     self.spriteSize = 40
     self.bullets = {}
     self.bulletSpeed = 340
@@ -41,7 +40,7 @@ function Player:load(camera)
     self.animationTimer = 0
 
     self.damageTimer = 4
-    Gun:load()
+    self.gun:load()
 
     self.quads = {}
     local sheetWidth = self.playerSheet:getWidth()
@@ -138,15 +137,15 @@ function Player:update(dt)
 
     addToDrawQueue(self.y+7, Player)
 
-    Gun:update(dt, self.x, self.y)
+    self.gun:update(dt, self.x, self.y)
 
-    if not Gun.showGun and moveX ~= 0 then
+    if not self.gun.showGun and moveX ~= 0 then
         if moveX > 0 then 
             self.flipH = true
         else 
             self.flipH = false
         end
-    elseif Gun.showGun then
+    elseif self.gun.showGun then
         if mouseX > self.x then
             self.flipH = true
         elseif mouseX < self.x then
@@ -244,7 +243,7 @@ end
 
 function love.mousepressed(x, y, button)
     if button == 1 and Player.isAlive then
-        --Gun:shoot()
+        --self.gun:shoot()
     end
 end
 
@@ -252,38 +251,43 @@ function Player:drawLife()
     if not self.isAlive then
         return
     end
+    local heartColor = "466673"
+    local outlineColor = "090909"
+    if self.damageTimer < 0.4 then
+        heartColor = "fbfaf7"
+        --outlineColor = "fbfaf7"
+    end
 
-    if self.life == 1 or self.damageTimer < 2 then 
+    local blink = false
+    if self.life == 1 then 
         local time = love.timer.getTime()
-  
-        local blink = math.floor(time * 3) % 2 ~= 0 
-        if not blink then
-            return
-        end
+        
+        blink = math.floor(time * 3) % 2 ~= 0 
     end
 
     local size = 24
     local spacing = 6
     local startX = 15
-    local startY = 15
+    local startY = 70
     local line = 3
     local SquareLineSize = size - line
-
-    for i = 1, self.totalLife do
-        love.graphics.setColor(0.274, 0.4, 0.45)
-        local drawTipe = "fill"
-        local squareSize = size
-        local currentStartX = startX + (i - 1) * (size + spacing)
-        local currentStartY = startY
-        if self.life < i then
-            drawTipe = "line"
-            squareSize = SquareLineSize
-            currentStartX = currentStartX + line/2
-            currentStartY = currentStartY + line/2
+    for _, color in ipairs({outlineColor, heartColor}) do
+        for i = 1, self.totalLife do
+            love.graphics.setColor(hexToRGB(color))
+            local drawTipe = "fill"
+            local squareSize = size
+            local currentStartX = startX + (i - 1) * (size + spacing) - _*3
+            local currentStartY = startY - _*3
+            if self.life < i or (i == 1 and blink)then
+                drawTipe = "line"
+                squareSize = SquareLineSize
+                currentStartX = currentStartX + line/2
+                currentStartY = currentStartY + line/2
+            end
+            love.graphics.setLineWidth(line)
+            love.graphics.rectangle(drawTipe, currentStartX, currentStartY, squareSize, squareSize)
+            love.graphics.setLineWidth(1)
         end
-        love.graphics.setLineWidth(line)
-        love.graphics.rectangle(drawTipe, currentStartX, currentStartY, squareSize, squareSize)
-        love.graphics.setLineWidth(1)
     end
     love.graphics.setColor(1, 1, 1, 1)
 end
@@ -293,7 +297,7 @@ function Player:drawSight()
         return
     end
 
-    Gun:drawSight()
+    self.gun:drawSight()
 end
 
 function Player:drawS()
@@ -330,7 +334,7 @@ function Player:drawSquare(x, y, angle, halfSize)
 end
 
 function Player:drawHand()
-    if not Gun.showGun then return end
+    if not self.gun.showGun then return end
 
     local handX = self.x + math.cos(self.mouseAngle) * 7
     local handY = self.y + math.sin(self.mouseAngle) * 7
@@ -345,7 +349,7 @@ function Player:drawHand()
         1, 1.2,
         0, 16
     )
-    Gun:draw()
+    self.gun:draw()
 
 end
 

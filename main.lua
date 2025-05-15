@@ -15,25 +15,26 @@ canvas = love.graphics.newCanvas(baseWidth, baseHeight)
 STATES = {mainMenu = 1, game = 2, gamePause = 3, gameDead = 4}
 state = STATES.mainMenu
 
-baseWidth = 1120
-baseHeight = 630
+--baseWidth = 1120
+--baseHeight = 630
+
+baseWidth = 960
+baseHeight = 540
 
 DEBUG = false
 FPS = false
 
 scale = 1
 
-MUSIC_VOLUME = 0
+MUSIC_VOLUME = 0.05
 
 function love.load()
-    --
-    love.window.setMode(0, 0, { fullscreen = true })
+    --love.window.setMode(0, 0, { fullscreen = true })
     local scaleX = love.graphics.getWidth() / baseWidth
     local scaleY = love.graphics.getHeight() / baseHeight
 
     scale = math.max(scaleX, scaleY)
 
-    
     MainMenu:load()
     AmbienceSound:load()
     PauseMenu:load()
@@ -150,7 +151,7 @@ function love.draw()
     end
 
     if FPS or DEBUG then 
-        love.graphics.print("FPS: " .. love.timer.getFPS(), 10, 60)
+        love.graphics.print("FPS: " .. love.timer.getFPS(), 10, 95)
     end
 
     love.graphics.setCanvas()

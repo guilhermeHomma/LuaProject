@@ -81,7 +81,9 @@ function WaveManager:draw()
 
     local x = baseWidth - textWidth - 15
     --love.graphics.setColor(0.70, 0.63, 0.52)
-    love.graphics.setColor(0.274, 0.4, 0.45, alpha)
+    --love.graphics.setColor(0.274, 0.4, 0.45, alpha)
+    love.graphics.setColor(0.05, 0, 0.05)
+    
     love.graphics.setFont(self.font)
     love.graphics.print(text, x+ 2, 10 + 2)
     love.graphics.setColor(1, 1, 1)

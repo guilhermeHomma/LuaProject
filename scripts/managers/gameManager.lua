@@ -7,12 +7,12 @@ local Ground = require("scripts/ground")
 local WaveManager = require("scripts/managers/waves")
 local Clouds = require("scripts/clouds")
 local Tilemap = require("scripts/tilemap")
+local PointsManager = require("scripts/managers/pointsManager")
 local DoorsManager = require("scripts/managers/doorsManager")
 local HeartSound = require("scripts/player/heartSound")
 local shader = love.graphics.newShader("scripts/shaders/palette.glsl")
 local paletteList = require("scripts/shaders/paletteList")
 
-local music
 camera = nil
 
 function Game:load()
@@ -26,16 +26,12 @@ function Game:load()
     Clouds:load()
     Tilemap:load()
     DoorsManager:load()
+    PointsManager:load()
     HeartSound:load()
 
     local cursorImage = love.image.newImageData("assets/sprites/cursor.png")
     local cursor = love.mouse.newCursor(cursorImage, 8, 8) 
     love.mouse.setCursor(cursor)
-
-    music = love.audio.newSource("assets/sfx/music.wav", "stream")
-    music:setLooping(true)
-    music:setVolume(0.8)
-    -- music:play()
 
     self.enemies = {}
     self.drawQueue = {}
@@ -66,6 +62,7 @@ function Game:update(dt)
             enemy:update(dt) 
             addToDrawQueue(enemy.y +6 + enemy.drawPriority, enemy)
         else
+            PointsManager:increasePoints(enemy.dropPoints)
             table.remove(self.enemies, _)
         end
     end
@@ -83,15 +80,19 @@ function Game:update(dt)
     Player:update(dt)
     DoorsManager:update(dt)
     HeartSound:update(dt)
-    Tilemap:update()
+    Tilemap:update(dt)
+    PointsManager:update(dt)
 
     camera:update()
+end
+
+function Game:performBuy()
+    print("buy")
 end
 
 function addToDrawQueue(priority, object)
     table.insert(Game.drawQueue, {priority = priority, object = object})
 end
-
 
 function Game:draw()
     camera:attach()
@@ -126,24 +127,23 @@ function Game:draw()
     
     love.graphics.scale(1, 1)
     
-    
     camera:detach()
     --love.graphics.setShader()
     
-    
+    PointsManager:draw()
     Player:drawLife()
     WaveManager:draw()
-    
 
     if DEBUG then
-        love.graphics.print("enemies qty: " .. #self.enemies, 10, 80)
+        love.graphics.print("enemies qty: " .. #self.enemies, 10, 110)
     end
 end
 
 function Game:keypressed(key)
-
     if key == "f6" then
         DEBUG = not DEBUG
+    elseif key == "x" then
+        Tilemap:keypressed(key)
     elseif key == "o" then
         DoorsManager:openSouth()
         DoorsManager:openNorth()

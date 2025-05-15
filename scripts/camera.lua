@@ -73,7 +73,7 @@ end
 function Camera:attach()
     love.graphics.push()
 
-    --love.graphics.scale(self.scale, self.scale)
+    --love.graphics.scale(1, 1)
     
     love.graphics.translate(-self.x, -self.y)
 end
