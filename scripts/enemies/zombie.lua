@@ -20,7 +20,7 @@ function Enemy:new(x, y)
     enemy.kbdx = 0
     enemy.kbdy = 0
 
-    enemy.dropPoints = 20
+    enemy.dropPoints = 10
     enemy.drawPriority = math.random()
 
     enemy.isAlive = true

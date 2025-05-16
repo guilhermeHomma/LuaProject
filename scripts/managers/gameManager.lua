@@ -53,6 +53,15 @@ function Game:changeShaders(index)
     shader:send("threshold", 0.1)
 end
 
+function Game:getPlayerPoints()
+    return PointsManager:getPoints()
+end
+
+function Game:decreasePlayerPoints(qty)
+    return PointsManager:decreasePoints(qty)
+end
+
+
 function Game:update(dt)
     self.drawQueue = {}
     --love.audio.setPosition(Player.x, Player.y, 0)
@@ -84,10 +93,6 @@ function Game:update(dt)
     PointsManager:update(dt)
 
     camera:update()
-end
-
-function Game:performBuy()
-    print("buy")
 end
 
 function addToDrawQueue(priority, object)

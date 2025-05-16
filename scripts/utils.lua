@@ -12,7 +12,7 @@ function drawOutline(text, x, y, width, def, color)
     if not color then color = "090909" end
     love.graphics.setColor(hexToRGB(color))
     local lineSize = 3
-
+    if def then
     --right
     love.graphics.printf(text, x+lineSize, y, width, def)
     --left
@@ -21,6 +21,17 @@ function drawOutline(text, x, y, width, def, color)
     love.graphics.printf(text, x, y-lineSize, width, def)
     --up
     love.graphics.printf(text, x, y+lineSize, width, def)
+    else 
+        lineSize = 1
+        --right
+        love.graphics.print(text, x+lineSize, y)
+        --left
+        love.graphics.print(text, x-lineSize, y)
+        --up
+        love.graphics.print(text, x, y-lineSize)
+        --up
+        love.graphics.print(text, x, y+lineSize)
+    end
     love.graphics.setColor(hexToRGB("fbfaf7"))
 
 end

@@ -1,6 +1,7 @@
 
 local baseMenu = {}
 
+
 function baseMenu:load()
     self.menuOptions = {}
     self.selectedOption = 1
@@ -10,6 +11,8 @@ function baseMenu:load()
 
     self.fontOptions = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 48)
     self.fontOptions:setFilter("nearest", "nearest")
+    self.scale = 1
+    self.lastSelectChange = -1
 end
 
 
@@ -20,15 +23,19 @@ end
 function baseMenu:drawTitle()
     love.graphics.setFont(self.fontTitle)
 
-    love.graphics.setColor(hexToRGB("fbfaf7"))
-    love.graphics.printf(self.MenuTItle, 0, self:getHeight() / 2 - 60, self:getWidth(), "center")
+
+    local titleX, titleY = 0, self:getHeight() / 2 - 60
+    drawOutline(self.MenuTItle, titleX, titleY, self:getWidth(), "center")
+
+    love.graphics.setColor(hexToRGB("fbfaf7"))  
+    love.graphics.printf(self.MenuTItle, titleX, titleY, self:getWidth(), "center")
     love.graphics.setColor(hexToRGB("ffffff"))
 
 end
 
 function baseMenu:drawOption(text, x, y, def, isSelected)
     if not isSelected then
-        --drawOutline(text, x, y, self:getWidth(), def)
+        drawOutline(text, x, y, self:getWidth(), def)
         love.graphics.setColor(hexToRGB("fbfaf7"))
         love.graphics.printf(text, x, y, self:getWidth(), def)
         return
@@ -38,43 +45,50 @@ function baseMenu:drawOption(text, x, y, def, isSelected)
     local blink = math.floor(time * 10) % 2 == 0 
     
     if blink then
-        --drawOutline(text, x, y, self:getWidth(), def)
+        drawOutline(text, x, y, self:getWidth(), def)
         love.graphics.setColor(hexToRGB("c7c093"))
         love.graphics.printf(text, x, y, self:getWidth(), def)
         love.graphics.setColor(hexToRGB("fbfaf7"))
         return
     end
 
-    --drawOutline(text, x, y, baseWidth, def)
+    drawOutline(text, x, y, self:getWidth(), def)
     love.graphics.setColor(hexToRGB("fbfaf7"))
+
     love.graphics.printf(text, x, y, self:getWidth(), def)
+
+
 end
 
 function baseMenu:getHeight()
-    return love.graphics.getHeight() / scale
+    return love.graphics.getHeight()/ scale / self.scale
 end
 
 function baseMenu:getWidth()
-    return love.graphics.getWidth() / scale
+    return love.graphics.getWidth() / scale / self.scale
 end
 
 
 function baseMenu:draw()
-    --love.graphics.setColor(0, 0, 0, 0.5)
-    --love.graphics.rectangle("fill", 0, 0, baseWidth, baseHeight)
-
 
     self:drawTitle()
-
     love.graphics.setFont(self.fontOptions)
     love.graphics.setColor(hexToRGB("fbfaf7"))
 
-    local centerHeight =  self:getHeight() / 2    
-
     for i, option in ipairs(self.menuOptions) do
-        local y = (centerHeight) + i * 30
+        
         local isSelected = i == self.selectedOption
+        love.graphics.push()
+        if isSelected and self.lastSelectChange + 0.06 > love.timer.getTime() then
+            self.scale = 1.05
+            love.graphics.scale(1.05, 1.05)
+        end
+        local centerHeight =  self:getHeight() / 2    
+        local y = (centerHeight) + (i * 30)
         self:drawOption(option, 0, y, "center", isSelected)
+        self.scale = 1
+        love.graphics.pop()
+
     end
 
     love.graphics.setColor(1, 1, 1)
@@ -106,6 +120,7 @@ function baseMenu:keypressed(key)
         return
     end
 
+    self.lastSelectChange = love.timer.getTime()
     sound:play()
 end
 

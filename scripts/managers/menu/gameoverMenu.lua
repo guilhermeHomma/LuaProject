@@ -13,7 +13,7 @@ end
 
 function gameOverMenu:draw()
     love.graphics.setColor(0, 0, 0, 0.5)
-    love.graphics.rectangle("fill", 0, 0, baseWidth, baseHeight)
+    love.graphics.rectangle("fill", 0, 0, self:getWidth(), self:getHeight())
     baseMenu.draw(self)
 end
 

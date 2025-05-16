@@ -27,7 +27,7 @@ function AmbienceSound:update(dt)
         self.targetVolume = 0.03
     elseif state == STATES.gamePause then
         self.targetPitch = 0.6
-        self.targetVolume = 0.10
+        self.targetVolume = 0.03
     else
         self.targetVolume = 0.0
     end

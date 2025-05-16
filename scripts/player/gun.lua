@@ -139,6 +139,10 @@ function Gun:aim()
 end
 
 
+function Gun:changeGun(index)
+    self.gunIndex = index
+end
+
 function Gun:drawSight()
     if not self.showSight then return end
     self.showSight = false

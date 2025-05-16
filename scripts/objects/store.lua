@@ -3,29 +3,32 @@ Store.__index = Store
 
 local sheetImage = love.graphics.newImage("assets/sprites/objects/store.png")
 local sheetWidth, sheetHeight = sheetImage:getDimensions()
+local sheetGun = love.graphics.newImage("assets/sprites/objects/store.png")
+local font = love.graphics.newFont("assets/fonts/pixelart.ttf", 8)
+
+sheetGun:setFilter("nearest", "nearest")
+sheetImage:setFilter("nearest", "nearest")
+font:setFilter("nearest", "nearest")
 
 local quads = {}
 local frameWidth = 32
 local frameHeight = sheetHeight
-
-local font = love.graphics.newFont("assets/fonts/pixelart.ttf", 8)
-
 local stretch = 1.5
---local Gun = require("scripts/player/gun")
-
+local gunDict  = {
+    {name = "shotgun", price = 400, index = 2},
+}
 
 for i = 0, (sheetWidth / frameWidth) - 1 do
     table.insert(quads, love.graphics.newQuad(i * frameWidth, 0, frameWidth, frameHeight, sheetWidth, sheetHeight))
 end
 
-sheetImage:setFilter("nearest", "nearest")
-font:setFilter("nearest", "nearest")
 
 function Store:new(x, y, quadIndex, collider)
     local tile = Tile.new(self, x, y, quadIndex, collider)
     setmetatable(tile, Store)
     tile.alpha = 1
     tile.targetAlpha = 1
+    tile.product = gunDict[1]
     return tile
 end
 
@@ -41,20 +44,39 @@ function Store:update(dt)
 end
 
 function Store:performBuy()
-    Game:performBuy()
+    if distance(Player, self) > 20 then return end
+
+    if Player.gun.gunIndex == self.product.index then return end
+
+    local playerPoints = Game:getPlayerPoints()
+
+    if playerPoints < self.product.price then return end
+
+    Game:decreasePlayerPoints(self.product.price)
+    Player.gun:changeGun(self.product.index)
 end
 
 function Store:draw()
-    local text = "click x to buy shotgun"
-
     love.graphics.setFont(font)
+
+    local text = "click x to buy"
+    local price = self.product.price .. " p"
+    local name = self.product.name 
+    
     local textWidth = font:getWidth(text)
+    local priceWidth = font:getWidth(price)
+    local nameWidth = font:getWidth(self.product.name)
 
     love.graphics.draw(sheetImage, quads[2], self.xWorld - frameWidth/2, self.yWorld - frameHeight * stretch, 0, 1, stretch)
 
     love.graphics.setColor(1, 1, 1, self.alpha)
-
-    love.graphics.print(text, self.xWorld - textWidth/2 + 4 , self.yWorld - 65)
+    
+    love.graphics.print(name, self.xWorld - nameWidth/2 + 2 , self.yWorld - 95)
+    love.graphics.print(price, self.xWorld - priceWidth/2 + 2 , self.yWorld - 80)
+    if Game:getPlayerPoints() > self.product.price then 
+        love.graphics.print(text, self.xWorld - textWidth/2 + 2 , self.yWorld - 65)
+    end
+    
     
     love.graphics.setColor(1, 1, 1)
 

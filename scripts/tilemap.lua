@@ -18,7 +18,7 @@ local Pathfinder = require("jumper.pathfinder")
 
 function loadTilemapFromImage()
     --map3 é o melhor
-    local imageData = love.image.newImageData("assets/sprites/map3.png")
+    local imageData = love.image.newImageData("assets/sprites/map-closed.png")
     local width, height = imageData:getDimensions()
     local tilemap = {}
 
@@ -165,13 +165,13 @@ function Tilemap:load()
             local tile = tilemap[y][x]
             local collider = false
 
-            if tile == 0 and math.random() > 0.8 then
+            if (tile == 0 or tile == 5 or tile == 6) and math.random() > 0.7 then
                 local gx, gy = self:mapToWorld(x,y)
-                local grass = Grass:new(gx - 1, gy - 5)
+                local grass = Grass:new(gx - 1, gy - 5, tile)
                 table.insert(self.grass, grass)
                 if math.random() > 0.4 then
                     local gx, gy = self:mapToWorld(x,y)
-                    local grass = Grass:new(gx + 1, gy +2 )
+                    local grass = Grass:new(gx + 1, gy +2, tile )
                     table.insert(self.grass, grass)
                 end
             end

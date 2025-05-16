@@ -29,14 +29,14 @@ local grassShader = love.graphics.newShader([[
 grassShader:send("direction", 1.0) 
 grassShader:send("spriteSize", {16.0, 16.0})
 
-function Grass:new(x, y)
+function Grass:new(x, y, tile)
     local grass = setmetatable({}, Grass)
     grass.x = x 
     grass.y = y 
     grass.index = 1
     grass.shaderDirection = 1
     grass.collisionDirection = 0
-    if math.random() > 0.8 then grass.index = 2 end
+    if math.random() > 0.7 or tile == 4 then grass.index = 2 end
     return grass
 end
 
@@ -76,7 +76,7 @@ function Grass:update(dt)
     local target = self:getTarget()
     local speed = 2
     if target ~= 0 then speed = 15 end
-    addToDrawQueue(self.y + 3, self)
+    addToDrawQueue(self.y + 4, self)
 
     self.collisionDirection = self.collisionDirection + (target - self.collisionDirection) * dt * speed
 

@@ -26,7 +26,7 @@ FPS = false
 
 scale = 1
 
-MUSIC_VOLUME = 0.05
+MUSIC_VOLUME = 1
 
 function love.load()
     --love.window.setMode(0, 0, { fullscreen = true })
