@@ -137,7 +137,11 @@ function Game:draw()
     
     PointsManager:draw()
     Player:drawLife()
+    if Player and Player.isAlive then
+        Player.gun:drawUI()
+    end
     WaveManager:draw()
+  
 
     if DEBUG then
         love.graphics.print("enemies qty: " .. #self.enemies, 10, 110)

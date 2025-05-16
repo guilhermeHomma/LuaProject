@@ -153,7 +153,39 @@ function Gun:drawSight()
 end
 
 function Gun:drawUI()
+
+    local size = 40
+    local startX = 13.5
+    local startY = 10.5
+    local line = 3
+    love.graphics.setLineWidth(line)
+    love.graphics.setColor(hexToRGB("090909"))
+    love.graphics.rectangle("line", startX+line, startY+line, size, size)
+    love.graphics.rectangle("line", startX + size + 10+line, startY+line, size, size)
     
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.rectangle("line", startX, startY, size, size)
+    love.graphics.rectangle("line", startX + size + 10, startY, size, size)
+
+    love.graphics.setLineWidth(1)
+    local quad = love.graphics.newQuad(
+        (self.gunIndex - 1) * self.size, 
+        16,
+        self.size, self.size,
+        self.gunSheet:getDimensions()
+    )
+
+    love.graphics.draw(
+        self.gunSheet,
+        quad,
+        20,
+        40,
+        0,
+        3, 3,
+        0,
+        self.size / 2
+    )
+
 end
 
 function Gun:draw()

@@ -3,7 +3,7 @@ Store.__index = Store
 
 local sheetImage = love.graphics.newImage("assets/sprites/objects/store.png")
 local sheetWidth, sheetHeight = sheetImage:getDimensions()
-local sheetGun = love.graphics.newImage("assets/sprites/objects/store.png")
+local sheetGun = love.graphics.newImage("assets/sprites/player/guns.png")
 local font = love.graphics.newFont("assets/fonts/pixelart.ttf", 8)
 
 sheetGun:setFilter("nearest", "nearest")
@@ -68,12 +68,30 @@ function Store:draw()
     local nameWidth = font:getWidth(self.product.name)
 
     love.graphics.draw(sheetImage, quads[2], self.xWorld - frameWidth/2, self.yWorld - frameHeight * stretch, 0, 1, stretch)
+    if Player.gun.gunIndex ~= self.product.index then 
+        local quadGun = love.graphics.newQuad(
+            (self.product.index - 1) * 16, 
+            16,
+            16, 16,
+            sheetGun:getDimensions()
+        )
 
+        love.graphics.draw(
+            sheetGun,
+            quadGun,
+            self.xWorld - 4,
+            self.yWorld - 18,
+            0,
+            1, 1.4,
+            0,
+            self.size / 2
+        )
+    end
     love.graphics.setColor(1, 1, 1, self.alpha)
     
     love.graphics.print(name, self.xWorld - nameWidth/2 + 2 , self.yWorld - 95)
     love.graphics.print(price, self.xWorld - priceWidth/2 + 2 , self.yWorld - 80)
-    if Game:getPlayerPoints() > self.product.price then 
+    if Game:getPlayerPoints() > self.product.price and Player.gun.gunIndex ~= self.product.index then 
         love.graphics.print(text, self.xWorld - textWidth/2 + 2 , self.yWorld - 65)
     end
     
