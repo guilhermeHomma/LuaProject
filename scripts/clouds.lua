@@ -10,11 +10,12 @@ function Clouds:load()
 end
 
 function Clouds:update(dt)
-    self.movement = (self.movement + 10 *dt) % self.width 
+    local speed = (math.sin(love.timer.getTime() * 0.2) + 3 ) / 4
+    self.movement = (self.movement + 10 *dt * speed) % self.width 
 end
 
 function Clouds:drawShadow()
-    self:drawCloud(true)
+    --self:drawCloud(true)
 end
 
 
@@ -22,7 +23,7 @@ function Clouds:drawCloud(shadow)
     love.graphics.setColor(1, 1, 1, 0.2)
     local cloudHeight = 80
     if shadow == true then
-        love.graphics.setColor(0.70, 0.63, 0.52, 0.5)
+        love.graphics.setColor(0.70, 0.63, 0.52, 0.3)
         cloudHeight = 0
     end
 
@@ -30,7 +31,9 @@ function Clouds:drawCloud(shadow)
 
     local screenHeight = love.graphics.getHeight()
 
-    local startX = math.floor(Player.x / self.width) * self.width + self.movement
+    --local startX = math.floor(Player.x / self.width) * self.width + self.movement
+    local startX = math.floor((Player.x + self.movement) / self.width) * self.width
+    local startX = math.floor(Player.x / self.width) * self.width - self.movement
     local startY = math.floor(Player.y / self.height) * self.height
 
     local tilesX = 3
@@ -39,6 +42,7 @@ function Clouds:drawCloud(shadow)
     for i = -1, tilesX do
         for j = -1, tilesY do
             love.graphics.draw(self.image, startX + i * self.width, startY - cloudHeight + j * self.height)
+            
         end
     end
     love.graphics.setColor(1, 1, 1)

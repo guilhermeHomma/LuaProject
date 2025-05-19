@@ -1,102 +1,162 @@
-Player = require "scripts/player"
-local stretchFactor = 0.65
 
-local Camera = require("scripts/camera")
+require "scripts/utils"
 
-camera = Camera:new(0, 0)
+Game = require("scripts.managers.gameManager")
+love.graphics.setDefaultFilter("nearest", "nearest")
 
-local Ground = require("scripts/ground")
-local WaveManager = require("scripts/waves")
-local Clouds = require("scripts/clouds")
-local Tilemap = require("scripts/tilemap")
+local AmbienceSound = require("scripts/managers/ambienceSound")
+local Music = require("scripts/managers/music")
+local PauseMenu = require("scripts/managers/menu/pauseMenu")
+local GameoverMenu = require("scripts/managers/menu/gameoverMenu")
+local MainMenu = require("scripts/managers/menu/mainMenu")
 
-drawQueue = {}
-enemies = {}
-particles = {}
-showCollision = false
 
-local music 
+canvas = love.graphics.newCanvas(baseWidth, baseHeight)
+STATES = {mainMenu = 1, game = 2, gamePause = 3, gameDead = 4}
+state = STATES.mainMenu
+
+--baseWidth = 1120
+--baseHeight = 630
+
+baseWidth = 960
+baseHeight = 540
+
+DEBUG = false
+FPS = false
+
+scale = 1
+
+MUSIC_VOLUME = 1
+GAME_VOLUME = 0.5
 
 function love.load()
-    WaveManager:load()
-    Player:load(camera)
-    Ground:load()
-    Clouds:load()
-    Tilemap:load()
+    --love.window.setMode(0, 0, { fullscreen = true })
+    local scaleX = love.graphics.getWidth() / baseWidth
+    local scaleY = love.graphics.getHeight() / baseHeight
 
-    local cursorImage = love.image.newImageData("assets/sprites/cursor.png")
-    local cursor = love.mouse.newCursor(cursorImage, 8, 8) 
-    love.mouse.setCursor(cursor)
-    music = love.audio.newSource("assets/sfx/music.wav", "stream")
-    music:setLooping(true) 
-    music:setVolume(0.8)
-    --music:play()
+    scale = math.max(scaleX, scaleY)
+    love.audio.setVolume(GAME_VOLUME)
+    MainMenu:load()
+    AmbienceSound:load()
+    PauseMenu:load()
+    Music:load()
+    GameoverMenu:load()
+    AmbienceSound:startGame()
+end
+
+function loadGame()
+    state=STATES.game
+    Game:load()
+    
+    Music:startGame()
+    
+end
+
+function playerDeath()
+    Music:death()
+    state=STATES.gameDead
+end
+
+function quitToMenu()
+    Music:closeGame()
+    Game:close()
+    state=STATES.mainMenu
+end
+
+function changePause()
+    if state == STATES.game or state == STATES.gamePause then
+        state = (state == STATES.gamePause) and STATES.game or STATES.gamePause
+
+        local isPaused = state == STATES.gamePause
+        Music:changePause(isPaused)
+
+    end
+end
+
+function love.keypressed(key)
+    
+    if key == "escape" then
+        changePause()
+    end 
+
+    if state == STATES.mainMenu then
+        MainMenu:keypressed(key)
+    elseif state == STATES.game then
+        Game:keypressed(key)
+    elseif state == STATES.gamePause then
+        PauseMenu:keypressed(key)
+    elseif state == STATES.gameDead then
+        GameoverMenu:keypressed(key)
+    end
+    if key == "f5" then
+        FPS = not FPS
+    end
+end
+
+function love.resize(w, h)
+
+    if camera then 
+        camera:resize(w, h)
+    end
+
+    local scaleX = w / baseWidth
+    local scaleY = h / baseHeight
+
+    scale = math.max(scaleX, scaleY)
 
 end
 
 function love.update(dt)
 
-    for _, enemy in ipairs(enemies) do
-        if enemy.isAlive then
-            enemy:update(dt) 
-            addToDrawQueue(enemy.y, enemy)
-        else
-            table.remove(enemies, _)
-
-        end
+    if state == STATES.game then
+        Game:update(dt)
+    elseif state == STATES.mainMenu then
+        MainMenu:update(dt)
+    elseif state == STATES.gamePause then
+        PauseMenu:update(dt)
     end
 
-    for i = #particles, 1, -1 do
-        local particle = particles[i]
-        particle:update(dt)
-        if not particle.isAlive then
-            table.remove(particles, i)
-        end
+    if state == STATES.gameDead then
+        Game:update(dt)
+        GameoverMenu:update(dt)
+
     end
 
-    WaveManager:update(dt)
-    Clouds:update(dt)
-    Player:update(dt)
-    Tilemap:update()
+    AmbienceSound:update(dt)
+    Music:update(dt)
+    
 
-    camera:update(Player.x *3 - love.graphics.getWidth() / 2, Player.y*2 - love.graphics.getHeight() / 2)
-end
+end 
 
-
-function addToDrawQueue(priority, object)
-    table.insert(drawQueue, {priority = priority, object = object})
-end
 
 function love.draw()
 
-    love.graphics.clear(0.780, 0.75, 0.57)
-
-    camera:attach()
-
-    love.graphics.scale(3, 2) 
-    Ground:draw(Player)
-    
-    table.sort(drawQueue, function(a, b) return a.priority < b.priority end)
-    Clouds:drawShadow()
-
-    for _, item in ipairs(drawQueue) do
-        if type(item.object.drawShadow) == "function" then
-            item.object:drawShadow()
-        end
-    end
-
-    Player:drawS()
-    Player:drawSight()
-
-    for _, item in ipairs(drawQueue) do
-        item.object:draw()
-    end
-    Clouds:draw()
     love.graphics.scale(1, 1)
+    love.graphics.clear(0, 0, 0)
     
-    drawQueue = {}
-    camera:detach()
-    Player:drawLife()
-    WaveManager:draw()
+    love.graphics.setCanvas(canvas)
+    
+    love.graphics.clear(0.2, 0.3, 0.3)
+    
+
+    if state == STATES.game or state == STATES.gamePause or state == STATES.gameDead then
+        Game:draw()
+    end
+
+    if state == STATES.gamePause then
+        PauseMenu:draw()
+    elseif state == STATES.mainMenu then
+        MainMenu:draw()
+    elseif state == STATES.gameDead then
+        GameoverMenu:draw()
+
+    end
+
+    if FPS or DEBUG then 
+        love.graphics.print("FPS: " .. love.timer.getFPS(), 10, 95)
+    end
+
+    love.graphics.setCanvas()
+    love.graphics.draw(canvas, 0, 0, 0, scale, scale)
 end
 

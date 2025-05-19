@@ -1,152 +1,183 @@
 local Tilemap = {}
 local tileSize = 16
-local tilesetImage
-local tileSet = {}
 
-local tilesetImage = love.graphics.newImage("assets/sprites/tileset.png")
-tilesetImage:setFilter("nearest", "nearest")
-local sheetWidth, sheetHeight = tilesetImage:getDimensions()
+require "scripts.utils"
+require "scripts.objects.tile"
+require "scripts.objects.door"
+require "scripts.objects.store"
+require "scripts.objects.water"
+require "scripts.objects.tree"
+require "scripts.objects.grass"
+
+tileSet = require("scripts.objects.tileset")
+
 local tilemapWorldX = -40 * tileSize
 local tilemapWorldY = -40 * tileSize
 
-
+local Grid = require("jumper.grid")
+local Pathfinder = require("jumper.pathfinder")
+local tilemap = nil
 
 function loadTilemapFromImage()
-    local imageData = love.image.newImageData("assets/sprites/map.png")
+    --map3 é o melhor
+    local imageData = love.image.newImageData("assets/sprites/map-closed.png")
     local width, height = imageData:getDimensions()
-    local tilemap = {}
+    local tilemapLoad = {}
 
     for y = 1, height do
-        tilemap[y] = {}
+        tilemapLoad[y] = {}
         for x = 1, width do
-            local r, g, b, a = imageData:getPixel(x - 1, y - 1) -- Pega a cor do pixel
+            local r, g, b, a = imageData:getPixel(x - 1, y - 1) -- pixel color
+            local found = false
 
-            -- Se for branco (255, 255, 255) -> tile sólido (1), senão vazio (0)
-            if r == 1 and g == 1 and b == 1 then  
-                tilemap[y][x] = 1
-            else
-                tilemap[y][x] = 0
+            local tileDefinitions = {
+                {r = 1,   g = 1,   b = 1,   tile = 1}, -- White wall
+                {r = 0,   g = 0,   b = 0,   tile = 0}, -- black defaultground
+                {r = 1,   g = 0,   b = 0,   tile = 2}, -- Red box
+                {r = 0,   g = 1,   b = 0,   tile = 3}, -- Green tree
+                {r = 1,   g = 1,   b = 0,   tile = 4}, -- Yellow grass
+                {r = 0,   g = 0,   b = 1,   tile = 5}, -- Blue door south
+                {r = 1,   g = 0,   b = 1,   tile = 6}, -- Pink door north
+
+                {r = 0.5,   g = 1,   b = 1,   tile = 7}, -- store - shotgun
+                {r = 0,   g = 0.5,   b = 1,   tile = 8}, -- water
+                {r = 0.5,   g = 0.5,   b = 0.5,   tile = 9}, -- sand
+            }
+
+            for _, def in ipairs(tileDefinitions) do
+                if isColorMatch(r, g, b, def) then
+                    tilemapLoad[y][x] = def.tile
+                    found = true
+                    break
+                end
             end
+    
+            if not found then
+                tilemapLoad[y][x] = 0 -- Vazio
+            end
+    
         end
     end
 
-    return tilemap
-end
-
-local tilemap = loadTilemapFromImage()
-
-Tile = {}
-Tile.__index = Tile
-
-function Tile:new(x, y, quadIndex)
-    local tile = setmetatable({}, Tile)
-    tile.quad = tileSet[quadIndex]
-    tile.quadIndex = quadIndex
-    tile.x = x
-    tile.y = y
-    tile.size = tileSize
-    tile.xWorld = tilemapWorldX + (x - 1) * tileSize
-    tile.yWorld = tilemapWorldY + (y - 1) * tileSize
-    return tile
-end
-
-function Tile:draw()
-    
-    --love.graphics.rectangle("fill", self.xWorld, self.yWorld, tileSize, tileSize)
-    love.graphics.draw(tilesetImage, self.quad, self.xWorld, self.yWorld, 0, 1, 1, tileSize/2, tileSize)
-    
-    if self.quadIndex ~= 5 and showCollision then
-        love.graphics.rectangle("line", self.xWorld-8, self.yWorld-16, 16, 16)
-    end
-end
-
-function Tile:drawShadow()
-    if self.quadIndex == 5 then 
-        return
-    end
-
-    local shadowSize = 20
-    local quadShadow = love.graphics.newQuad(110, 14, shadowSize, shadowSize, sheetWidth, sheetHeight)
-    love.graphics.draw(tilesetImage, quadShadow, self.xWorld, self.yWorld, 0, 1, 1, shadowSize/2, shadowSize-4)
-
+    return tilemapLoad
 end
 
 function Tilemap:getTilemap()
-
     return tilemap
 end
 
 function Tilemap:mapToWorld(x,y)
-    --if y > #tilemap or y < 1 then return 0, 0 end
-    --if x > #tilemap[y] or x < 1 then return 0, 0 end
 
     local xWorld = tilemapWorldX + (x - 1) * tileSize
     local yWorld = tilemapWorldY + (y - 1) * tileSize
-    return xWorld, yWorld- tileSize/2
+    return xWorld, yWorld + tileSize/2
 end
 
-function Tilemap:createTileSet()
-    for x = 1, 3 do
-        for y = 1, 3 do
-            local tileX = (x - 1) * 16
-            local tileY = (y - 1) * 16
-
-            local index = (y - 1) * 3 + x
-            tileSet[index] = love.graphics.newQuad(tileX, tileY, tileSize, tileSize, sheetWidth, sheetHeight)
-        end
-    end
-
-    tileSet[10] = love.graphics.newQuad(48 + 16, 0, tileSize, tileSize, sheetWidth, sheetHeight)
-    tileSet[11] = love.graphics.newQuad(64 + 16, 0, tileSize, tileSize, sheetWidth, sheetHeight)
-    tileSet[12] = love.graphics.newQuad(48 + 16, 16, tileSize, tileSize, sheetWidth, sheetHeight)
-    tileSet[13] = love.graphics.newQuad(64 + 16, 16, tileSize, tileSize, sheetWidth, sheetHeight)
-
-
+function Tilemap:worldToMap(x, y)
+    local xMap = math.floor((x - tilemapWorldX) / tileSize + 0.5 ) + 1
+    local yMap = math.floor((y - tilemapWorldY) / tileSize + 0.5) + 1
+    return xMap, yMap
 end
 
-function Tilemap:autoTile(x, y)
-    if x == 1 or y == 1 or x == #tilemap[y] or y == #tilemap then 
-        return 5
-    end
+function Tilemap:hasTileClose(x, y, tileIndex)
+    if x -1  <= 1 or y - 1 <= 1 then return false end
+    
+    if y + 1 > #tilemap then return false end
 
-    local top = tilemap[y - 1][x] ~= 1
-    local bottom = tilemap[y + 1][x] ~= 1
-    local left = tilemap[y][x - 1] ~= 1
-    local right = tilemap[y][x + 1] ~= 1
+    if x + 1 > #tilemap[y] then return false end
+ 
+    return 
+        tilemap[y][x + 1] == tileIndex or
+        tilemap[y][x - 1] == tileIndex or
+        tilemap[y + 1][x] == tileIndex or
+        tilemap[y - 1][x] == tileIndex
+end
 
-    local topLeft = tilemap[y - 1][x - 1] ~= 1
-    local topRight = tilemap[y - 1][x + 1] ~= 1
-    local bottomLeft = tilemap[y + 1][x - 1] ~= 1
-    local bottomRight = tilemap[y + 1][x + 1] ~= 1
 
-    if top and left then return 1 end
-    if top and right then return 3 end
-    if bottom and left then return 7 end
-    if bottom and right then return 9 end
 
-    if top then return 2 end
-    if bottom then return 8 end
-    if left then return 4 end
-    if right then return 6 end
+function Tilemap:loadfinders()
+    self.sharedGrid = Grid(tilemap)
 
-    if topLeft then return 13 end
-    if topRight then return 12 end
-    if bottomLeft then return 11 end
-    if bottomRight then return 10 end
+    self.finder = Pathfinder(self.sharedGrid, 'JPS', 0)
+    self.finderAstar = Pathfinder(self.sharedGrid, 'ASTAR', 0)
+    self.finder:setMode("DIAGONAL") -- ORTHOGONAL
+    self.finderAstar:setMode("DIAGONAL")
 
-    return 5
 
 end
 
 function Tilemap:load()
-    self:createTileSet()
+    tilemap = loadTilemapFromImage()
+    tileSet:createTileSet()
+    Tile:setTilemap(self)
+    self:loadfinders()
+    self.grass = {}
     self.tiles = {}
     for y = 1, #tilemap do
         for x = 1, #tilemap[y] do
             local tile = tilemap[y][x]
-            if tileSet[tile] then
+            local collider = false
+
+            if (tile == 0 or tile == 5 or tile == 6) and math.random() > 0.7 then
+                local gx, gy = self:mapToWorld(x,y)
+                local grass = Grass:new(gx - 1, gy - 5, tile)
+                table.insert(self.grass, grass)
+                if math.random() > 0.4 then
+                    local gx, gy = self:mapToWorld(x,y)
+                    local grass = Grass:new(gx + 1, gy +2, tile )
+                    table.insert(self.grass, grass)
+                end
+            end
+
+            if self:hasTileClose(x, y, 0) or 
+                self:hasTileClose(x, y, 5) or 
+                self:hasTileClose(x, y, 8) or 
+                self:hasTileClose(x, y, 6) then 
+                collider = true
+            end       
+            
+            if tile == 8 then 
+                local c = self:hasTileClose(x, y, 0) or self:hasTileClose(x, y, 5) or self:hasTileClose(x, y, 6)
+                index = autoTileWater(x, y, tilemap)
+                local t = Water:new(x, y, index, c)
+                table.insert(self.tiles, t)
+            elseif tile == 9 then
+
+
+            elseif tile == 3 then -- three
+                local indexes = {16, 17, 19}
+                local t = TreeTile:new(x, y, indexes[math.random(#indexes)], collider)
+                table.insert(self.tiles, t)
+            
+            elseif tile == 7 then --store
+                local index = 24
+                local t = Store:new(x, y, index, collider)
+                table.insert(self.tiles, t)
+
+            elseif tile == 5 or tile == 6 then --door
+                local index = 20
                 
-                local t = Tile:new(x, y, self:autoTile(x, y))
+                if tile == 6 then index = 22 end
+
+                if self:hasTileClose(x, y, 0) then index = index + 1 end
+
+                local t = DoorTile:new(x, y, index, collider)
+                table.insert(self.tiles, t)
+
+            elseif tile > 0 then --tileset
+                local index = 5
+
+                if tile == 1 then 
+                    index = autoTile(x, y, tilemap)
+                elseif tile == 2 then
+                    index = 14
+                end
+
+                if index == 5 and math.random(10) == 1 then
+                    index = 15
+                end
+
+                local t = Tile:new(x, y, index, collider)
                 table.insert(self.tiles, t)
                 
             end
@@ -154,9 +185,30 @@ function Tilemap:load()
     end
 end
 
-function Tilemap:update()
+function Tilemap:update(dt)
+    for _, g in ipairs(self.grass) do
+        g:update(dt)
+    end
+
     for _, tile in ipairs(self.tiles) do
-        addToDrawQueue(tile.yWorld, tile)
+        tile:update(dt)
+
+        if tile.quadIndex == 16 or tile.quadIndex == 17 or tile.quadIndex == 19 then
+            addToDrawQueue(tile.yWorld+1, tile)
+        
+        elseif tile.isWater then
+            addToDrawQueue(tile.yWorld - 16, tile)
+        else
+            addToDrawQueue(tile.yWorld, tile)
+        end
+    end
+end
+
+function Tilemap:keypressed(key)
+    for _, tile in ipairs(self.tiles) do
+        if type(tile.performBuy) == "function" then
+            tile:performBuy()
+        end
     end
 end
 
