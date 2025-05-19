@@ -139,7 +139,6 @@ function Enemy:update(dt)
         local distance = math.sqrt((self.x - nextTileX)^2 + (self.y - nextTileY)^2)
         if distance < 4 then
             table.remove(self.path, 1)
-
         end
         if math.abs(nextTileX - self.x) < 1.4 then self.x = nextTileX end
         if math.abs(nextTileY - self.y) < 1.4 then self.y = nextTileY end
@@ -225,8 +224,10 @@ function Enemy:update(dt)
             local negative = 0
         end
 
-        self.x = self.x + velocityX*negative * self.speed * dt
-        self.y = self.y + velocityY*negative * self.speed * dt
+        local moveX, moveY =  velocityX, velocityY
+        local collidedX, collidedY = self:isColliding(moveX,moveY)
+        if not collidedX then self.x = self.x + moveX *negative * self.speed * dt end
+        if not collidedY then self.y = self.y + moveY *negative * self.speed * dt end
     end
 end
 
@@ -411,6 +412,7 @@ function Enemy:draw()
     end
 
     if DEBUG then 
+
         love.graphics.rectangle("line", self.x - 3.5, self.y - 3.5, 7, 7)
     
         if self.path and #self.path > 1 then

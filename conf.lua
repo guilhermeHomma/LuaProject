@@ -19,7 +19,10 @@ function love.conf(t)
 
     t.window.width = 1120
     t.window.height = 630 
-
+    --t.window.vsync = 0
     t.window.width = 1280
     t.window.height = 720 
+
+    t.window.width = 960
+    t.window.height = 540
 end

@@ -40,7 +40,7 @@ function TreeTile:new(x, y, quadIndex, collider)
 end
 
 function TreeTile:update(dt)
-    self.shaderDirection = math.sin(love.timer.getTime() /1.5 + (self.yWorld/10))
+    self.shaderDirection = math.sin(love.timer.getTime() + (self.yWorld/10)) / 2 + 1
 end
 
 local function getTargetAlpha(box)

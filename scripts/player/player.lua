@@ -124,20 +124,22 @@ function Player:update(dt)
         moveY = moveY * diagFactor
     end
 
-    local collidedX, collidedY = self:isColliding(moveX, moveY)
+    local collidedX, collidedY = self:isColliding(
+        moveX,
+        moveY 
+    )
 
     if collidedX then moveX = 0 end
     if collidedY then moveY = 0 end
 
-
-    local mouseX, mouseY = mousePosition()
     self.x = self.x + moveX * self.speed * dt
     self.y = self.y + moveY * self.speed * dt
-
 
     addToDrawQueue(self.y+7, Player)
 
     self.gun:update(dt, self.x, self.y)
+
+    local mouseX, mouseY = mousePosition()
 
     if not self.gun.showGun and moveX ~= 0 then
         if moveX > 0 then 
@@ -153,7 +155,6 @@ function Player:update(dt)
         end
     end 
 
-    
     self:checkDamage()
     self:updateAnimation(dt, moveX ~= 0 or moveY ~= 0)
     self:death()
@@ -190,7 +191,6 @@ end
 
 function Player:isColliding(moveX, moveY, size)
     if not size then size = self:getCollisionBox().size end
-
 
     local playerBoxX = self:getCollisionBox()
     playerBoxX.x = playerBoxX.x + moveX
@@ -237,8 +237,6 @@ function Player:death()
     playerDeath()
     love.audio.stop(bulletSound)
 end
-
-
 
 
 function love.mousepressed(x, y, button)

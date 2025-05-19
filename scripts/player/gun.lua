@@ -25,15 +25,12 @@ function Gun:load()
         {shotCooldown = 0.54, damage = 10, bulletSpeed = 300, shootFunction = function() self:shootPistol() end},
         {shotCooldown = 0.8, damage = 15, bulletSpeed = 230, shootFunction = function() self:shootShotgun() end},
         {shotCooldown = 0.4, damage = 20, bulletSpeed = 340, shootFunction = function() self:shootPistol() end},
-
     }
 
     self.shootTimer = 0
     self.showGunTime = 1.5
     self.showGun = false
 end
-
-
 
 function Gun:update(dt, playerX, playerY)
     self.x = playerX
@@ -61,11 +58,9 @@ function Gun:update(dt, playerX, playerY)
             table.remove(self.bullets, i)
         end
     end
-
 end
 
 function Gun:shootShotgun()
-
     local angle = mouseAngle()
 
     local offsetX = math.cos(angle) * 5
@@ -88,7 +83,6 @@ function Gun:shootShotgun()
     bulletSound:setVolume(1)
     bulletSound:setPitch(0.7 + math.random() * 0.1)
     bulletSound:play()
-
 end
 
 function Gun:shootPistol()
@@ -108,18 +102,13 @@ function Gun:shootPistol()
     bulletSound:setVolume(0.8)
     bulletSound:setPitch(0.9 + math.random() * 0.1)
     bulletSound:play()
-
 end
 
 function Gun:shootRaygun()
-
-
     local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
-
     bulletSound:setVolume(0.5)
     bulletSound:setPitch(1.0 + math.random() * 0.1)
     bulletSound:play()
-
 end
 
 function Gun:shoot()
@@ -130,7 +119,7 @@ function Gun:shoot()
 
     self.gunConfig[self.gunIndex].shootFunction(self)
 
-    camera:shake(1, 0.88) 
+    camera:shake(1, 0.88)
 end
 
 function Gun:aim()
@@ -141,6 +130,8 @@ end
 
 function Gun:changeGun(index)
     self.gunIndex = index
+    self.showGun = true
+    self.shootTimer = 0 - math.random() * 0.1
 end
 
 function Gun:drawSight()
@@ -162,27 +153,23 @@ function Gun:drawUI()
     love.graphics.setColor(hexToRGB("090909"))
     love.graphics.rectangle("line", startX+line, startY+line, size, size)
     love.graphics.rectangle("line", startX + size + 10+line, startY+line, size, size)
-    
     love.graphics.setColor(1, 1, 1, 1)
+    
     love.graphics.rectangle("line", startX, startY, size, size)
-    love.graphics.rectangle("line", startX + size + 10, startY, size, size)
+    love.graphics.setColor(0.274, 0.4, 0.45, 1)
 
+    love.graphics.rectangle("line", startX + size + 10, startY, size, size)
+    love.graphics.setColor(1, 1, 1, 1)
     love.graphics.setLineWidth(1)
     local quad = love.graphics.newQuad(
-        (self.gunIndex - 1) * self.size, 
-        16,
+        (self.gunIndex - 1) * self.size, 16,
         self.size, self.size,
         self.gunSheet:getDimensions()
     )
 
     love.graphics.draw(
-        self.gunSheet,
-        quad,
-        20,
-        40,
-        0,
-        3, 3,
-        0,
+        self.gunSheet, quad, 20,
+        40, 0, 3, 3, 0,
         self.size / 2
     )
 

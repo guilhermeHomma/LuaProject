@@ -80,7 +80,7 @@ function Grass:update(dt)
 
     self.collisionDirection = self.collisionDirection + (target - self.collisionDirection) * dt * speed
 
-    self.shaderDirection = math.sin(love.timer.getTime() /1.5 + (self.y/10)) + self.collisionDirection*0.7
+    self.shaderDirection = (math.sin(love.timer.getTime() + (self.y/10)   )) / 2 + 1  + self.collisionDirection*0.5
 
 
     

@@ -133,21 +133,96 @@ function vectorDistance(a, b)
 end
 
 
-function debugObject(obj)
-    print("== Object Debug ==")
-    print("type: " .. type(obj))
-    print("ToString: " .. tostring(obj))
 
-    local mt = getmetatable(obj)
-    if mt then
-        print("Metatable:")
-        for k, v in pairs(mt) do
-            print("  ", k, v)
-        end
+function autoTile(x, y, tilemap) -- grass wall
+
+    local function isNotSolid(y, x)
+        local v = tilemap[y] and tilemap[y][x]
+        return v ~= 1 and v ~= 3
     end
 
-    print("atrr:")
-    for k, v in pairs(obj) do
-        print("  ", k, v)
+    local function isSolid(y, x)
+        local v = tilemap[y] and tilemap[y][x]
+        return v == 1 or v == 3
     end
+
+    if x == 1 or y == 1 or x == #tilemap[y] or y == #tilemap then 
+        return 5
+    end
+
+    local top = isNotSolid(y - 1, x)
+    local bottom = isNotSolid(y + 1, x)
+    local left = isNotSolid(y, x - 1)
+    local right = isNotSolid(y, x + 1)
+    
+    local topLeft = isNotSolid(y - 1, x - 1)
+    local topRight = isNotSolid(y - 1, x + 1)
+    local bottomLeft = isNotSolid(y + 1, x - 1)
+    local bottomRight = isNotSolid(y + 1, x + 1)
+
+    local leftNoBottom = left and isSolid(y+1, x-1)
+    local rightNoBottom = right and isSolid(y+1, x+1)
+
+    if top and left then return 1 end
+    if top and right then return 3 end
+    if bottom and left then return 7 end
+    if bottom and right then return 9 end
+
+    if leftNoBottom then return 13 end
+    if rightNoBottom then return 12 end
+
+    if top then return 2 end
+    if bottom then return 8 end
+    if left then return 4 end
+    if right then return 6 end
+
+    if topLeft then return 5 end --13
+    if topRight then return 5 end --12
+    if bottomLeft then return 11 end
+    if bottomRight then return 10 end
+
+    return 5
+
+end
+
+
+function autoTileWater(x, y, tilemap) -- water
+
+    local function isNotWater(y, x)
+        local v = tilemap[y] and tilemap[y][x]
+        return v ~= 8
+    end
+
+    if x == 1 or y == 1 or x == #tilemap[y] or y == #tilemap then 
+        return 5
+    end
+
+    local top = isNotWater(y - 1, x)
+    local bottom = isNotWater(y + 1, x)
+    local left = isNotWater(y, x - 1)
+    local right = isNotWater(y, x + 1)
+    
+    local topLeft = isNotWater(y - 1, x - 1)
+    local topRight = isNotWater(y - 1, x + 1)
+    local bottomLeft = isNotWater(y + 1, x - 1)
+    local bottomRight = isNotWater(y + 1, x + 1)
+
+
+    if top and left then return 1 end
+    if top and right then return 3 end
+    if bottom and left then return 7 end
+    if bottom and right then return 9 end
+
+    if top then return 2 end
+    if bottom then return 8 end
+    if left then return 4 end
+    if right then return 6 end
+
+    if bottomLeft then return 11 end
+    if bottomRight then return 10 end
+    if topLeft then return 13 end
+    if topRight then return 12 end 
+
+    return 5
+
 end

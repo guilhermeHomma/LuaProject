@@ -52,6 +52,11 @@ function Store:performBuy()
 
     if playerPoints < self.product.price then return end
 
+    local sound = love.audio.newSource("assets/sfx/store/buy-item.wav", "static")
+    sound:setVolume(1)
+    --sound:setPitch(0.95 + math.random() * 0.1)
+    sound:play()
+
     Game:decreasePlayerPoints(self.product.price)
     Player.gun:changeGun(self.product.index)
 end
@@ -59,7 +64,7 @@ end
 function Store:draw()
     love.graphics.setFont(font)
 
-    local text = "click x to buy"
+    local text = "click X to buy"
     local price = self.product.price .. " p"
     local name = self.product.name 
     
@@ -87,14 +92,16 @@ function Store:draw()
             self.size / 2
         )
     end
-    love.graphics.setColor(1, 1, 1, self.alpha)
-    
-    love.graphics.print(name, self.xWorld - nameWidth/2 + 2 , self.yWorld - 95)
-    love.graphics.print(price, self.xWorld - priceWidth/2 + 2 , self.yWorld - 80)
-    if Game:getPlayerPoints() > self.product.price and Player.gun.gunIndex ~= self.product.index then 
-        love.graphics.print(text, self.xWorld - textWidth/2 + 2 , self.yWorld - 65)
+
+    love.graphics.setColor(0, 0, 0, self.alpha)
+    for i = 0, 1 do
+        if i == 1 then love.graphics.setColor(1, 1, 1, self.alpha) end
+        love.graphics.print(name, math.ceil(self.xWorld - nameWidth/2 + 2 + i) + 0.5 , self.yWorld - 95 + i)
+        love.graphics.print(price, self.xWorld - priceWidth/2 + 2 + i, self.yWorld - 80 + i)
+        if Game:getPlayerPoints() > self.product.price and Player.gun.gunIndex ~= self.product.index then 
+            love.graphics.print(text, self.xWorld - textWidth/2 + 2 + i , self.yWorld - 65 + i)
+        end
     end
-    
     
     love.graphics.setColor(1, 1, 1)
 

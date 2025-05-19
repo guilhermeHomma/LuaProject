@@ -13,6 +13,11 @@ function baseMenu:load()
     self.fontOptions:setFilter("nearest", "nearest")
     self.scale = 1
     self.lastSelectChange = -1
+
+    self.scaleTarget = 1
+
+    self.selectSprite = love.graphics.newImage("assets/sprites/menu/menu-select.png")
+
 end
 
 
@@ -20,12 +25,18 @@ function baseMenu:onSelect()
 
 end
 
+function baseMenu:drawSelectSprite(text, y)
+
+    local spriteX =  math.ceil(self:getWidth()/ 2 - self.fontOptions:getWidth(text) / 2 - 30)
+    love.graphics.draw(self.selectSprite, spriteX, y+ 9, 0, 3, 3)
+end
+
 function baseMenu:drawTitle()
     love.graphics.setFont(self.fontTitle)
 
 
     local titleX, titleY = 0, self:getHeight() / 2 - 60
-    drawOutline(self.MenuTItle, titleX, titleY, self:getWidth(), "center")
+    --drawOutline(self.MenuTItle, titleX, titleY, self:getWidth(), "center")
 
     love.graphics.setColor(hexToRGB("fbfaf7"))  
     love.graphics.printf(self.MenuTItle, titleX, titleY, self:getWidth(), "center")
@@ -35,7 +46,7 @@ end
 
 function baseMenu:drawOption(text, x, y, def, isSelected)
     if not isSelected then
-        drawOutline(text, x, y, self:getWidth(), def)
+        --drawOutline(text, x, y, self:getWidth(), def)
         love.graphics.setColor(hexToRGB("fbfaf7"))
         love.graphics.printf(text, x, y, self:getWidth(), def)
         return
@@ -44,15 +55,17 @@ function baseMenu:drawOption(text, x, y, def, isSelected)
     local time = love.timer.getTime()
     local blink = math.floor(time * 10) % 2 == 0 
     
+    self:drawSelectSprite(text, y)
+
     if blink then
-        drawOutline(text, x, y, self:getWidth(), def)
+        --drawOutline(text, x, y, self:getWidth(), def)
         love.graphics.setColor(hexToRGB("c7c093"))
         love.graphics.printf(text, x, y, self:getWidth(), def)
         love.graphics.setColor(hexToRGB("fbfaf7"))
         return
     end
 
-    drawOutline(text, x, y, self:getWidth(), def)
+    --drawOutline(text, x, y, self:getWidth(), def)
     love.graphics.setColor(hexToRGB("fbfaf7"))
 
     love.graphics.printf(text, x, y, self:getWidth(), def)

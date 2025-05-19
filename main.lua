@@ -27,6 +27,7 @@ FPS = false
 scale = 1
 
 MUSIC_VOLUME = 1
+GAME_VOLUME = 0.5
 
 function love.load()
     --love.window.setMode(0, 0, { fullscreen = true })
@@ -34,18 +35,19 @@ function love.load()
     local scaleY = love.graphics.getHeight() / baseHeight
 
     scale = math.max(scaleX, scaleY)
-
+    love.audio.setVolume(GAME_VOLUME)
     MainMenu:load()
     AmbienceSound:load()
     PauseMenu:load()
     Music:load()
     GameoverMenu:load()
+    AmbienceSound:startGame()
 end
 
 function loadGame()
     state=STATES.game
     Game:load()
-    AmbienceSound:startGame()
+    
     Music:startGame()
     
 end
@@ -67,7 +69,7 @@ function changePause()
 
         local isPaused = state == STATES.gamePause
         Music:changePause(isPaused)
-        Music:changePause(isPaused)
+
     end
 end
 

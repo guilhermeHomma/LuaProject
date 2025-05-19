@@ -5,6 +5,7 @@ require "scripts.utils"
 require "scripts.objects.tile"
 require "scripts.objects.door"
 require "scripts.objects.store"
+require "scripts.objects.water"
 require "scripts.objects.tree"
 require "scripts.objects.grass"
 
@@ -15,15 +16,16 @@ local tilemapWorldY = -40 * tileSize
 
 local Grid = require("jumper.grid")
 local Pathfinder = require("jumper.pathfinder")
+local tilemap = nil
 
 function loadTilemapFromImage()
     --map3 é o melhor
     local imageData = love.image.newImageData("assets/sprites/map-closed.png")
     local width, height = imageData:getDimensions()
-    local tilemap = {}
+    local tilemapLoad = {}
 
     for y = 1, height do
-        tilemap[y] = {}
+        tilemapLoad[y] = {}
         for x = 1, width do
             local r, g, b, a = imageData:getPixel(x - 1, y - 1) -- pixel color
             local found = false
@@ -38,27 +40,27 @@ function loadTilemapFromImage()
                 {r = 1,   g = 0,   b = 1,   tile = 6}, -- Pink door north
 
                 {r = 0.5,   g = 1,   b = 1,   tile = 7}, -- store - shotgun
+                {r = 0,   g = 0.5,   b = 1,   tile = 8}, -- water
+                {r = 0.5,   g = 0.5,   b = 0.5,   tile = 9}, -- sand
             }
 
             for _, def in ipairs(tileDefinitions) do
                 if isColorMatch(r, g, b, def) then
-                    tilemap[y][x] = def.tile
+                    tilemapLoad[y][x] = def.tile
                     found = true
                     break
                 end
             end
     
             if not found then
-                tilemap[y][x] = 0 -- Vazio
+                tilemapLoad[y][x] = 0 -- Vazio
             end
     
         end
     end
 
-    return tilemap
+    return tilemapLoad
 end
-
-local tilemap = loadTilemapFromImage()
 
 function Tilemap:getTilemap()
     return tilemap
@@ -91,55 +93,6 @@ function Tilemap:hasTileClose(x, y, tileIndex)
         tilemap[y - 1][x] == tileIndex
 end
 
-local function isNotSolid(y, x)
-    local v = tilemap[y] and tilemap[y][x]
-    return v ~= 1 and v ~= 3
-end
-
-local function isSolid(y, x)
-    local v = tilemap[y] and tilemap[y][x]
-    return v == 1 or v == 3
-end
-
-function Tilemap:autoTile(x, y)
-    if x == 1 or y == 1 or x == #tilemap[y] or y == #tilemap then 
-        return 5
-    end
-
-    local top = isNotSolid(y - 1, x)
-    local bottom = isNotSolid(y + 1, x)
-    local left = isNotSolid(y, x - 1)
-    local right = isNotSolid(y, x + 1)
-    
-    local topLeft = isNotSolid(y - 1, x - 1)
-    local topRight = isNotSolid(y - 1, x + 1)
-    local bottomLeft = isNotSolid(y + 1, x - 1)
-    local bottomRight = isNotSolid(y + 1, x + 1)
-
-    local leftNoBottom = left and isSolid(y+1, x-1)
-    local rightNoBottom = right and isSolid(y+1, x+1)
-
-    if top and left then return 1 end
-    if top and right then return 3 end
-    if bottom and left then return 7 end
-    if bottom and right then return 9 end
-
-    if leftNoBottom then return 13 end
-    if rightNoBottom then return 12 end
-
-    if top then return 2 end
-    if bottom then return 8 end
-    if left then return 4 end
-    if right then return 6 end
-
-    if topLeft then return 5 end --13
-    if topRight then return 5 end --12
-    if bottomLeft then return 11 end
-    if bottomRight then return 10 end
-
-    return 5
-
-end
 
 
 function Tilemap:loadfinders()
@@ -178,11 +131,20 @@ function Tilemap:load()
 
             if self:hasTileClose(x, y, 0) or 
                 self:hasTileClose(x, y, 5) or 
+                self:hasTileClose(x, y, 8) or 
                 self:hasTileClose(x, y, 6) then 
                 collider = true
             end       
+            
+            if tile == 8 then 
+                local c = self:hasTileClose(x, y, 0) or self:hasTileClose(x, y, 5) or self:hasTileClose(x, y, 6)
+                index = autoTileWater(x, y, tilemap)
+                local t = Water:new(x, y, index, c)
+                table.insert(self.tiles, t)
+            elseif tile == 9 then
 
-            if tile == 3 then -- three
+
+            elseif tile == 3 then -- three
                 local indexes = {16, 17, 19}
                 local t = TreeTile:new(x, y, indexes[math.random(#indexes)], collider)
                 table.insert(self.tiles, t)
@@ -206,12 +168,12 @@ function Tilemap:load()
                 local index = 5
 
                 if tile == 1 then 
-                    index = self:autoTile(x, y)
+                    index = autoTile(x, y, tilemap)
                 elseif tile == 2 then
                     index = 14
                 end
 
-                if index == 5 and math.random(15) == 1 then
+                if index == 5 and math.random(10) == 1 then
                     index = 15
                 end
 
@@ -233,6 +195,9 @@ function Tilemap:update(dt)
 
         if tile.quadIndex == 16 or tile.quadIndex == 17 or tile.quadIndex == 19 then
             addToDrawQueue(tile.yWorld+1, tile)
+        
+        elseif tile.isWater then
+            addToDrawQueue(tile.yWorld - 16, tile)
         else
             addToDrawQueue(tile.yWorld, tile)
         end
