@@ -3,7 +3,7 @@ require("scripts/utils")
 local Player = {}
 
 local Bullet = require("scripts/bullet")
-local Particle = require("scripts/particle")
+local Particle = require("scripts/particles/particle")
 local Tilemap = require("scripts/tilemap")
 
 local bulletSound = love.audio.newSource("assets/sfx/tanksound.wav", "static")
@@ -342,7 +342,7 @@ function Player:drawHand()
     love.graphics.draw(
         self.handImage,
         handX-8,
-        handY - 1 ,
+        handY - 2 ,
         0,
         1, 1.2,
         0, 16
@@ -359,7 +359,7 @@ function Player:draw()
 
     local quad = self.quads[frameIndex + 1] -- +1 porque Lua começa em 1
 
-    local scaleX = self.flipH and -0.85 or 0.85
+    local scaleX = self.flipH and -1 or 1
     local originX = self.flipH and (self.spriteSize - self.spriteSize / 2) or (self.spriteSize / 2)
     
 
@@ -374,7 +374,7 @@ function Player:draw()
             self.x,
             self.y,
             0,
-            scaleX, 1.2,
+            scaleX, 1.4,
             originX, self.spriteSize
         )
         self:drawHand()
@@ -386,7 +386,7 @@ function Player:draw()
             self.x,
             self.y,
             0,
-            scaleX, 1.2,
+            scaleX, 1.4,
             originX, self.spriteSize
         )
     end

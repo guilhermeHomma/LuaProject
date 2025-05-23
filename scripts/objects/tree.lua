@@ -41,6 +41,7 @@ end
 
 function TreeTile:update(dt)
     self.shaderDirection = math.sin(love.timer.getTime() + (self.yWorld/10)) / 2 + 1
+    --print(self.shaderDirection)
 end
 
 local function getTargetAlpha(box)
@@ -64,7 +65,7 @@ function TreeTile:draw()
     local tileSize = TileSet.tileSize
     local tilesetImage = TileSet.tilesetImage
     love.graphics.setShader(shader)
-    shader:send("direction", self.shaderDirection)
+    shader:send("direction", math.floor(self.shaderDirection))
     love.graphics.draw(tilesetImage, tileSet[5], self.xWorld, self.yWorld, 0, 1, 1, tileSize/2, tileSize)
     local targetAlpha = 1
     local image = threeImage1

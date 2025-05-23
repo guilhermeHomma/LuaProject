@@ -193,7 +193,7 @@ function Gun:draw()
             self.gunSheet,
             quad,
             self.x + offsetX,
-            self.y + offsetY - 14 + i,
+            self.y + offsetY - 16 + i,
             self.angle,
             0.8, 0.8,
             0,

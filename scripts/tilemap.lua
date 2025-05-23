@@ -20,7 +20,7 @@ local tilemap = nil
 
 function loadTilemapFromImage()
     --map3 é o melhor
-    local imageData = love.image.newImageData("assets/sprites/map-closed.png")
+    local imageData = love.image.newImageData("assets/sprites/map2.png")
     local width, height = imageData:getDimensions()
     local tilemapLoad = {}
 

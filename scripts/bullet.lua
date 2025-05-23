@@ -3,7 +3,7 @@ Bullet.__index = Bullet
 
 require("scripts/utils")
 
-local Particle = require("scripts/particle")
+local Particle = require("scripts/particles/particle")
 local Tilemap = require("scripts/tilemap")
 
 function Bullet:new(x, y, angle, height, speed, damage, level)

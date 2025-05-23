@@ -10,6 +10,7 @@ function Scarecrow:new(x, y)
     scarecrow.y = y
     scarecrow.totalLife = 50
     scarecrow.life = scarecrow.totalLife
+    scarecrow.isAlive = true
     return
 end
 

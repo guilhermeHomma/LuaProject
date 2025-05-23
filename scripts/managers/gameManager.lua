@@ -57,6 +57,10 @@ function Game:getPlayerPoints()
     return PointsManager:getPoints()
 end
 
+function Game:increasePlayerPoints(qty)
+    PointsManager:increasePoints(qty)
+end
+
 function Game:decreasePlayerPoints(qty)
     return PointsManager:decreasePoints(qty)
 end
@@ -71,7 +75,6 @@ function Game:update(dt)
             enemy:update(dt) 
             addToDrawQueue(enemy.y +6 + enemy.drawPriority, enemy)
         else
-            PointsManager:increasePoints(enemy.dropPoints)
             table.remove(self.enemies, _)
         end
     end

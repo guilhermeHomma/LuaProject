@@ -35,7 +35,7 @@ function baseMenu:drawTitle()
     love.graphics.setFont(self.fontTitle)
 
 
-    local titleX, titleY = 0, self:getHeight() / 2 - 60
+    local titleX, titleY = 01, self:getHeight() / 2 - 60
     --drawOutline(self.MenuTItle, titleX, titleY, self:getWidth(), "center")
 
     love.graphics.setColor(hexToRGB("fbfaf7"))  

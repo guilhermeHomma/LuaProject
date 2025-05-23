@@ -4,7 +4,7 @@ PointsManager = {}
 function PointsManager:load()
     self.font = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 32)
     self.font:setFilter("nearest", "nearest")
-    self.points = 600
+    self.points = 100
 
     self.animationColor = "c7c093"
     self.animationTimer = 10

@@ -60,7 +60,7 @@ function WaveManager:enemyPosition()
     local randomIndex = math.random(1, #posibleTiles)
     local chosenTile = posibleTiles[randomIndex]
 
-    return chosenTile.x, chosenTile.y
+    return chosenTile.x, chosenTile.y - 8
 end
 
 function WaveManager:startNextWave()

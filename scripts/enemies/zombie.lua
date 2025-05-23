@@ -1,25 +1,26 @@
-local Enemy = {}
-Enemy.__index = Enemy
-Enemy.states = { idle = 1, walk = 2, damage = 3 }
+local Zombie = {}
+Zombie.__index = Zombie
+Zombie.states = { idle = 1, walk = 2, damage = 3 }
 
-local Particle = require("scripts/particle")
+local Particle = require("scripts/particles/particle")
 local Tilemap = require("scripts/tilemap")
+local whiteShader = love.graphics.newShader("scripts/shaders/whiteShader.glsl")
 
 
 require("scripts/utils")
 
-function Enemy:new(x, y)
-    local enemy = setmetatable({}, Enemy)
+function Zombie:new(x, y)
+    local enemy = setmetatable({}, Zombie)
 
     enemy.x = x
     enemy.y = y
-    enemy.speed = math.random(25, 45)
+    enemy.speed = math.random(30, 40)
     enemy.totalLife = 40
     enemy.life = enemy.totalLife
     enemy.damageTimer = 0.1
     enemy.kbdx = 0
     enemy.kbdy = 0
-
+    enemy.size = 7
     enemy.dropPoints = 10
     enemy.drawPriority = math.random()
 
@@ -28,9 +29,6 @@ function Enemy:new(x, y)
     enemy.spriteSheet = love.graphics.newImage("assets/sprites/enemy/enemy.png")
         
     enemy.spriteSheet:setFilter("nearest", "nearest")
-
-    enemy.spriteOutline = love.graphics.newImage("assets/sprites/enemy/enemyOutline.png")
-    enemy.spriteOutline:setFilter("nearest", "nearest")
 
     enemy.spriteShadow = love.graphics.newImage("assets/sprites/enemy/enemyShadow.png")
     enemy.spriteShadow:setFilter("nearest", "nearest")
@@ -71,7 +69,7 @@ function Enemy:new(x, y)
 
     enemy.soundTimer = 0
 
-    enemy.state = (math.random(0, 1) == 0) and Enemy.states.idle or Enemy.states.walk
+    enemy.state = (math.random(0, 1) == 0) and Zombie.states.idle or Zombie.states.walk
     return enemy
 end
 
@@ -81,7 +79,7 @@ local function sign(n)
     else return 0 end
 end
 
-function Enemy:update(dt)
+function Zombie:update(dt)
     self.pathUpdateCounter = self.pathUpdateCounter + 1
 
     local velocityX = 0
@@ -99,7 +97,7 @@ function Enemy:update(dt)
     end
 
     if (self.pathUpdateCounter >= self.pathUpdateInterval and Player.isAlive) or self.path == nil or #self.path < 2 then
-    --if (self.pathUpdateCounter >= self.pathUpdateInterval and self.state == Enemy.states.idle and Player.isAlive) or self.path == nil or #self.path < 2 then
+    --if (self.pathUpdateCounter >= self.pathUpdateInterval and self.state == Zombie.states.idle and Player.isAlive) or self.path == nil or #self.path < 2 then
         self.pathUpdateCounter = 0
         --print("generate")
         local posMapX, posMapY = Tilemap:worldToMap(self.x, self.y)
@@ -122,8 +120,6 @@ function Enemy:update(dt)
 
 
         self.path = Tilemap.finderAstar:getPath(posMapX, posMapY, playerMapX, playerMapY)
-
- 
     end
 
     local nextTileX, nextTileY = self.x, self.y
@@ -146,12 +142,12 @@ function Enemy:update(dt)
         local moveX = sign(nextTileX - self.x)
         local moveY = sign(nextTileY - self.y)
 
-        local repulseX, repulseY = self:getRepulsionVector(moveX,moveY,5)
+        local repulseX, repulseY = self:getRepulsionVector()
 
         moveX = moveX + repulseX * 2
         moveY = moveY + repulseY * 2
 
-        local collidedX, collidedY = self:isColliding(moveX,moveY,5)
+        local collidedX, collidedY = self:isColliding(moveX,moveY)
 
         if not collidedX then velocityX = moveX end
         if not collidedY then velocityY = moveY end
@@ -165,34 +161,34 @@ function Enemy:update(dt)
     end
 
     local animationDuration = self.idleDuration
-    if self.state == Enemy.states.walk then 
+    if self.state == Zombie.states.walk then 
         animationDuration = self.walkDuration 
-    elseif self.state == Enemy.states.damage then
+    elseif self.state == Zombie.states.damage then
         animationDuration = self.damageTimer
     end
 
     self.stateTimer = self.stateTimer + dt
     if self.stateTimer >= animationDuration then
-        if self.state == Enemy.states.idle then
+        if self.state == Zombie.states.idle then
             self.walkDuration = math.random(4, 6)
-            self.state = Enemy.states.walk
+            self.state = Zombie.states.walk
             if not Player.isAlive then
-                self.state = Enemy.states.idle
+                self.state = Zombie.states.idle
                 self.stateTimer = 0
                 local negative = 0
             end
         elseif Player.isAlive then
             self.idleDuration = math.random(0.7, 1.3)
-            self.state = Enemy.states.idle
+            self.state = Zombie.states.idle
         end
         self.stateTimer = 0
     end 
 
     self:death()
 
-    if self.state == Enemy.states.idle or self.state == Enemy.states.damage then
+    if self.state == Zombie.states.idle or self.state == Zombie.states.damage then
         self:animate(1, 2, dt)
-        if self.state == Enemy.states.damage then
+        if self.state == Zombie.states.damage then
             local movekbX = self.kbdx * dt * 0.1
             local movekbY = self.kbdy * dt * 0.1
             local collidedX, collidedY = self:isColliding(movekbX,movekbY)
@@ -219,7 +215,7 @@ function Enemy:update(dt)
         
         local negative = 1
         if not Player.isAlive then
-            self.state = Enemy.states.idle
+            self.state = Zombie.states.idle
             self.stateTimer = 0
             local negative = 0
         end
@@ -232,14 +228,12 @@ function Enemy:update(dt)
 end
 
 
-function Enemy:getRepulsionVector(size)
-    size = size or 4
-
+function Zombie:getRepulsionVector()
     local repulseX, repulseY = 0, 0
-    local selfBox = self:collisionBox(self.x - size / 2, self.y - size / 2, size)
+    local selfBox = self:collisionBox(self.x, self.y)
 
     for _, enemy in ipairs(Game.enemies) do
-        if enemy.isAlive and enemy ~= self and enemy.state == Enemy.states.walk and self.speed < enemy.speed then
+        if enemy.isAlive and enemy ~= self and enemy.state == Zombie.states.walk and self.speed < enemy.speed then
             local enemyBox = enemy:collisionBox()
             local dx = self.x - enemy.x
             local dy = self.y - enemy.y
@@ -259,24 +253,19 @@ function Enemy:getRepulsionVector(size)
     return repulseX, repulseY
 end
 
-function Enemy:collisionBox(x, y, size)
+function Zombie:collisionBox(x, y)
     if not x then x = self.x end
     if not y then y = self.y end
-    if not size then size = 4 end
 
-    return {x = x - size/2, y = y - size/2, width = size, height = size}
-
+    return {x = x - self.size/2, y = y - self.size/2, width = self.size, height = self.size}
 end
 
-function Enemy:isColliding(moveX, moveY, size)
-    if size == nil then size = 7 end
-
-
+function Zombie:isColliding(moveX, moveY)
     local futureX = self.x + moveX
     local futureY = self.y + moveY
 
-    local selfBoxX = self:collisionBox(futureX - size/2, self.y - size/2, size)
-    local selfBoxY = self:collisionBox(self.x - size/2, futureY - size/2, size)
+    local selfBoxX = self:collisionBox(futureX, self.y)
+    local selfBoxY = self:collisionBox(self.x, futureY)
 
     local collidedX = false
     local collidedY = false
@@ -297,9 +286,9 @@ function Enemy:isColliding(moveX, moveY, size)
     return collidedX, collidedY
 end
 
-function Enemy:takeDamage(damage, dx, dy)
+function Zombie:takeDamage(damage, dx, dy)
     self.animationTimer = 0.5
-    self.state = Enemy.states.damage
+    self.state = Zombie.states.damage
     self.stateTimer = 0
     self.kbdx = dx
     self.kbdy = dy 
@@ -316,7 +305,7 @@ function Enemy:takeDamage(damage, dx, dy)
     bulletSound:play()
 end
 
-function Enemy:death()
+function Zombie:death()
     if self.life > 0 or not self.isAlive then
         return
     end
@@ -325,7 +314,7 @@ function Enemy:death()
     bulletSound:setVolume(0.3)
     bulletSound:setPitch(0.8)
     bulletSound:play()
-
+    Game:increasePlayerPoints(self.dropPoints)
     self.noise:stop()
 
     self.isAlive = false    
@@ -337,7 +326,7 @@ function Enemy:death()
     table.insert(Game.particles, particle)
 end
 
-function Enemy:animate(startFrame, endFrame, dt)
+function Zombie:animate(startFrame, endFrame, dt)
     self.animationTimer = self.animationTimer + dt
     if self.animationTimer >= self.animationSpeed then
         self.animationTimer = 0
@@ -346,7 +335,7 @@ function Enemy:animate(startFrame, endFrame, dt)
             self.currentFrame = startFrame
         end
 
-        if self.state == Enemy.states.walk and self.currentFrame % 2 == 0 then
+        if self.state == Zombie.states.walk and self.currentFrame % 2 == 0 then
 
             local playerDistance = self:playerDistance()
             if playerDistance <= 150 then
@@ -364,56 +353,56 @@ function Enemy:animate(startFrame, endFrame, dt)
     end
 end
 
-function Enemy:playerDistance()
+function Zombie:playerDistance()
     local dx = self.x - Player.x
     local dy = self.y - Player.y
     return math.sqrt(dx * dx + dy * dy)
 end
 
-function Enemy:drawShadow()
+function Zombie:drawShadow()
 
     if not self.isAlive then
         return
     end
 
-    local width = 0.7
-    local height = 0.6
+    local width = 14
+    local height = 14
 
-    love.graphics.draw(self.spriteShadow, self.x - (width/2) * 16, self.y- (height/2) * 16 , 0 , width, height)
+    love.graphics.draw(self.spriteShadow, self.x - 6, self.y- 6, 0 , 1, 1)
 end
 
-function Enemy:draw()
+function Zombie:draw()
 
     if not self.isAlive then
         return
     end
     local xOffset = 0
-    local scaleX = 0.7
+    local scaleX = 1
     if self.flipH then
-        scaleX = -0.7
+        scaleX = -1
         xOffset = 1
     end
 
-    if self.state == Enemy.states.damage then
-        love.graphics.draw(self.spriteOutline, self.frames[self.currentFrame], xOffset + self.x, self.y, 0, scaleX, 0.7, self.frameWidth / 2, self.frameHeight)
-    else 
-        love.graphics.draw(self.spriteSheet, self.frames[self.currentFrame], xOffset +self.x, self.y, 0, scaleX, 0.7, self.frameWidth / 2, self.frameHeight)
+    if self.state == Zombie.states.damage then
+        love.graphics.setShader(whiteShader)
     end
 
-    if self.state ~= Enemy.states.damage then
+    love.graphics.draw(self.spriteSheet, self.frames[self.currentFrame], xOffset +self.x, self.y, 0, scaleX, 1.3, self.frameWidth / 2, self.frameHeight)
+    love.graphics.setShader()
+
+    if self.state ~= Zombie.states.damage then
         love.graphics.setColor(hexToRGB("302c5e"))
         if self.soundTimer >= 0 and self.soundTimer <= 1 then
-            love.graphics.circle("fill", self.x , self.y - 9, 1.5)
+            love.graphics.circle("fill", self.x , self.y - 16, 1.5)
         else
-            love.graphics.rectangle("fill", self.x -0.7 ,self.y - 10, 1.4, 0.6 )
-
+            love.graphics.rectangle("fill", self.x -0.7 ,self.y - 17, 1.4, 0.6 )
         end
         love.graphics.setColor(1, 1, 1, 1)
     end
 
     if DEBUG then 
 
-        love.graphics.rectangle("line", self.x - 3.5, self.y - 3.5, 7, 7)
+        love.graphics.rectangle("line", self.x - self.size/2, self.y - self.size/2, self.size, self.size)
     
         if self.path and #self.path > 1 then
             love.graphics.setColor(0, 1, 0, 0.6)
@@ -436,4 +425,4 @@ function Enemy:draw()
     end
 end
 
-return Enemy
+return Zombie
