@@ -21,7 +21,7 @@ end
 
 function MainMenu:load()
     baseMenu.load(self)
-    self.MenuTItle = "no title"
+    self.MenuTItle = "BigBurn Island"
     self.menuOptions = {"start game", "settings", "exit",} -- "options"}
     self.fontTitle = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 80)
     self.fontTitle:setFilter("nearest", "nearest")
