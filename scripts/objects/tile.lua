@@ -29,7 +29,7 @@ function Tile:new(x, y, quadIndex, collider)
 end
 
 function Tile:update(dt) 
-
+    addToDrawQueue(self.yWorld, self)
 end
 
 
@@ -40,13 +40,10 @@ function Tile:draw()
 
     if self.quadIndex == 14 or self.quadIndex == 18 then --box
         love.graphics.draw(tilesetImage, self.quad, self.xWorld, self.yWorld, 0, 1, 1, tileSize/2, tileSize*2)
-
     elseif self.quadIndex == 1 or self.quadIndex == 2 or self.quadIndex == 3  then
         love.graphics.draw(tilesetImage, self.quad, self.xWorld, self.yWorld, 0, 1, 1, tileSize/2, tileSize+10)
-
     else
-        love.graphics.draw(tilesetImage, self.quad, self.xWorld, self.yWorld, 0, 1, 1, tileSize/2, tileSize)
-        
+       love.graphics.draw(tilesetImage, self.quad, self.xWorld, self.yWorld, 0, 1, 1, tileSize/2, tileSize)
     end
 
     self:drawDebug()

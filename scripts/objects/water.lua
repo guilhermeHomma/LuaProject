@@ -24,7 +24,6 @@ local function getQuadList(animIndex)
         end
     end
 
-
     quadList[10] = love.graphics.newQuad(80 + IncrementX, 16, 16, 16, sheetWidth, sheetHeight)
     quadList[11] = love.graphics.newQuad(96 + IncrementX, 16, 16, 16, sheetWidth, sheetHeight)
     quadList[12] = love.graphics.newQuad(80 + IncrementX, 32, 16, 16, sheetWidth, sheetHeight)
@@ -47,7 +46,8 @@ function Water:new(x, y, quadIndex, collider)
     return tile
 end
 
-function Water:update(dt) 
+function Water:update(dt)
+    addToDrawQueue(self.yWorld-16, self)
     self.timer = self.timer + dt
     if self.timer >= 0.9 then
         self.timer = self.timer - 0.9

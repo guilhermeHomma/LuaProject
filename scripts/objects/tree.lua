@@ -26,10 +26,8 @@ local shader = love.graphics.newShader([[
     }
 ]])
 
-
 shader:send("direction", 1.0) 
 shader:send("spriteSize", {64.0, 96.0})
-
 
 function TreeTile:new(x, y, quadIndex, collider)
     local tile = Tile.new(self, x, y, quadIndex, collider)
@@ -40,7 +38,8 @@ function TreeTile:new(x, y, quadIndex, collider)
 end
 
 function TreeTile:update(dt)
-    self.shaderDirection = math.sin(love.timer.getTime() + (self.yWorld/10)) / 2 + 1
+    addToDrawQueue(self.yWorld+1, self)
+    self.shaderDirection = math.sin(love.timer.getTime() + (self.yWorld/10)) * 0.45 + 1
     --print(self.shaderDirection)
 end
 
@@ -58,6 +57,9 @@ local function getTargetAlpha(box)
     return 1
 end
 
+function TreeTile:drawShadow()
+   
+end
 
 function TreeTile:draw()
 
@@ -65,8 +67,10 @@ function TreeTile:draw()
     local tileSize = TileSet.tileSize
     local tilesetImage = TileSet.tilesetImage
     love.graphics.setShader(shader)
-    shader:send("direction", math.floor(self.shaderDirection))
-    love.graphics.draw(tilesetImage, tileSet[5], self.xWorld, self.yWorld, 0, 1, 1, tileSize/2, tileSize)
+    shader:send("direction", self.shaderDirection)
+    if not self.collider then
+        love.graphics.draw(tilesetImage, tileSet[5], self.xWorld, self.yWorld + 1, 0, 1, 1, tileSize/2, tileSize)
+    end
     local targetAlpha = 1
     local image = threeImage1
 
@@ -81,8 +85,10 @@ function TreeTile:draw()
     self.alpha = self.alpha + (targetAlpha - self.alpha) * 0.1
     
     love.graphics.setColor(1, 1, 1, self.alpha)
-    love.graphics.draw(image, self.xWorld, self.yWorld, 0, 1, 1.6, 32, 93)
+    love.graphics.draw(image, self.xWorld, self.yWorld, 0, 1, 1.5, 32, 93)
     love.graphics.setColor(1, 1, 1) 
     love.graphics.setShader()
     self:drawDebug()    
 end
+
+return TreeTile

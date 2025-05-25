@@ -14,7 +14,7 @@ function Zombie:new(x, y)
 
     enemy.x = x
     enemy.y = y
-    enemy.speed = math.random(30, 40)
+    enemy.speed = math.random(40, 50)
     enemy.totalLife = 40
     enemy.life = enemy.totalLife
     enemy.damageTimer = 0.1
@@ -26,8 +26,8 @@ function Zombie:new(x, y)
 
     enemy.isAlive = true
 
-    enemy.spriteSheet = love.graphics.newImage("assets/sprites/enemy/enemy.png")
-        
+    enemy.spriteSheet = self:getSprite()
+    
     enemy.spriteSheet:setFilter("nearest", "nearest")
 
     enemy.spriteShadow = love.graphics.newImage("assets/sprites/enemy/enemyShadow.png")
@@ -71,6 +71,21 @@ function Zombie:new(x, y)
 
     enemy.state = (math.random(0, 1) == 0) and Zombie.states.idle or Zombie.states.walk
     return enemy
+end
+
+function Zombie:getSprite()
+    
+    if math.random(1, 100) < 2 then 
+        return love.graphics.newImage("assets/sprites/enemy/enemy-paulo.png") end
+    if math.random(1, 100) < 2 then 
+        return love.graphics.newImage("assets/sprites/enemy/enemy-ponei.png") end
+    if math.random(1, 100) < 2 then 
+        return love.graphics.newImage("assets/sprites/enemy/enemy-jhone.png") end
+    if math.random(1, 2) == 2 then 
+        return love.graphics.newImage("assets/sprites/enemy/enemy2.png") end
+
+    return love.graphics.newImage("assets/sprites/enemy/enemy.png")
+
 end
 
 local function sign(n)
@@ -147,10 +162,8 @@ function Zombie:update(dt)
         moveX = moveX + repulseX * 2
         moveY = moveY + repulseY * 2
 
-        local collidedX, collidedY = self:isColliding(moveX,moveY)
-
-        if not collidedX then velocityX = moveX end
-        if not collidedY then velocityY = moveY end
+        velocityX = moveX
+        velocityY = moveY
         
     end 
 
@@ -220,10 +233,10 @@ function Zombie:update(dt)
             local negative = 0
         end
 
-        local moveX, moveY =  velocityX, velocityY
+        local moveX, moveY =  velocityX *negative * self.speed * dt, velocityY *negative * self.speed * dt
         local collidedX, collidedY = self:isColliding(moveX,moveY)
-        if not collidedX then self.x = self.x + moveX *negative * self.speed * dt end
-        if not collidedY then self.y = self.y + moveY *negative * self.speed * dt end
+        if not collidedX then self.x = self.x + moveX end
+        if not collidedY then self.y = self.y + moveY end
     end
 end
 
@@ -387,15 +400,15 @@ function Zombie:draw()
         love.graphics.setShader(whiteShader)
     end
 
-    love.graphics.draw(self.spriteSheet, self.frames[self.currentFrame], xOffset +self.x, self.y, 0, scaleX, 1.3, self.frameWidth / 2, self.frameHeight)
+    love.graphics.draw(self.spriteSheet, self.frames[self.currentFrame], xOffset +self.x, self.y, 0, scaleX, 1.5, self.frameWidth / 2, self.frameHeight)
     love.graphics.setShader()
 
     if self.state ~= Zombie.states.damage then
         love.graphics.setColor(hexToRGB("302c5e"))
         if self.soundTimer >= 0 and self.soundTimer <= 1 then
-            love.graphics.circle("fill", self.x , self.y - 16, 1.5)
+            love.graphics.circle("fill", self.x , self.y - 18, 1.5)
         else
-            love.graphics.rectangle("fill", self.x -0.7 ,self.y - 17, 1.4, 0.6 )
+            love.graphics.rectangle("fill", self.x -0.7 ,self.y - 19, 1.4, 0.6 )
         end
         love.graphics.setColor(1, 1, 1, 1)
     end

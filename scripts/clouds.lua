@@ -15,7 +15,7 @@ function Clouds:update(dt)
 end
 
 function Clouds:drawShadow()
-    --self:drawCloud(true)
+    self:drawCloud(true)
 end
 
 

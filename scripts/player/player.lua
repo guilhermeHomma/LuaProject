@@ -13,7 +13,7 @@ bulletSound:setLooping(true)
 function Player:load(camera)
     self.x = 0
     self.y = 20
-    self.speed = 50
+    self.speed = 60
     self.size = 40
     self.gun = require("scripts/player/gun")
     self.spriteSize = 40
@@ -125,15 +125,18 @@ function Player:update(dt)
     end
 
     local collidedX, collidedY = self:isColliding(
-        moveX,
-        moveY 
+        moveX * self.speed * dt,
+        moveY * self.speed * dt 
     )
 
     if collidedX then moveX = 0 end
     if collidedY then moveY = 0 end
+    
+    local sumMoveX = moveX * self.speed * dt
+    local sumMoveY = moveY * self.speed * dt
 
-    self.x = self.x + moveX * self.speed * dt
-    self.y = self.y + moveY * self.speed * dt
+    self.x = self.x + sumMoveX
+    self.y = self.y + sumMoveY
 
     addToDrawQueue(self.y+7, Player)
 
@@ -334,7 +337,7 @@ end
 function Player:drawHand()
     if not self.gun.showGun then return end
 
-    local handX = self.x + math.cos(self.mouseAngle) * 7
+    local handX = self.x + math.cos(self.mouseAngle) * 5
     local handY = self.y + math.sin(self.mouseAngle) * 7
 
     local scaleX = (math.cos(self.mouseAngle) < 0) and -1 or 1
@@ -362,8 +365,6 @@ function Player:draw()
     local scaleX = self.flipH and -1 or 1
     local originX = self.flipH and (self.spriteSize - self.spriteSize / 2) or (self.spriteSize / 2)
     
-
-
     local mouseX, mouseY = mousePosition()
 
     if mouseY > self.y then
@@ -374,7 +375,7 @@ function Player:draw()
             self.x,
             self.y,
             0,
-            scaleX, 1.4,
+            scaleX, 1.5,
             originX, self.spriteSize
         )
         self:drawHand()
@@ -386,7 +387,7 @@ function Player:draw()
             self.x,
             self.y,
             0,
-            scaleX, 1.4,
+            scaleX, 1.5,
             originX, self.spriteSize
         )
     end

@@ -14,7 +14,10 @@ local quads = {}
 local frameWidth = 32
 local frameHeight = sheetHeight
 local stretch = 1.5
+
 local gunDict  = {
+    {name = "raygun", price = 600, index = 3},
+    {name = "squaregun", price = 200, index = 4},
     {name = "shotgun", price = 400, index = 2},
 }
 
@@ -23,16 +26,18 @@ for i = 0, (sheetWidth / frameWidth) - 1 do
 end
 
 
-function Store:new(x, y, quadIndex, collider)
+function Store:new(x, y, quadIndex, collider, productIndex)
     local tile = Tile.new(self, x, y, quadIndex, collider)
     setmetatable(tile, Store)
     tile.alpha = 1
     tile.targetAlpha = 1
-    tile.product = gunDict[1]
+    tile.product = gunDict[productIndex]
+
     return tile
 end
 
 function Store:update(dt)
+    addToDrawQueue(self.yWorld, self)
 
     if distance(Player, self) < 20 and Player.isAlive then
         self.targetAlpha = 1
@@ -87,7 +92,7 @@ function Store:draw()
             self.xWorld - 4,
             self.yWorld - 18,
             0,
-            1, 1.4,
+            1, 1.5,
             0,
             self.size / 2
         )

@@ -21,13 +21,16 @@ state = STATES.mainMenu
 baseWidth = 960
 baseHeight = 540
 
+baseWidth = 1280
+baseHeight = 720
+
 DEBUG = false
 FPS = false
 
 scale = 1
 
-MUSIC_VOLUME = 0.7
-GAME_VOLUME = 0.8
+MUSIC_VOLUME = 0.9
+GAME_VOLUME = 0.9
 
 function love.load()
     --love.window.setMode(0, 0, { fullscreen = true })

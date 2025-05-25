@@ -8,6 +8,7 @@ require "scripts.objects.store"
 require "scripts.objects.water"
 require "scripts.objects.tree"
 require "scripts.objects.grass"
+require "scripts.objects.house"
 
 tileSet = require("scripts.objects.tileset")
 
@@ -42,6 +43,8 @@ function loadTilemapFromImage()
                 {r = 0.5,   g = 1,   b = 1,   tile = 7}, -- store - shotgun
                 {r = 0,   g = 0.5,   b = 1,   tile = 8}, -- water
                 {r = 0.5,   g = 0.5,   b = 0.5,   tile = 9}, -- sand
+
+                {r = 0.5,   g = 0.5,   b = 0,   tile = 10}, -- house                
             }
 
             for _, def in ipairs(tileDefinitions) do
@@ -113,6 +116,9 @@ function Tilemap:load()
     self:loadfinders()
     self.grass = {}
     self.tiles = {}
+    
+    local itemStoreList = {1, 2, 3}
+
     for y = 1, #tilemap do
         for x = 1, #tilemap[y] do
             local tile = tilemap[y][x]
@@ -142,7 +148,10 @@ function Tilemap:load()
                 local t = Water:new(x, y, index, c)
                 table.insert(self.tiles, t)
             elseif tile == 9 then
+            elseif tile == 10 then --house
 
+                local t = HouseTile:new(x, y, 30, collider)
+                table.insert(self.tiles, t)
 
             elseif tile == 3 then -- three
                 local indexes = {16, 17, 19}
@@ -151,7 +160,9 @@ function Tilemap:load()
             
             elseif tile == 7 then --store
                 local index = 24
-                local t = Store:new(x, y, index, collider)
+
+                local t = Store:new(x, y, index, collider, #itemStoreList)
+                table.remove(itemStoreList, #itemStoreList)
                 table.insert(self.tiles, t)
 
             elseif tile == 5 or tile == 6 then --door
@@ -192,15 +203,6 @@ function Tilemap:update(dt)
 
     for _, tile in ipairs(self.tiles) do
         tile:update(dt)
-
-        if tile.quadIndex == 16 or tile.quadIndex == 17 or tile.quadIndex == 19 then
-            addToDrawQueue(tile.yWorld+1, tile)
-        
-        elseif tile.isWater then
-            addToDrawQueue(tile.yWorld - 16, tile)
-        else
-            addToDrawQueue(tile.yWorld, tile)
-        end
     end
 end
 

@@ -12,7 +12,7 @@ function Gun:load()
     self.x = 0
     self.y = 0
     self.size = 16
-    self.centerDistance = 5
+    self.centerDistance = 0
     self.bullets = {}
     self.gunSheet = love.graphics.newImage("assets/sprites/player/guns.png")
     self.gunSheet:setFilter("nearest", "nearest")
@@ -25,6 +25,7 @@ function Gun:load()
         {shotCooldown = 0.54, damage = 10, bulletSpeed = 300, shootFunction = function() self:shootPistol() end},
         {shotCooldown = 0.8, damage = 15, bulletSpeed = 230, shootFunction = function() self:shootShotgun() end},
         {shotCooldown = 0.4, damage = 20, bulletSpeed = 340, shootFunction = function() self:shootPistol() end},
+        {shotCooldown = 1.0, damage = 30, bulletSpeed = 340, shootFunction = function() self:shootPistol() end},
     }
 
     self.shootTimer = 0
