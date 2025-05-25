@@ -24,7 +24,7 @@ function Player:load(camera)
     self.life = self.totalLife
     self.isAlive = true
     self.flipX = false
-    self.playerSheet = love.graphics.newImage("assets/sprites/player/soldier/soldier.png")
+    self.playerSheet = love.graphics.newImage("assets/sprites/player/soldier/girl.png")
     self.playerShadow = love.graphics.newImage("assets/sprites/player/shadow.png")
     self.handImage = love.graphics.newImage("assets/sprites/player/hand.png")
     self.handImage:setFilter("nearest", "nearest")

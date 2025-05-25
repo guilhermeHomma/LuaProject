@@ -81,9 +81,10 @@ function Zombie:getSprite()
         return love.graphics.newImage("assets/sprites/enemy/enemy-ponei.png") end
     if math.random(1, 100) < 2 then 
         return love.graphics.newImage("assets/sprites/enemy/enemy-jhone.png") end
-    if math.random(1, 2) == 2 then 
+    if math.random(1, 3) == 2 then 
         return love.graphics.newImage("assets/sprites/enemy/enemy2.png") end
-
+    if math.random(1, 3) == 2 then 
+        return love.graphics.newImage("assets/sprites/enemy/enemy3.png") end  
     return love.graphics.newImage("assets/sprites/enemy/enemy.png")
 
 end
@@ -233,7 +234,9 @@ function Zombie:update(dt)
             local negative = 0
         end
 
-        local moveX, moveY =  velocityX *negative * self.speed * dt, velocityY *negative * self.speed * dt
+        local moveX = velocityX *negative * self.speed * dt
+        local moveY = velocityY *negative * self.speed * dt
+
         local collidedX, collidedY = self:isColliding(moveX,moveY)
         if not collidedX then self.x = self.x + moveX end
         if not collidedY then self.y = self.y + moveY end

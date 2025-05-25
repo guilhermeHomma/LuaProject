@@ -21,9 +21,6 @@ state = STATES.mainMenu
 baseWidth = 960
 baseHeight = 540
 
-baseWidth = 1280
-baseHeight = 720
-
 DEBUG = false
 FPS = false
 
