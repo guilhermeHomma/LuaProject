@@ -9,7 +9,7 @@ local Music = require("scripts/managers/music")
 local PauseMenu = require("scripts/managers/menu/pauseMenu")
 local GameoverMenu = require("scripts/managers/menu/gameoverMenu")
 local MainMenu = require("scripts/managers/menu/mainMenu")
-
+local TransitionManager = require("scripts.managers.transitionManager")
 
 canvas = love.graphics.newCanvas(baseWidth, baseHeight)
 STATES = {mainMenu = 1, game = 2, gamePause = 3, gameDead = 4}
@@ -42,14 +42,17 @@ function love.load()
     Music:load()
     GameoverMenu:load()
     AmbienceSound:startGame()
+    TransitionManager:load()
 end
 
 function loadGame()
-    state=STATES.game
-    Game:load()
-    
-    Music:startGame()
-    
+    local function callback()
+        state=STATES.game
+        Game:load()
+        Music:startGame()
+    end
+
+    TransitionManager:startTransition(function() callback() end)
 end
 
 function playerDeath()
@@ -58,9 +61,21 @@ function playerDeath()
 end
 
 function quitToMenu()
-    Music:closeGame()
-    Game:close()
-    state=STATES.mainMenu
+    local function callback()
+        Music:closeGame()
+        Game:close()
+        state=STATES.mainMenu
+    end
+    TransitionManager:startTransition(function() callback() end, 3)
+end
+
+function quitGame()
+    local function callback()
+        love.event.quit()
+    end
+
+    local cb = function() callback() end
+    TransitionManager:startTransition(cb, 10, 2)
 end
 
 function changePause()
@@ -75,6 +90,8 @@ end
 
 function love.keypressed(key)
     
+    if TransitionManager.isTransiting then return end
+
     if key == "escape" then
         changePause()
     end 
@@ -121,6 +138,7 @@ function love.update(dt)
         GameoverMenu:update(dt)
 
     end
+    TransitionManager:update(dt)
 
     AmbienceSound:update(dt)
     Music:update(dt)
@@ -151,6 +169,8 @@ function love.draw()
         GameoverMenu:draw()
 
     end
+
+    TransitionManager:draw()
 
     if FPS or DEBUG then 
         love.graphics.print("FPS: " .. love.timer.getFPS(), 10, 95)

@@ -59,7 +59,7 @@ function MainMenu:onSelect()
     if self.selectedOption == 1 then
         loadGame()
     elseif self.selectedOption == 3 then
-        love.event.quit()
+        quitGame()
     end
 end
 

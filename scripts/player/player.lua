@@ -24,7 +24,7 @@ function Player:load(camera)
     self.life = self.totalLife
     self.isAlive = true
     self.flipX = false
-    self.playerSheet = love.graphics.newImage("assets/sprites/player/soldier/girl.png")
+    self.playerSheet = love.graphics.newImage("assets/sprites/player/soldier/soldier.png")
     self.playerShadow = love.graphics.newImage("assets/sprites/player/shadow.png")
     self.handImage = love.graphics.newImage("assets/sprites/player/hand.png")
     self.handImage:setFilter("nearest", "nearest")
@@ -101,7 +101,7 @@ function Player:update(dt)
 
     self.damageTimer = self.damageTimer + dt
 
-    self.mouseAngle = mouseAngle()
+    self.mouseAngle = math.floor(mouseAngle() * 4) / 4
     local moveX, moveY = 0, 0
 
     -- Input WASD
@@ -177,6 +177,10 @@ function Player:checkDamage()
             camera:shake(3, 0.95)
             self.life = self.life - 1
             local damageSound = love.audio.newSource("assets/sfx/damage.wav", "static")
+            local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
+            bulletSound:setPitch(1.4 + math.random() * 0.1)
+            bulletSound:setVolume(0.4)
+            bulletSound:play()
 
             self.damageTimer = 0
             damageSound:setVolume(1.8)

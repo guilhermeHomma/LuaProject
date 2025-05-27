@@ -36,7 +36,7 @@ end
 function Gun:update(dt, playerX, playerY)
     self.x = playerX
     self.y = playerY
-    self.angle = mouseAngle()
+    self.angle = math.floor(mouseAngle() * 6) / 6
     self.squareAngle = self.squareAngle + 0.8*dt
     self.shootTimer = self.shootTimer + dt
 
@@ -120,7 +120,7 @@ function Gun:shoot()
 
     self.gunConfig[self.gunIndex].shootFunction(self)
 
-    camera:shake(1, 0.88)
+    camera:shake(1.4, 0.88)
 end
 
 function Gun:aim()
@@ -188,7 +188,7 @@ function Gun:draw()
     local offsetX = math.cos(self.angle) * self.centerDistance
     local offsetY = math.sin(self.angle) * self.centerDistance
 
-    for i = 0, 2, 1 do
+    for i = 2, 0, -0.5 do
 
         love.graphics.draw(
             self.gunSheet,
