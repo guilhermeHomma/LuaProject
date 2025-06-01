@@ -113,7 +113,7 @@ end
 
 function baseMenu:keypressed(key)
 
-    local sound = love.audio.newSource("assets/sfx/menu/menu-button.wav", "static")
+    local sound = love.audio.newSource("assets/sfx/menu/menu-button.mp3", "static")
     sound:setVolume(1)
     sound:setPitch(0.95 + math.random() * 0.1)
 
@@ -124,7 +124,7 @@ function baseMenu:keypressed(key)
         self.selectedOption = self.selectedOption + 1
         if self.selectedOption > #self.menuOptions then self.selectedOption = 1 end
     elseif key == "return" or key == "space" then
-        sound = love.audio.newSource("assets/sfx/menu/menu-selected.wav", "static")
+        sound = love.audio.newSource("assets/sfx/menu/menu-selected.mp3", "static")
         sound:setPitch(1)
         sound:setVolume(1)
 

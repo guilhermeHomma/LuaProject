@@ -104,10 +104,13 @@ function Game:update(dt)
     Tilemap:update(dt)
     PointsManager:update(dt)
 
-    camera:update()
+    camera:update(dt)
 end
 
 function addToDrawQueue(priority, object)
+    if distance(Player, object) > 300 then
+        return
+    end
     table.insert(Game.drawQueue, {priority = priority, object = object})
 end
 

@@ -124,7 +124,7 @@ function Tilemap:load()
             local tile = tilemap[y][x]
             local collider = false
 
-            if (tile == 0 or tile == 5 or tile == 6 or tile == 9) and math.random() > 0.5 then
+            if (tile == 0 or tile == 5 or tile == 6 or tile == 9) and math.random() > 0.55 then
                 local gx, gy = self:mapToWorld(x,y)
                 local grass = Grass:new(gx - 1, gy - 5, tile)
                 table.insert(self.grass, grass)

@@ -4,10 +4,6 @@ local Gun = {}
 
 local Bullet = require("scripts/bullet")
 
-local bulletSound = love.audio.newSource("assets/sfx/tanksound.wav", "static")
-bulletSound:setVolume(0.4)
-bulletSound:setLooping(true) 
-
 function Gun:load()
     self.x = 0
     self.y = 0
@@ -143,7 +139,7 @@ function Gun:shoot()
 
     self.gunConfig[self.gunIndex].shootFunction(self)
 
-    camera:shake(1.4, 0.88)
+    camera:shake(50, 0.88)
 end
 
 function Gun:aim()

@@ -6,10 +6,6 @@ local Bullet = require("scripts/bullet")
 local Particle = require("scripts/particles/particle")
 local Tilemap = require("scripts/tilemap")
 
-local bulletSound = love.audio.newSource("assets/sfx/tanksound.wav", "static")
-bulletSound:setVolume(0.4)
-bulletSound:setLooping(true) 
-
 function Player:load(camera)
     self.x = 0
     self.y = 20
@@ -24,7 +20,7 @@ function Player:load(camera)
     self.life = self.totalLife
     self.isAlive = true
     self.flipX = false
-    self.playerSheet = love.graphics.newImage("assets/sprites/player/soldier/soldier.png")
+    self.playerSheet = love.graphics.newImage("assets/sprites/player/soldier/girl.png")
     self.playerShadow = love.graphics.newImage("assets/sprites/player/shadow.png")
     self.handImage = love.graphics.newImage("assets/sprites/player/hand.png")
     self.handImage:setFilter("nearest", "nearest")
@@ -180,9 +176,9 @@ function Player:checkDamage()
         if distance < 10 then
             --enemy.life = 0
             --enemy:death()
-            camera:shake(3, 0.95)
+            camera:shake(100, 0.95)
             self.life = self.life - 1
-            local damageSound = love.audio.newSource("assets/sfx/damage.wav", "static")
+            local damageSound = love.audio.newSource("assets/sfx/damage.mp3", "static")
             local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
             bulletSound:setPitch(1.4 + math.random() * 0.1)
             bulletSound:setVolume(0.4)
@@ -248,7 +244,7 @@ function Player:death()
         table.insert(Game.particles, particle)
     end
     playerDeath()
-    love.audio.stop(bulletSound)
+
 end
 
 

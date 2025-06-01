@@ -1,7 +1,7 @@
 
 
 local HeartSound = {}
-soundPlayer = love.audio.newSource("assets/sfx/player/heart.wav", "stream")
+soundPlayer = love.audio.newSource("assets/sfx/player/heart.mp3", "stream")
 
 function HeartSound:load()    
     soundPlayer:stop()

@@ -22,7 +22,7 @@ function Camera:new(x, y)
     cam.x = x*3 - love.graphics.getWidth() / cam.scale / 2
     cam.y = y*2 - love.graphics.getHeight() / cam.scale  / 2
 
-    cam.smoothSpeed = 0.03
+    cam.smoothSpeed = 3
     cam.shakeIntensity = 0
     cam.shakeDecay = 0.5
 
@@ -40,18 +40,18 @@ function Camera:setCenterDistance(targetX, targetY)
     self.targetDistanceY = self.windowHeight/2 + dy
 end
 
-function Camera:update(targetX, targetY)
+function Camera:update(dt)
 
     local targetX = Player.x*3 - love.graphics.getWidth() / self.scale / 2
     local targetY = Player.y*2 - love.graphics.getHeight() / self.scale  / 2
 
     self:setCenterDistance(targetX, targetY)
 
-    self.x = self.x + (targetX - self.x) * self.smoothSpeed
-    self.y = self.y + (targetY -40- self.y) * self.smoothSpeed
+    self.x = self.x + (targetX - self.x) * self.smoothSpeed * dt
+    self.y = self.y + (targetY -40- self.y) * self.smoothSpeed * dt
     if self.shakeIntensity > 0 then
-        local dx = love.math.randomNormal(-1, 1) * self.shakeIntensity
-        local dy = love.math.randomNormal(-1, 1) * self.shakeIntensity
+        local dx = love.math.randomNormal(-1, 1) * self.shakeIntensity * dt
+        local dy = love.math.randomNormal(-1, 1) * self.shakeIntensity * dt
         self.x = self.x + dx
         self.y = self.y + dy
         self.shakeIntensity = self.shakeIntensity * self.shakeDecay
@@ -79,7 +79,7 @@ function Camera:attach()
 end
 
 function Camera:shake(intensity, decay)
-    self.shakeIntensity = intensity or 5
+    self.shakeIntensity = intensity or 50
     self.shakeDecay = decay or 0.4
 end
 

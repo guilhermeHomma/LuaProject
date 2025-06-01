@@ -287,7 +287,7 @@ function Zombie:isColliding(moveX, moveY)
     local collidedY = false
 
     for _, tile in ipairs(Tilemap.tiles) do
-        if tile.collider then
+        if tile.collider and distance(self, tile) < 70 then
             local tileBox = { x = tile.xWorld - tile.size/2, y = tile.yWorld - tile.size, width = tile.size, height = tile.size }
 
             if checkCollision(selfBoxX, tileBox) then
@@ -315,7 +315,7 @@ function Zombie:takeDamage(damage, dx, dy)
         self.soundTimer = 1.1
     end
 
-    local bulletSound = love.audio.newSource("assets/sfx/enemyDamage.wav", "static")
+    local bulletSound = love.audio.newSource("assets/sfx/enemyDamage.mp3", "static")
     bulletSound:setVolume(2)
     bulletSound:setPitch(0.8 + math.random() * 0.1)
     bulletSound:play()

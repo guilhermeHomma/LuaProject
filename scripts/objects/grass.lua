@@ -86,7 +86,7 @@ function Grass:getTarget()
 end
 
 function Grass:update(dt)
-    if distance(self, Player) > 250 then
+    if distance(self, Player) > 230 then
         return
     end
 

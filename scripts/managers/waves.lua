@@ -4,13 +4,13 @@ local Tilemap = require("scripts/tilemap")
 
 require("scripts/utils")
 
-local maxEnemiesAlive = 50
+local maxEnemiesAlive = 80
 
 function WaveManager:load()
     
     self.wave = 0
     self.enemiesPerWave = 0
-    self.spawnInterval = 2
+    self.spawnInterval = 0.1
     self.spawnTimer = 0
     self.enemiesSpawned = 0
 
