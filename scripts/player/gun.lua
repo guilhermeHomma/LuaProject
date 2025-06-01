@@ -24,12 +24,12 @@ function Gun:load()
     self.gunConfig = {
         {shotCooldown = 0.54, damage = 10, bulletSpeed = 300, shootFunction = function() self:shootPistol() end},
         {shotCooldown = 0.8, damage = 15, bulletSpeed = 230, shootFunction = function() self:shootShotgun() end},
-        {shotCooldown = 0.4, damage = 20, bulletSpeed = 340, shootFunction = function() self:shootPistol() end},
-        {shotCooldown = 0.6, damage = 15, bulletSpeed = 240, shootFunction = function() self:shootPistol() end},
+        {shotCooldown = 0.4, damage = 15, bulletSpeed = 340, shootFunction = function() self:shootPistol() end},
+        {shotCooldown = 0.6, damage = 10, bulletSpeed = 250, shootFunction = function() self:shootSquareGun() end},
     }
 
     self.shootTimer = 0
-    self.showGunTime = 1.5
+    self.showGunTime = 0.5
     self.showGun = false
 end
 
@@ -105,6 +105,29 @@ function Gun:shootPistol()
     bulletSound:play()
 end
 
+
+function Gun:shootSquareGun()
+    local angle = mouseAngle() + (math.random() * 0.1) - 0.05
+
+    local offsetX = math.cos(angle) * 5
+    local offsetY = math.sin(angle) * 5
+
+    local damage = self.gunConfig[self.gunIndex].damage
+    local bulletSpeed = self.gunConfig[self.gunIndex].bulletSpeed
+
+    local bullet = Bullet:new(self.x + offsetX, self.y + offsetY, angle, 15, bulletSpeed, damage)
+    table.insert(self.bullets, bullet)
+
+    local bullet = Bullet:new(self.x + offsetX * 2 + 2, self.y + offsetY* 2 + 2, angle + 0.1, 15, bulletSpeed, damage)
+    table.insert(self.bullets, bullet)
+
+    local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
+
+    bulletSound:setVolume(0.8)
+    bulletSound:setPitch(0.9 + math.random() * 0.1)
+    bulletSound:play()
+end
+
 function Gun:shootRaygun()
     local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
     bulletSound:setVolume(0.5)
@@ -145,7 +168,6 @@ function Gun:drawSight()
 end
 
 function Gun:drawUI()
-
     local size = 40
     local startX = 13.5
     local startY = 10.5

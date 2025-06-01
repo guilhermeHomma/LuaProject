@@ -27,7 +27,7 @@ FPS = false
 scale = 1
 
 MUSIC_VOLUME = 0.9
-GAME_VOLUME = 0.9
+GAME_VOLUME = 1
 
 function love.load()
     --love.window.setMode(0, 0, { fullscreen = true })
@@ -66,7 +66,7 @@ function quitToMenu()
         Game:close()
         state=STATES.mainMenu
     end
-    TransitionManager:startTransition(function() callback() end, 3)
+    TransitionManager:startTransition(function() callback() end, 10, 5)
 end
 
 function quitGame()
@@ -75,7 +75,7 @@ function quitGame()
     end
 
     local cb = function() callback() end
-    TransitionManager:startTransition(cb, 10, 2)
+    TransitionManager:startTransition(cb, 10, 1.4)
 end
 
 function changePause()

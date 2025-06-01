@@ -65,7 +65,10 @@ function Player:updateAnimation(dt, moving)
     end
 
     local anim = self.animations[self.currentAnimation]
-    local frameTime = anim.duration / #anim.frames
+
+    local duration = anim.duration
+    if self.gun.showGun then duration = duration * 1.25 end
+    local frameTime = duration / #anim.frames
 
     if self.currentAnimation == "idle" and self.currentFrame == 2 then
         frameTime = 0.1
@@ -132,8 +135,11 @@ function Player:update(dt)
     if collidedX then moveX = 0 end
     if collidedY then moveY = 0 end
     
-    local sumMoveX = moveX * self.speed * dt
-    local sumMoveY = moveY * self.speed * dt
+    local speed = self.speed
+    if self.gun.showGun then speed = speed * 0.7 end
+
+    local sumMoveX = moveX * speed * dt
+    local sumMoveY = moveY * speed * dt
 
     self.x = self.x + sumMoveX
     self.y = self.y + sumMoveY

@@ -15,8 +15,8 @@ tileSet = require("scripts.objects.tileset")
 local tilemapWorldX = -40 * tileSize
 local tilemapWorldY = -40 * tileSize
 
-local Grid = require("jumper.grid")
-local Pathfinder = require("jumper.pathfinder")
+local Grid = require("jumperj.grid")
+local Pathfinder = require("jumperj.pathfinder")
 local tilemap = nil
 
 function loadTilemapFromImage()
@@ -124,11 +124,11 @@ function Tilemap:load()
             local tile = tilemap[y][x]
             local collider = false
 
-            if (tile == 0 or tile == 5 or tile == 6) and math.random() > 0.7 then
+            if (tile == 0 or tile == 5 or tile == 6 or tile == 9) and math.random() > 0.5 then
                 local gx, gy = self:mapToWorld(x,y)
                 local grass = Grass:new(gx - 1, gy - 5, tile)
                 table.insert(self.grass, grass)
-                if math.random() > 0.4 then
+                if math.random() > 0.3 then
                     local gx, gy = self:mapToWorld(x,y)
                     local grass = Grass:new(gx + 1, gy +2, tile )
                     table.insert(self.grass, grass)

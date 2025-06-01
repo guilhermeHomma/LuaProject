@@ -40,8 +40,17 @@ function Game:load()
     self:changeShaders(0)
 end
 
+function Game:openSouth()
+    DoorsManager:openSouth()
+end
+
+function Game:openNorth()
+    DoorsManager:openNorth()
+end
+
 function Game:close()
     HeartSound:stop()
+    selF = {}
 end
 
 function Game:changeShaders(index)
@@ -124,6 +133,17 @@ function Game:draw()
     end
 
     Player:drawS()
+
+    for _, item in ipairs(self.drawQueue) do
+        if type(item.object.drawOutline) == "function" then
+
+            if distance(Player, item.object) < 300 then 
+                item.object:drawOutline()
+            end
+        end
+    end
+
+    
     Player:drawSight()
 
     for _, item in ipairs(self.drawQueue) do
@@ -157,10 +177,10 @@ function Game:keypressed(key)
     elseif key == "x" then
         Tilemap:keypressed(key)
     elseif key == "o" then
-        DoorsManager:openSouth()
-        DoorsManager:openNorth()
+        --DoorsManager:openSouth()
+        --DoorsManager:openNorth()
     elseif tonumber(key) then
-        self:changeShaders(tonumber(key))
+        --self:changeShaders(tonumber(key))
     end
 end
 

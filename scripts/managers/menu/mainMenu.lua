@@ -21,8 +21,8 @@ end
 
 function MainMenu:load()
     baseMenu.load(self)
-    self.MenuTItle = "BigBurn Island"
-    self.menuOptions = {"start game", "settings", "exit",} -- "options"}
+    self.MenuTItle = "Zombit Island"
+    self.menuOptions = {"start game", "exit",} -- "options"}
     self.fontTitle = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 80)
     self.fontTitle:setFilter("nearest", "nearest")
 
@@ -58,7 +58,7 @@ end
 function MainMenu:onSelect()
     if self.selectedOption == 1 then
         loadGame()
-    elseif self.selectedOption == 3 then
+    elseif self.selectedOption == #self.menuOptions then
         quitGame()
     end
 end

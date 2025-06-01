@@ -65,6 +65,15 @@ end
 
 function WaveManager:startNextWave()
     self.wave = self.wave + 1
+
+    if self.wave == 14 then
+        Game:openSouth()
+    end
+
+    if self.wave == 7 then
+        Game:openNorth()
+    end
+
     self.enemiesPerWave = self.enemiesPerWave + 2
     self.enemiesSpawned = 0
 end
