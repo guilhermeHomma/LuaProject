@@ -11,6 +11,8 @@ local GameoverMenu = require("scripts/managers/menu/gameoverMenu")
 local MainMenu = require("scripts/managers/menu/mainMenu")
 local TransitionManager = require("scripts.managers.transitionManager")
 
+baseWidth = 960
+baseHeight = 540
 canvas = love.graphics.newCanvas(baseWidth, baseHeight)
 STATES = {mainMenu = 1, game = 2, gamePause = 3, gameDead = 4}
 state = STATES.mainMenu
@@ -18,8 +20,7 @@ state = STATES.mainMenu
 --baseWidth = 1120
 --baseHeight = 630
 
-baseWidth = 960
-baseHeight = 540
+
 
 DEBUG = false
 FPS = false
@@ -33,6 +34,10 @@ function love.load()
     --love.window.setMode(0, 0, { fullscreen = true })
     local scaleX = love.graphics.getWidth() / baseWidth
     local scaleY = love.graphics.getHeight() / baseHeight
+
+    local icon = love.image.newImageData("assets/sprites/icon.png")
+    --icon:setFilter("nearest", "nearest")
+    love.window.setIcon(icon)
 
     scale = math.max(scaleX, scaleY)
     love.audio.setVolume(GAME_VOLUME)
@@ -92,7 +97,7 @@ function love.keypressed(key)
     
     if TransitionManager.isTransiting then return end
 
-    if key == "escape" then
+    if key == "escape" or key == "p" then
         changePause()
     end 
 
@@ -158,6 +163,7 @@ function love.draw()
     
 
     if state == STATES.game or state == STATES.gamePause or state == STATES.gameDead then
+        
         Game:draw()
     end
 
@@ -177,6 +183,20 @@ function love.draw()
     end
 
     love.graphics.setCanvas()
+
+    local shader = love.graphics.newShader("scripts/shaders/palette.glsl")
+
+    local paletteList = require("scripts/shaders/paletteList")
+    local oldColors = paletteList[1]
+    local newColors = paletteList[2]
+    shader:send("oldColors", unpack(oldColors))
+    shader:send("newColors", unpack(newColors))
+    shader:send("threshold", 0.8)
+    shader:send("saturation", 1)
+    shader:send("brightness", 1.2)
+
+    love.graphics.setShader(shader)
     love.graphics.draw(canvas, 0, 0, 0, scale, scale)
+    love.graphics.setShader()
 end
 

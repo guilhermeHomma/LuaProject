@@ -16,7 +16,7 @@ return {
         colorPack("090909"), --black
     },
     { -- 1 night
-        colorPack("a2b8b1"),--white
+        colorPack("d2e8e1"),--white
         colorPack("719797"),--yellow
         colorPack("557b78"),--dark yellow
         colorPack("396d7d"),--y green

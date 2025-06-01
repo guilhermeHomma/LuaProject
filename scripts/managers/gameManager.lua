@@ -37,7 +37,7 @@ function Game:load()
     self.drawQueue = {}
     self.particles = {}
 
-    self:changeShaders(0)
+    self:changeShaders(1)
 end
 
 function Game:openSouth()
@@ -119,7 +119,7 @@ function Game:draw()
 
     love.graphics.scale(3, 2) 
 
-    --love.graphics.setShader(shader)
+    
 
     Ground:draw(Player)
     
@@ -159,7 +159,7 @@ function Game:draw()
     love.graphics.scale(1, 1)
     
     camera:detach()
-    --love.graphics.setShader()
+    
     
     PointsManager:draw()
     Player:drawLife()

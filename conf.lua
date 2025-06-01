@@ -1,5 +1,5 @@
 function love.conf(t)
-    t.window.title = "Lua Project"
+    t.window.title = "Zombit Beach"
     t.window.resizable = true 
 
     t.window.width = 1600

@@ -1,7 +1,7 @@
 local MusicList = {
     love.audio.newSource("assets/sfx/musics/intro/stairway.mp3", "stream"),
     love.audio.newSource("assets/sfx/musics/horror/midnight.mp3", "stream"),
-    love.audio.newSource("assets/sfx/musics/horror/a_horror_theme.mp3", "stream"),
+    --love.audio.newSource("assets/sfx/musics/horror/a_horror_theme.mp3", "stream"),
     love.audio.newSource("assets/sfx/musics/default/late-song.mp3", "stream"),
 }
 
