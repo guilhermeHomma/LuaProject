@@ -23,7 +23,7 @@ function Bullet:new(x, y, angle, height, speed, damage, level)
     bullet.radius = 1.3
     bullet.isAlive = true
     bullet.timer = 0
-
+    bullet.lastParticle = 0
     bullet.lifeTime = 0.3 + math.random() * 0.1
 
     return bullet
@@ -78,8 +78,12 @@ function Bullet:update(dt)
         self.isAlive = false
     end
 
-    local particle = Particle:new(self.x, self.y, self.height-2, 1.2, 0.07)
-    table.insert(Game.particles, particle)
+    self.lastParticle = self.lastParticle + dt
+    if self.lastParticle > 0.005 then
+        self.lastParticle = 0
+        local particle = Particle:new(self.x, self.y, self.height-2, 1.2, 0.07)
+        table.insert(Game.particles, particle)
+    end
 
     for _, enemy in ipairs(Game.enemies) do
         if self:checkCollisionWithEnemy(enemy) and self.isAlive and enemy.isAlive then

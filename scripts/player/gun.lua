@@ -14,7 +14,7 @@ function Gun:load()
     self.gunSheet:setFilter("nearest", "nearest")
     self.squareAngle = 0
     self.gunIndex = 1 -- 1 2 ou 3
-
+    self.height = 16
     self.angle = 0
 
     self.gunConfig = {
@@ -66,13 +66,13 @@ function Gun:shootShotgun()
     local damage = self.gunConfig[self.gunIndex].damage
     local bulletSpeed = self.gunConfig[self.gunIndex].bulletSpeed
 
-    local bullet = Bullet:new(self.x + offsetX, self.y + offsetY, angle + (math.random() * 0.1), 15, bulletSpeed, damage)
+    local bullet = Bullet:new(self.x + offsetX, self.y + offsetY, angle + (math.random() * 0.1), self.height, bulletSpeed, damage)
     table.insert(self.bullets, bullet)
 
-    local bullet = Bullet:new(self.x + offsetX, self.y + offsetY, angle + (math.random() * 0.1) + 0.15, 15, bulletSpeed, damage)
+    local bullet = Bullet:new(self.x + offsetX, self.y + offsetY, angle + (math.random() * 0.1) + 0.15, self.height, bulletSpeed, damage)
     table.insert(self.bullets, bullet)
 
-    local bullet = Bullet:new(self.x + offsetX, self.y + offsetY, angle + (math.random() * 0.1)- 0.15, 15, bulletSpeed, damage)
+    local bullet = Bullet:new(self.x + offsetX, self.y + offsetY, angle + (math.random() * 0.1)- 0.15, self.height, bulletSpeed, damage)
     table.insert(self.bullets, bullet)
 
     local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
@@ -91,7 +91,7 @@ function Gun:shootPistol()
     local damage = self.gunConfig[self.gunIndex].damage
     local bulletSpeed = self.gunConfig[self.gunIndex].bulletSpeed
 
-    local bullet = Bullet:new(self.x + offsetX, self.y + offsetY, angle, 15, bulletSpeed, damage)
+    local bullet = Bullet:new(self.x + offsetX, self.y + offsetY, angle, self.height, bulletSpeed, damage)
     table.insert(self.bullets, bullet)
 
     local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
@@ -111,7 +111,7 @@ function Gun:shootSquareGun()
     local damage = self.gunConfig[self.gunIndex].damage
     local bulletSpeed = self.gunConfig[self.gunIndex].bulletSpeed
 
-    local bullet = Bullet:new(self.x + offsetX, self.y + offsetY, angle, 15, bulletSpeed, damage)
+    local bullet = Bullet:new(self.x + offsetX, self.y + offsetY, angle, self.height, bulletSpeed, damage)
     table.insert(self.bullets, bullet)
 
     local bullet = Bullet:new(self.x + offsetX * 2 + 2, self.y + offsetY* 2 + 2, angle + 0.1, 15, bulletSpeed, damage)
@@ -212,7 +212,7 @@ function Gun:draw()
             self.gunSheet,
             quad,
             self.x + offsetX,
-            self.y + offsetY - 16 + i,
+            self.y + offsetY - self.height + i,
             self.angle,
             0.8, 0.8,
             0,
