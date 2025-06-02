@@ -106,7 +106,7 @@ function love.keypressed(key)
         changePause()
     end 
 
-    if key == "1" or key == "2" or key == "3" or key == "3" then
+    if key == "1" or key == "2" or key == "3" or key == "4" then
         local paletteList = require("scripts/shaders/paletteList")
 
         local newColors = paletteList[tonumber(key)]
@@ -183,7 +183,6 @@ function love.draw()
         MainMenu:draw()
     elseif state == STATES.gameDead then
         GameoverMenu:draw()
-
     end
 
     TransitionManager:draw()

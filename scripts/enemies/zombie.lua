@@ -10,7 +10,7 @@ local whiteShader = love.graphics.newShader("scripts/shaders/whiteShader.glsl")
 require("scripts/utils")
 
 function Zombie:new(x, y)
-    local enemy = setmetatable({}, Zombie)
+    local enemy = setmetatable({}, {__index = self})
 
     enemy.x = x
     enemy.y = y
@@ -101,16 +101,7 @@ function Zombie:update(dt)
     local velocityX = 0
     local velocityY = 0
 
-    self.soundTimer = self.soundTimer + dt
-    if self.soundTimer >= 10 and Player.isAlive then
-        self.soundTimer = 0
-        local soundPositionX, soundPositionY = soundPosition(Player, self)
-
-        self.noise:setPosition(soundPositionX, soundPositionY, 0)
-        self.noise:setVolume(1)
-        self.noise:setPitch(1.2 + math.random() * 0.2)
-        self.noise:play()
-    end
+    self:noiseCheck(dt)
 
     if (self.pathUpdateCounter >= self.pathUpdateInterval and Player.isAlive) or self.path == nil or #self.path < 2 then
     --if (self.pathUpdateCounter >= self.pathUpdateInterval and self.state == Zombie.states.idle and Player.isAlive) or self.path == nil or #self.path < 2 then
@@ -181,30 +172,15 @@ function Zombie:update(dt)
         animationDuration = self.damageTimer
     end
 
-    self.stateTimer = self.stateTimer + dt
-    if self.stateTimer >= animationDuration then
-        if self.state == Zombie.states.idle then
-            self.walkDuration = math.random(4, 6)
-            self.state = Zombie.states.walk
-            if not Player.isAlive then
-                self.state = Zombie.states.idle
-                self.stateTimer = 0
-                local negative = 0
-            end
-        elseif Player.isAlive then
-            self.idleDuration = math.random(0.7, 1.3)
-            self.state = Zombie.states.idle
-        end
-        self.stateTimer = 0
-    end 
+    self:stateManager(dt, animationDuration)
 
     self:death()
 
     if self.state == Zombie.states.idle or self.state == Zombie.states.damage then
         self:animate(1, 2, dt)
         if self.state == Zombie.states.damage then
-            local movekbX = self.kbdx * dt * 0.1
-            local movekbY = self.kbdy * dt * 0.1
+            local movekbX = self.kbdx * dt * 0.05
+            local movekbY = self.kbdy * dt * 0.05
             local collidedX, collidedY = self:isColliding(movekbX,movekbY)
 
             if not collidedX then self.x = self.x + movekbX end
@@ -243,6 +219,37 @@ function Zombie:update(dt)
     end
 end
 
+
+function Zombie:noiseCheck(dt)
+    self.soundTimer = self.soundTimer + dt
+    if self.soundTimer >= 10 and Player.isAlive then
+        self.soundTimer = 0
+        local soundPositionX, soundPositionY = soundPosition(Player, self)
+
+        self.noise:setPosition(soundPositionX, soundPositionY, 0)
+        self.noise:setVolume(1)
+        self.noise:setPitch(1.2 + math.random() * 0.2)
+        self.noise:play()
+    end
+end
+
+function Zombie:stateManager(dt, animationDuration)
+    self.stateTimer = self.stateTimer + dt
+    if self.stateTimer >= animationDuration then
+        if self.state == Zombie.states.idle then
+            self.walkDuration = math.random(4, 6)
+            self.state = Zombie.states.walk
+            if not Player.isAlive then
+                self.state = Zombie.states.idle
+                self.stateTimer = 0
+            end
+        elseif Player.isAlive then
+            self.idleDuration = math.random(0.7, 1.3)
+            self.state = Zombie.states.idle
+        end
+        self.stateTimer = 0
+    end 
+end
 
 function Zombie:getRepulsionVector()
     local repulseX, repulseY = 0, 0
@@ -387,6 +394,18 @@ function Zombie:drawShadow()
     love.graphics.draw(self.spriteShadow, self.x - 6, self.y- 6, 0 , 1, 1)
 end
 
+function Zombie:drawMouth()
+    if self.state ~= Zombie.states.damage then
+        love.graphics.setColor(hexToRGB("302c5e"))
+        if self.soundTimer >= 0 and self.soundTimer <= 1 then
+            love.graphics.circle("fill", self.x , self.y - 18, 1.5)
+        else
+            love.graphics.rectangle("fill", self.x -0.7 ,self.y - 19, 1.4, 0.6 )
+        end
+        love.graphics.setColor(1, 1, 1, 1)
+    end
+end
+
 function Zombie:draw()
 
     if not self.isAlive then
@@ -406,15 +425,8 @@ function Zombie:draw()
     love.graphics.draw(self.spriteSheet, self.frames[self.currentFrame], xOffset +self.x, self.y, 0, scaleX, 1.5, self.frameWidth / 2, self.frameHeight)
     love.graphics.setShader()
 
-    if self.state ~= Zombie.states.damage then
-        love.graphics.setColor(hexToRGB("302c5e"))
-        if self.soundTimer >= 0 and self.soundTimer <= 1 then
-            love.graphics.circle("fill", self.x , self.y - 18, 1.5)
-        else
-            love.graphics.rectangle("fill", self.x -0.7 ,self.y - 19, 1.4, 0.6 )
-        end
-        love.graphics.setColor(1, 1, 1, 1)
-    end
+    self:drawMouth()
+
 
     if DEBUG then 
 

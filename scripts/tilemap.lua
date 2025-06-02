@@ -126,6 +126,8 @@ function Tilemap:load()
             if self:hasTileClose(x, y, 0) or 
                 self:hasTileClose(x, y, 5) or 
                 self:hasTileClose(x, y, 8) or 
+                self:hasTileClose(x, y, 4) or 
+                self:hasTileClose(x, y, 9) or 
                 self:hasTileClose(x, y, 6) then 
                 collider = true
             end 

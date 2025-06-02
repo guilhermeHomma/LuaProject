@@ -1,5 +1,7 @@
 local WaveManager = {}
-local Enemy = require("scripts/enemies/zombie")
+local Zombie= require("scripts/enemies/zombie")
+local BigZombie = require("scripts/enemies/bigZombie")
+local BabyZombie = require("scripts/enemies/babyZombie")
 local Tilemap = require("scripts/tilemap")
 
 require("scripts/utils")
@@ -38,7 +40,15 @@ end
 function WaveManager:instanceEnemy()
 
     local enemyX, enemyY = self:enemyPosition()
-    table.insert(Game.enemies, Enemy:new(enemyX, enemyY) )
+    --and self.wave > 8
+    if math.random(1, 9) > 8 and self.wave > 5 then
+        table.insert(Game.enemies, BigZombie:new(enemyX, enemyY) )
+    elseif math.random(1, 7) > 6 and self.wave > 10 then
+        table.insert(Game.enemies, BabyZombie:new(enemyX, enemyY))
+    else
+        table.insert(Game.enemies, Zombie:new(enemyX, enemyY))
+        
+    end
     self.enemiesSpawned = self.enemiesSpawned + 1
 end
 
@@ -67,7 +77,7 @@ end
 
 function WaveManager:startNextWave()
     self.wave = self.wave + 1
-    self.nextInterval = 10
+    --self.nextInterval = 10
     if self.wave == 14 then
         Game:openSouth()
     end
@@ -79,6 +89,8 @@ function WaveManager:startNextWave()
     self.enemiesPerWave = self.enemiesPerWave + 2
     self.enemiesSpawned = 0
 end
+
+
 
 
 function WaveManager:draw()

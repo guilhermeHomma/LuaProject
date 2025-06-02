@@ -32,6 +32,7 @@ function Camera:new(x, y)
     cam.minLeft = -1000
     cam.minDown = 60
     cam.maxTop = -590
+    cam.objectWorldPosition = cam:updateObjectPosition()
     return cam
 end
 
@@ -63,13 +64,18 @@ function Camera:update(dt)
     if self.x < self.minLeft then self.x = self.minLeft end
     if self.y < self.maxTop then self.y = self.maxTop end
 
+    self.objectWorldPosition = self:updateObjectPosition()
+end
+
+function Camera:updateObjectPosition()
+    return {
+        x = self.x/3 + love.graphics.getWidth() / self.scale / 6, 
+        y = self.y/2 + love.graphics.getHeight() / self.scale  / 4
+    }
 end
 
 function Camera:objectPosition()
-    return {
-        x = self.x/3 + love.graphics.getWidth() / self.scale / 6, 
-        y = self.y/2 + love.graphics.getHeight() / self.scale  / 4}
-    
+    return self.objectWorldPosition
 end
 
 function Camera:resize(w, h)

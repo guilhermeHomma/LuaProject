@@ -56,6 +56,8 @@ end
 
 
 function Grass:getTarget()
+    if self.tile == 1 then return 0 end
+
     if distance(self, Player) < 10 then
         if Player.x < self.x then
             return -1
@@ -87,9 +89,10 @@ function Grass:getTarget()
 end
 
 function Grass:update(dt)
-    if distance(self, Player) > 230 then
+    if distance(self, camera:objectPosition()) > 230 then
         return
     end
+
 
     local target = self:getTarget()
     local speed = 2
