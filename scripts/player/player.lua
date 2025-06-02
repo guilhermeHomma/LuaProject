@@ -176,7 +176,7 @@ function Player:checkDamage()
         if distance < 10 then
             --enemy.life = 0
             --enemy:death()
-            camera:shake(100, 0.95)
+            camera:shake(120, 0.95)
             self.life = self.life - 1
             local damageSound = love.audio.newSource("assets/sfx/damage.mp3", "static")
             local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")

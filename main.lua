@@ -19,7 +19,12 @@ state = STATES.mainMenu
 
 --baseWidth = 1120
 --baseHeight = 630
-
+local shader = love.graphics.newShader("scripts/shaders/palette.glsl")
+local paletteList = require("scripts/shaders/paletteList")
+local oldColors = paletteList[1]
+local newColors = paletteList[2]
+shader:send("oldColors", unpack(oldColors))
+shader:send("newColors", unpack(newColors))
 
 
 DEBUG = false
@@ -28,7 +33,7 @@ FPS = false
 scale = 1
 
 MUSIC_VOLUME = 0.9
-GAME_VOLUME = 1
+GAME_VOLUME = 0.4
 
 function love.load()
     --love.window.setMode(0, 0, { fullscreen = true })
@@ -101,6 +106,13 @@ function love.keypressed(key)
         changePause()
     end 
 
+    if key == "1" or key == "2" or key == "3" or key == "3" then
+        local paletteList = require("scripts/shaders/paletteList")
+
+        local newColors = paletteList[tonumber(key)]
+        shader:send("newColors", unpack(newColors))
+    end 
+
     if state == STATES.mainMenu then
         MainMenu:keypressed(key)
     elseif state == STATES.game then
@@ -147,8 +159,6 @@ function love.update(dt)
 
     AmbienceSound:update(dt)
     Music:update(dt)
-    
-
 end 
 
 
@@ -184,16 +194,9 @@ function love.draw()
 
     love.graphics.setCanvas()
 
-    local shader = love.graphics.newShader("scripts/shaders/palette.glsl")
-
-    local paletteList = require("scripts/shaders/paletteList")
-    local oldColors = paletteList[1]
-    local newColors = paletteList[2]
-    shader:send("oldColors", unpack(oldColors))
-    shader:send("newColors", unpack(newColors))
     shader:send("threshold", 0.8)
     shader:send("saturation", 1)
-    shader:send("brightness", 1.2)
+    shader:send("brightness", 1.1)
 
     love.graphics.setShader(shader)
     love.graphics.draw(canvas, 0, 0, 0, scale, scale)

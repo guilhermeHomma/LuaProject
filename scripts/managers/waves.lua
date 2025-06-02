@@ -10,7 +10,8 @@ function WaveManager:load()
     
     self.wave = 0
     self.enemiesPerWave = 0
-    self.spawnInterval = 0.1
+    self.spawnInterval = {0.1, 2}
+    self.nextInterval = 10
     self.spawnTimer = 0
     self.enemiesSpawned = 0
 
@@ -22,7 +23,8 @@ end
 function WaveManager:update(dt)
     if self.enemiesSpawned < self.enemiesPerWave and #Game.enemies < maxEnemiesAlive then
         self.spawnTimer = self.spawnTimer + dt
-        if self.spawnTimer >= self.spawnInterval then
+        if self.spawnTimer >= self.nextInterval then
+            self.nextInterval = math.random(self.spawnInterval[1], self.spawnInterval[2])
             self.spawnTimer = 0
             self:instanceEnemy()
         end
@@ -65,7 +67,7 @@ end
 
 function WaveManager:startNextWave()
     self.wave = self.wave + 1
-
+    self.nextInterval = 10
     if self.wave == 14 then
         Game:openSouth()
     end

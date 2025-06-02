@@ -24,7 +24,7 @@ return {
         colorPack("254351"),--blue green
         colorPack("19374b"),--blue
         colorPack("1f2439"),--dark blue
-        colorPack("230019"),--black
+        colorPack("090909"),--black
     },
     { -- 2 snake
         colorPack("66f390"),--white

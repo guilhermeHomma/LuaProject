@@ -25,6 +25,7 @@ function Tile:new(x, y, quadIndex, collider)
     tile.alpha = 1
     tile.collider = collider
     tile.xWorld, tile.yWorld = Tile.tilemap:mapToWorld(x,y)
+    tile.distance = 0
     return tile
 end
 
@@ -72,6 +73,7 @@ function Tile:drawShadow()
     local sheetHeight = TileSet.sheetHeight
     local shadowSize = 20
     local quadShadow = love.graphics.newQuad(110, 14, shadowSize, shadowSize, sheetWidth, sheetHeight)
+
     love.graphics.draw(tilesetImage, quadShadow, self.xWorld, self.yWorld, 0, 1, 1, shadowSize/2, shadowSize-4)
 end
 

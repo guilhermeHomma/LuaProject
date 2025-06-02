@@ -84,9 +84,16 @@ function TreeTile:draw()
 
     self.alpha = self.alpha + (targetAlpha - self.alpha) * 0.1
     
-    love.graphics.setColor(1, 1, 1, self.alpha)
+    local r, g, b, a = love.graphics.getColor()
+    love.graphics.setColor(r, g, b, self.alpha)
+    if Player.y + 100 < self.yWorld then 
+        
+        love.graphics.setColor(r, g, b, 1)
+
+    end
+    
     love.graphics.draw(image, self.xWorld, self.yWorld, 0, 1, 1.5, 32, 93)
-    love.graphics.setColor(1, 1, 1) 
+    love.graphics.setColor(r, g, b, a) 
     love.graphics.setShader()
     self:drawDebug()    
 end

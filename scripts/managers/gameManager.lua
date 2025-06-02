@@ -10,8 +10,6 @@ local Tilemap = require("scripts/tilemap")
 local PointsManager = require("scripts/managers/pointsManager")
 local DoorsManager = require("scripts/managers/doorsManager")
 local HeartSound = require("scripts/player/heartSound")
-local shader = love.graphics.newShader("scripts/shaders/palette.glsl")
-local paletteList = require("scripts/shaders/paletteList")
 
 camera = nil
 
@@ -36,30 +34,23 @@ function Game:load()
     self.enemies = {}
     self.drawQueue = {}
     self.particles = {}
-
-    self:changeShaders(1)
+    --self:openNorth()
+    --self:openSouth()
 end
 
 function Game:openSouth()
     DoorsManager:openSouth()
+    camera.minDown = 240
 end
 
 function Game:openNorth()
     DoorsManager:openNorth()
+    camera.maxTop = -1000
 end
 
 function Game:close()
     HeartSound:stop()
-    selF = {}
-end
-
-function Game:changeShaders(index)
-    if index >= #paletteList then return end
-    local oldColors = paletteList[1]
-    local newColors = paletteList[index + 1]
-    shader:send("oldColors", unpack(oldColors))
-    shader:send("newColors", unpack(newColors))
-    shader:send("threshold", 0.1)
+    self = {}
 end
 
 function Game:getPlayerPoints()
@@ -108,7 +99,7 @@ function Game:update(dt)
 end
 
 function addToDrawQueue(priority, object)
-    if distance(Player, object) > 300 then
+    if distance(camera:objectPosition(), object) > 300 then
         return
     end
     table.insert(Game.drawQueue, {priority = priority, object = object})
@@ -128,31 +119,27 @@ function Game:draw()
 
     for _, item in ipairs(self.drawQueue) do
         if type(item.object.drawShadow) == "function" then
-
-            if distance(Player, item.object) < 300 then 
-                item.object:drawShadow()
-            end
+            item.object:drawShadow()
         end
     end
 
-    Player:drawS()
-
-    for _, item in ipairs(self.drawQueue) do
-        if type(item.object.drawOutline) == "function" then
-
-            if distance(Player, item.object) < 300 then 
-                item.object:drawOutline()
-            end
-        end
-    end
-
-    
+    Player:drawS()    
     Player:drawSight()
 
     for _, item in ipairs(self.drawQueue) do
-        if distance(Player, item.object) < 400 then 
-            item.object:draw()
-        end
+        local d = distance(camera:objectPosition(), item.object)
+
+        --local minDist = 70
+        --local maxDist = 250
+        local minDist = 110
+        local maxDist = 260
+
+        local t = math.min(math.max((d - minDist) / (maxDist - minDist), 0), 1)
+        local brightness = 1 - t * 0.8
+        local r, g, b, a = 1,1,1,1
+        love.graphics.setColor(r * brightness, g * brightness, b * brightness, a)
+        item.object:draw()
+        love.graphics.setColor(r, g, b, a)
     end
     Clouds:draw()
     

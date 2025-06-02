@@ -123,8 +123,14 @@ function Tilemap:load()
         for x = 1, #tilemap[y] do
             local tile = tilemap[y][x]
             local collider = false
+            if self:hasTileClose(x, y, 0) or 
+                self:hasTileClose(x, y, 5) or 
+                self:hasTileClose(x, y, 8) or 
+                self:hasTileClose(x, y, 6) then 
+                collider = true
+            end 
 
-            if (tile == 0 or tile == 5 or tile == 6 or tile == 9) and math.random() > 0.55 then
+            if (tile == 0 or tile == 5 or tile == 6 or tile == 9 or (tile == 1 and not collider)) and math.random() > 0.55 then
                 local gx, gy = self:mapToWorld(x,y)
                 local grass = Grass:new(gx - 1, gy - 5, tile)
                 table.insert(self.grass, grass)
@@ -134,13 +140,6 @@ function Tilemap:load()
                     table.insert(self.grass, grass)
                 end
             end
-
-            if self:hasTileClose(x, y, 0) or 
-                self:hasTileClose(x, y, 5) or 
-                self:hasTileClose(x, y, 8) or 
-                self:hasTileClose(x, y, 6) then 
-                collider = true
-            end       
             
             if tile == 8 then 
                 local c = self:hasTileClose(x, y, 0) or self:hasTileClose(x, y, 5) or self:hasTileClose(x, y, 6)

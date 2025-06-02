@@ -139,7 +139,7 @@ function Gun:shoot()
 
     self.gunConfig[self.gunIndex].shootFunction(self)
 
-    camera:shake(50, 0.88)
+    camera:shake(80, 0.88)
 end
 
 function Gun:aim()

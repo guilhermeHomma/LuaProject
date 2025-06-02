@@ -49,6 +49,7 @@ function Grass:new(x, y, tile)
     grass.index = getGrassIndex()
     grass.shaderDirection = 1
     grass.collisionDirection = 0
+    grass.tile = tile
 
     return grass
 end
@@ -93,8 +94,13 @@ function Grass:update(dt)
     local target = self:getTarget()
     local speed = 2
     if target ~= 0 then speed = 15 end
-    addToDrawQueue(self.y + 4, self)
 
+    if not self.tile == 1 then 
+        addToDrawQueue(self.y + 4, self)
+    else
+        addToDrawQueue(self.y + 8, self)
+        
+    end
     self.collisionDirection = self.collisionDirection + (target - self.collisionDirection) * dt * speed
 
     self.shaderDirection = (math.sin(love.timer.getTime() + (self.y/10)   )) / 2 + 1  + self.collisionDirection*0.7

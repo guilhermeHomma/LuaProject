@@ -29,6 +29,9 @@ function Camera:new(x, y)
     cam.targetDistanceX = 0.5
     cam.targetDistanceY = 0.5
 
+    cam.minLeft = -1000
+    cam.minDown = 60
+    cam.maxTop = -590
     return cam
 end
 
@@ -56,9 +59,18 @@ function Camera:update(dt)
         self.y = self.y + dy
         self.shakeIntensity = self.shakeIntensity * self.shakeDecay
     end
+    if self.y > self.minDown then self.y = self.minDown end
+    if self.x < self.minLeft then self.x = self.minLeft end
+    if self.y < self.maxTop then self.y = self.maxTop end
 
 end
 
+function Camera:objectPosition()
+    return {
+        x = self.x/3 + love.graphics.getWidth() / self.scale / 6, 
+        y = self.y/2 + love.graphics.getHeight() / self.scale  / 4}
+    
+end
 
 function Camera:resize(w, h)
     camera.windowWidth = w
