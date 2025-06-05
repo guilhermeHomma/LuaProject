@@ -99,7 +99,7 @@ function Grass:update(dt)
     if target ~= 0 then speed = 15 end
 
     if not self.tile == 1 then 
-        addToDrawQueue(self.y + 4, self)
+        addToDrawQueue(self.y + 2, self)
     else
         addToDrawQueue(self.y + 8, self)
         

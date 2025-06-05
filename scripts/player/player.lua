@@ -307,7 +307,7 @@ function Player:drawSight()
     self.gun:drawSight()
 end
 
-function Player:drawS()
+function Player:drawShadow()
     if not self.isAlive then
         return
     end

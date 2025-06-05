@@ -19,8 +19,8 @@ function Gun:load()
 
     self.gunConfig = {
         {shotCooldown = 0.54, damage = 10, bulletSpeed = 300, shootFunction = function() self:shootPistol() end},
-        {shotCooldown = 0.8, damage = 15, bulletSpeed = 230, shootFunction = function() self:shootShotgun() end},
-        {shotCooldown = 0.4, damage = 15, bulletSpeed = 340, shootFunction = function() self:shootPistol() end},
+        {shotCooldown = 0.92, damage = 15, bulletSpeed = 230, shootFunction = function() self:shootShotgun() end},
+        {shotCooldown = 0.3, damage = 15, bulletSpeed = 340, shootFunction = function() self:shootPistol() end},
         {shotCooldown = 0.6, damage = 10, bulletSpeed = 250, shootFunction = function() self:shootSquareGun() end},
     }
 

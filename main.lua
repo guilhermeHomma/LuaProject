@@ -193,9 +193,9 @@ function love.draw()
 
     love.graphics.setCanvas()
 
-    shader:send("threshold", 0.8)
-    shader:send("saturation", 1)
-    shader:send("brightness", 1.1)
+    shader:send("threshold", 0.01)
+    shader:send("saturation", 1.2)
+    shader:send("brightness", 1.2)
 
     love.graphics.setShader(shader)
     love.graphics.draw(canvas, 0, 0, 0, scale, scale)

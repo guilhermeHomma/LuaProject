@@ -21,7 +21,7 @@ end
 
 function MainMenu:load()
     baseMenu.load(self)
-    self.MenuTItle = "surbit island"
+    self.MenuTItle = "zisland"
     self.menuOptions = {"start game", "exit",} -- "options"}
     self.fontTitle = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 80)
     self.fontTitle:setFilter("nearest", "nearest")

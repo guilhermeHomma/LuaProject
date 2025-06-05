@@ -3,7 +3,7 @@ TransitionManager = {}
 function TransitionManager:load()
     self.alpha = 1
     self.targetAlpha = 0
-    self.speed = 2
+    self.speed = 4
     self.isTransiting = false
 
     self.transitionTimer = 0

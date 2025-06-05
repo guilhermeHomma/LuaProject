@@ -123,14 +123,14 @@ function Game:draw()
         end
     end
 
-    Player:drawS()    
     Player:drawSight()
 
     for _, item in ipairs(self.drawQueue) do
         local d = distance(camera:objectPosition(), item.object)
 
-        --local minDist = 70
-        --local maxDist = 250
+        local minDist = 20
+        local maxDist = 200
+
         local minDist = 110
         local maxDist = 260
 

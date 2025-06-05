@@ -16,19 +16,40 @@ vec3 adjustBrightness(vec3 color, float b) {
 vec4 effect(vec4 color, Image texture, vec2 texture_coords, vec2 screen_coords) {
     vec4 pixel = Texel(texture, texture_coords) * color;
 
-    float minDistance = 10000.0;
-    int minIndex = -1;
+    float minDist1 = 10000.0;
+    float minDist2 = 10000.0;
+    int index1 = -1;
+    int index2 = -1;
 
+    // Encontrar as duas cores mais próximas
     for (int i = 0; i < 9; i++) {
         float d = distance(pixel.rgb, oldColors[i]);
-        if (d < minDistance) {
-            minDistance = d;
-            minIndex = i;
+
+        if (d < minDist1) {
+            minDist2 = minDist1;
+            index2 = index1;
+
+            minDist1 = d;
+            index1 = i;
+        } else if (d < minDist2) {
+            minDist2 = d;
+            index2 = i;
         }
     }
 
-    if (minIndex >= 0 && (threshold <= 0.0 || minDistance < threshold)) {
-        pixel.rgb = newColors[minIndex];
+    if (index1 >= 0) {
+        if (threshold <= 0.0 || minDist1 < threshold) {
+            // 👉 Se estiver dentro do threshold → substitui direto
+            pixel.rgb = newColors[index1];
+        } else {
+            // 👉 Fora do threshold → interpola entre as duas cores mais próximas
+            float t = minDist1 / (minDist1 + minDist2 + 0.00001);  // Peso da interpolação
+
+            vec3 color1 = newColors[index1];
+            vec3 color2 = (index2 >= 0) ? newColors[index2] : color1;
+
+            pixel.rgb = mix(color1, color2, t);
+        }
     }
 
     // Aplicar saturação e brilho
