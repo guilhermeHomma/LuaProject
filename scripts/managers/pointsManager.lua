@@ -36,13 +36,13 @@ function PointsManager:draw()
     local textWidth = self.font:getWidth(self.points)
     local x = love.graphics.getWidth() / scale - textWidth - 15
 
-    x = 112
-    local y = 12
+    x = 66
+    local y = 6
     
     love.graphics.setFont(self.font)
     --love.graphics.setColor(0.274, 0.4, 0.45, 1)
     love.graphics.setColor(0.05, 0, 0.05, 1)
-    love.graphics.print(self.points, x + 3, y + 3)
+    love.graphics.print(self.points, x+3, y + 3)
     
     love.graphics.setColor(1, 1, 1)
     if self.animationTimer <= 0.1 or (self.animationTimer <= 0.3 and self.animationTimer > 0.2) then

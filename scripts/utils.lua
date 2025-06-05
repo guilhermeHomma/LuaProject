@@ -62,7 +62,7 @@ end
 
 function soundPosition(player, soundObject) 
     local playerDistanceX, playerDistanceY = vectorDistance(Player, soundObject)
-    return -playerDistanceX/30, -playerDistanceY/30
+    return -playerDistanceX/30/2, -playerDistanceY/30/2
 end 
 
 function mousePosition()

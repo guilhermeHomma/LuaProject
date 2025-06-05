@@ -11,22 +11,29 @@ function Gun:load()
     self.centerDistance = 0
     self.bullets = {}
     self.gunSheet = love.graphics.newImage("assets/sprites/player/guns.png")
+    self.bulletSheet = love.graphics.newImage("assets/sprites/player/gun-bullet.png")
     self.gunSheet:setFilter("nearest", "nearest")
+    self.bulletSheet:setFilter("nearest", "nearest")
     self.squareAngle = 0
-    self.gunIndex = 1 -- 1 2 ou 3
+    self.gunIndex = 2 -- 1 2 ou 3
     self.height = 16
     self.angle = 0
 
     self.gunConfig = {
-        {shotCooldown = 0.54, damage = 10, bulletSpeed = 300, shootFunction = function() self:shootPistol() end},
-        {shotCooldown = 0.92, damage = 15, bulletSpeed = 230, shootFunction = function() self:shootShotgun() end},
-        {shotCooldown = 0.3, damage = 15, bulletSpeed = 340, shootFunction = function() self:shootPistol() end},
-        {shotCooldown = 0.6, damage = 10, bulletSpeed = 250, shootFunction = function() self:shootSquareGun() end},
+        {shotCooldown = 0.54, magCount = 12 ,magCapacity = 6, damage = 10, bulletSpeed = 300, shootFunction = function() self:shootPistol() end},
+        {shotCooldown = 0.92, magCount = 15 ,magCapacity = 6, damage = 15, bulletSpeed = 230, shootFunction = function() self:shootShotgun() end},
+        {shotCooldown = 0.3, magCount = 10, magCapacity = 10, damage = 15, bulletSpeed = 340, shootFunction = function() self:shootPistol() end},
+        {shotCooldown = 0.6, magCount = 12, magCapacity = 8, damage = 10, bulletSpeed = 250, shootFunction = function() self:shootSquareGun() end},
     }
+    self.currentMagCapacity = self.gunConfig[self.gunIndex].magCapacity
+    self.currentMagCount = self.gunConfig[self.gunIndex].magCount
 
     self.shootTimer = 0
     self.showGunTime = 0.5
     self.showGun = false
+
+    self.font = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 32)
+    self.font:setFilter("nearest", "nearest")
 end
 
 function Gun:update(dt, playerX, playerY)
@@ -76,13 +83,15 @@ function Gun:shootShotgun()
     table.insert(self.bullets, bullet)
 
     local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
-
+    self.currentMagCapacity = self.currentMagCapacity - 3
     bulletSound:setVolume(1)
     bulletSound:setPitch(0.7 + math.random() * 0.1)
     bulletSound:play()
 end
 
 function Gun:shootPistol()
+    
+
     local angle = mouseAngle() + (math.random() * 0.1) - 0.05
 
     local offsetX = math.cos(angle) * 5
@@ -90,6 +99,8 @@ function Gun:shootPistol()
 
     local damage = self.gunConfig[self.gunIndex].damage
     local bulletSpeed = self.gunConfig[self.gunIndex].bulletSpeed
+
+    self.currentMagCapacity = self.currentMagCapacity - 1
 
     local bullet = Bullet:new(self.x + offsetX, self.y + offsetY, angle, self.height, bulletSpeed, damage)
     table.insert(self.bullets, bullet)
@@ -100,7 +111,6 @@ function Gun:shootPistol()
     bulletSound:setPitch(0.9 + math.random() * 0.1)
     bulletSound:play()
 end
-
 
 function Gun:shootSquareGun()
     local angle = mouseAngle() + (math.random() * 0.1) - 0.05
@@ -118,7 +128,7 @@ function Gun:shootSquareGun()
     table.insert(self.bullets, bullet)
 
     local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
-
+    self.currentMagCapacity = self.currentMagCapacity - 2
     bulletSound:setVolume(0.8)
     bulletSound:setPitch(0.9 + math.random() * 0.1)
     bulletSound:play()
@@ -137,9 +147,27 @@ function Gun:shoot()
     self.showGun = true
     self.shootTimer = 0 - math.random() * 0.1
 
-    self.gunConfig[self.gunIndex].shootFunction(self)
+    if self.currentMagCapacity > 0 then
+        self.gunConfig[self.gunIndex].shootFunction(self)
+        camera:shake(80, 0.88)
+    elseif self.currentMagCount > 0 then
+        self.currentMagCount = self.currentMagCount - 1
+        self.currentMagCapacity = self.gunConfig[self.gunIndex].magCapacity
+        local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
+        bulletSound:setVolume(0.1)
+        bulletSound:setPitch(1.6 + math.random() * 0.1)
+        bulletSound:play()
+        self.shootTimer = self.shootTimer + self.gunConfig[self.gunIndex].shotCooldown / 2
 
-    camera:shake(80, 0.88)
+    else
+        local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
+        bulletSound:setVolume(0.2)
+        bulletSound:setPitch(1.9 + math.random() * 0.1)
+        bulletSound:play()
+    end 
+        
+
+    
 end
 
 function Gun:aim()
@@ -152,6 +180,9 @@ function Gun:changeGun(index)
     self.gunIndex = index
     self.showGun = true
     self.shootTimer = 0 - math.random() * 0.1
+
+    self.currentMagCapacity = self.gunConfig[self.gunIndex].magCapacity
+    self.currentMagCount = self.gunConfig[self.gunIndex].magCount
 end
 
 function Gun:drawSight()
@@ -171,13 +202,13 @@ function Gun:drawUI()
     love.graphics.setLineWidth(line)
     love.graphics.setColor(hexToRGB("090909"))
     love.graphics.rectangle("line", startX+line, startY+line, size, size)
-    love.graphics.rectangle("line", startX + size + 10+line, startY+line, size, size)
+    --love.graphics.rectangle("line", startX + size + 10+line, startY+line, size, size)
     love.graphics.setColor(1, 1, 1, 1)
     
     love.graphics.rectangle("line", startX, startY, size, size)
     love.graphics.setColor(0.274, 0.4, 0.45, 1)
 
-    love.graphics.rectangle("line", startX + size + 10, startY, size, size)
+    --love.graphics.rectangle("line", startX + size + 10, startY, size, size)
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.setLineWidth(1)
     local quad = love.graphics.newQuad(
@@ -192,6 +223,45 @@ function Gun:drawUI()
         self.size / 2
     )
 
+    local text = self.currentMagCount .. "/" .. self.gunConfig[self.gunIndex].magCount
+    local textWidth = self.font:getWidth(text)
+
+    local x = 66
+    local y = 27
+    
+    love.graphics.setFont(self.font)
+    --love.graphics.setColor(0.05, 0, 0.05, 1)
+    love.graphics.print(text, x, y)
+
+    local startX = 12
+    local startY = 81
+    for i = 1, self.gunConfig[self.gunIndex].magCapacity do
+        local quad = love.graphics.newQuad(
+        0, 0,
+        self.size, self.size,
+        self.bulletSheet:getDimensions()
+        )   
+        
+        local quad2 = love.graphics.newQuad(
+        self.size, 0,
+        self.size, self.size,
+        self.bulletSheet:getDimensions()
+        )  
+
+        love.graphics.draw(
+            self.bulletSheet, quad2, startX,
+            startY + i * 18, 0, 3, 3, 0,
+            0
+        )
+
+        if i <= self.currentMagCapacity then
+            love.graphics.draw(
+                self.bulletSheet, quad, startX,
+                startY + i * 18, 0, 3, 3, 0,
+                0
+            )
+        end
+    end
 end
 
 function Gun:draw()
