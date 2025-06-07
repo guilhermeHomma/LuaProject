@@ -21,7 +21,7 @@ end
 
 function MainMenu:load()
     baseMenu.load(self)
-    self.MenuTItle = "zisland"
+    self.MenuTItle = "mobize"
     self.menuOptions = {"start game", "exit",} -- "options"}
     self.fontTitle = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 80)
     self.fontTitle:setFilter("nearest", "nearest")
@@ -42,11 +42,11 @@ end
 
 function MainMenu:draw()
 
-    love.graphics.setColor(hexToRGB("ffffff"))
+    love.graphics.setColor(hexToRGB("090909"))
     love.graphics.rectangle("fill", 0, 0, baseWidth, baseHeight)
 
     local quad = animationQuads[currentFrame]
-    love.graphics.draw(sheetImage, quad, -6, -6, 0, 3, 3)
+    --love.graphics.draw(sheetImage, quad, -6, -6, 0, 3, 3)
 
 
     baseMenu.draw(self)

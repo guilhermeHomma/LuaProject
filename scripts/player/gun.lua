@@ -11,11 +11,12 @@ function Gun:load()
     self.centerDistance = 0
     self.bullets = {}
     self.gunSheet = love.graphics.newImage("assets/sprites/player/guns.png")
+    self.particlesshootSheet = love.graphics.newImage("assets/sprites/particles/gunSmoke.png")
     self.bulletSheet = love.graphics.newImage("assets/sprites/player/gun-bullet.png")
     self.gunSheet:setFilter("nearest", "nearest")
     self.bulletSheet:setFilter("nearest", "nearest")
     self.squareAngle = 0
-    self.gunIndex = 2 -- 1 2 ou 3
+    self.gunIndex = 1 -- 1 2 ou 3
     self.height = 16
     self.angle = 0
 
@@ -85,7 +86,7 @@ function Gun:shootShotgun()
     local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
     self.currentMagCapacity = self.currentMagCapacity - 3
     bulletSound:setVolume(1)
-    bulletSound:setPitch(0.7 + math.random() * 0.1)
+    bulletSound:setPitch((0.7 + math.random() * 0.1) * GAME_PITCH)
     bulletSound:play()
 end
 
@@ -108,7 +109,7 @@ function Gun:shootPistol()
     local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
 
     bulletSound:setVolume(0.8)
-    bulletSound:setPitch(0.9 + math.random() * 0.1)
+    bulletSound:setPitch((0.9 + math.random() * 0.1) * GAME_PITCH)
     bulletSound:play()
 end
 
@@ -130,14 +131,14 @@ function Gun:shootSquareGun()
     local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
     self.currentMagCapacity = self.currentMagCapacity - 2
     bulletSound:setVolume(0.8)
-    bulletSound:setPitch(0.9 + math.random() * 0.1)
+    bulletSound:setPitch((0.9 + math.random() * 0.1) * GAME_PITCH)
     bulletSound:play()
 end
 
 function Gun:shootRaygun()
     local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
     bulletSound:setVolume(0.5)
-    bulletSound:setPitch(1.0 + math.random() * 0.1)
+    bulletSound:setPitch((1.0 + math.random() * 0.1) * GAME_PITCH)
     bulletSound:play()
 end
 
@@ -155,14 +156,14 @@ function Gun:shoot()
         self.currentMagCapacity = self.gunConfig[self.gunIndex].magCapacity
         local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
         bulletSound:setVolume(0.1)
-        bulletSound:setPitch(1.6 + math.random() * 0.1)
+        bulletSound:setPitch((1.6 + math.random() * 0.1) * GAME_PITCH)
         bulletSound:play()
         self.shootTimer = self.shootTimer + self.gunConfig[self.gunIndex].shotCooldown / 2
 
     else
         local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
         bulletSound:setVolume(0.2)
-        bulletSound:setPitch(1.9 + math.random() * 0.1)
+        bulletSound:setPitch((1.9 + math.random() * 0.1) * GAME_PITCH)
         bulletSound:play()
     end 
         

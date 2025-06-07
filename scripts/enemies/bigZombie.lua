@@ -5,10 +5,10 @@ BigZombie.__index = BigZombie
 
 function BigZombie:new(x, y)
     local zombie = Zombie.new(self, x, y)
-    zombie.speed = math.random(38, 45)
+    zombie.speed = math.random(33, 40)
     zombie.damageTimer = 0.1
-    zombie.dropPoints = 15
-    zombie.totalLife = 60
+    zombie.dropPoints = 25
+    zombie.totalLife = 70
     zombie.life = zombie.totalLife
     return zombie
 end
@@ -33,7 +33,7 @@ function BigZombie:takeDamage(damage, dx, dy)
 
     local bulletSound = love.audio.newSource("assets/sfx/enemyDamage.mp3", "static")
     bulletSound:setVolume(2)
-    bulletSound:setPitch(0.6 + math.random() * 0.1)
+    bulletSound:setPitch((0.6 + math.random() * 0.1) * GAME_PITCH)
     bulletSound:play()
 end
 
@@ -49,7 +49,7 @@ function BigZombie:noiseCheck(dt)
 
         self.noise:setPosition(soundPositionX, soundPositionY, 0)
         self.noise:setVolume(1)
-        self.noise:setPitch(0.65 + math.random() * 0.2)
+        self.noise:setPitch((0.75 + math.random() * 0.2) * GAME_PITCH)
         self.noise:play()
     end
 end

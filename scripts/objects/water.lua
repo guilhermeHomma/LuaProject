@@ -47,6 +47,7 @@ function Water:new(x, y, quadIndex, collider)
 end
 
 function Water:update(dt)
+
     addToDrawQueue(self.yWorld-16, self)
     self.timer = self.timer + dt
     if self.timer >= 0.9 then

@@ -19,7 +19,7 @@ end
 
 
 function babyZombie:takeDamage(damage, dx, dy)
-    self.animationTimer = 0.3
+    self.animationTimer = 0.2
     self.state = babyZombie.states.damage
     self.stateTimer = 0
     self.kbdx = dx
@@ -33,7 +33,7 @@ function babyZombie:takeDamage(damage, dx, dy)
 
     local bulletSound = love.audio.newSource("assets/sfx/enemyDamage.mp3", "static")
     bulletSound:setVolume(2)
-    bulletSound:setPitch(0.6 + math.random() * 0.1)
+    bulletSound:setPitch((0.6 + math.random() * 0.1) * GAME_PITCH)
     bulletSound:play()
 end
 
@@ -49,7 +49,7 @@ function babyZombie:noiseCheck(dt)
 
         self.noise:setPosition(soundPositionX, soundPositionY, 0)
         self.noise:setVolume(1)
-        self.noise:setPitch(2 + math.random() * 0.2)
+        self.noise:setPitch((2 + math.random() * 0.2) * GAME_PITCH)
         self.noise:play()
     end
 end

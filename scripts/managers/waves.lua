@@ -41,9 +41,9 @@ function WaveManager:instanceEnemy()
 
     local enemyX, enemyY = self:enemyPosition()
     --and self.wave > 8
-    if math.random(1, 9) > 8 and self.wave > 5 then
+    if math.random(1, 9) > 8  then
         table.insert(Game.enemies, BigZombie:new(enemyX, enemyY) )
-    elseif math.random(1, 7) > 6 and self.wave > 10 then
+    elseif math.random(1, 7) > 6  then
         table.insert(Game.enemies, BabyZombie:new(enemyX, enemyY))
     else
         table.insert(Game.enemies, Zombie:new(enemyX, enemyY))

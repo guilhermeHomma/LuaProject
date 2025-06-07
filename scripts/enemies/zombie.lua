@@ -228,7 +228,7 @@ function Zombie:noiseCheck(dt)
 
         self.noise:setPosition(soundPositionX, soundPositionY, 0)
         self.noise:setVolume(1)
-        self.noise:setPitch(1.2 + math.random() * 0.2)
+        self.noise:setPitch((1.2 + math.random() * 0.2) * GAME_PITCH)
         self.noise:play()
     end
 end
@@ -324,7 +324,7 @@ function Zombie:takeDamage(damage, dx, dy)
 
     local bulletSound = love.audio.newSource("assets/sfx/enemyDamage.mp3", "static")
     bulletSound:setVolume(2)
-    bulletSound:setPitch(0.8 + math.random() * 0.1)
+    bulletSound:setPitch((0.8 + math.random() * 0.1) * GAME_PITCH)
     bulletSound:play()
 end
 
@@ -335,7 +335,7 @@ function Zombie:death()
 
     local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
     bulletSound:setVolume(0.3)
-    bulletSound:setPitch(0.8)
+    bulletSound:setPitch(0.8 * GAME_PITCH)
     bulletSound:play()
     Game:increasePlayerPoints(self.dropPoints)
     self.noise:stop()
@@ -368,7 +368,7 @@ function Zombie:animate(startFrame, endFrame, dt)
                 self.noise:setPosition(soundPositionX, soundPositionY, 0)
                 stepsound:setVolume(0.4)
 
-                stepsound:setPitch(0.4 + math.random() * 0.4)
+                stepsound:setPitch((0.4 + math.random() * 0.4) * GAME_PITCH)
                 stepsound:play()
             end
 

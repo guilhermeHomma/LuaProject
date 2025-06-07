@@ -126,7 +126,7 @@ function baseMenu:keypressed(key)
     elseif key == "return" or key == "space" then
         sound = love.audio.newSource("assets/sfx/menu/menu-selected.mp3", "static")
         sound:setPitch(1)
-        sound:setVolume(1)
+        sound:setVolume(0.2)
 
         self:onSelect()
     else

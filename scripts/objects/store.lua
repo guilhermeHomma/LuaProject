@@ -63,7 +63,7 @@ function Store:performBuy()
 
     local sound = love.audio.newSource("assets/sfx/store/buy-item.mp3", "static")
     sound:setVolume(1)
-    --sound:setPitch(0.95 + math.random() * 0.1)
+    sound:setPitch((0.95 + math.random() * 0.1) * GAME_PITCH)
     sound:play()
 
     Game:decreasePlayerPoints(currentPrice)

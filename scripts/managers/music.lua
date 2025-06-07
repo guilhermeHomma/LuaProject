@@ -36,6 +36,7 @@ function Music:startGame()
     self.pitch = 1
     self.musicIndex = 1
     self:startMusic()
+    GAME_PITCH = 1
 end
 
 function Music:startMusic()
@@ -60,6 +61,7 @@ end
 
 function Music:closeGame()
     self.targetVolume = 0.0
+    GAME_PITCH = 1
 end
 
 function Music:update(dt)
@@ -82,7 +84,7 @@ function Music:update(dt)
     end
     
     MusicPlayer:setVolume(self.volume * MUSIC_VOLUME)
-    MusicPlayer:setPitch(self.pitch)
+    MusicPlayer:setPitch(self.pitch  * GAME_PITCH)
 
     if not MusicPlayer:isPlaying() and state == STATES.game then
         self.musicIndex = self.musicIndex + 1

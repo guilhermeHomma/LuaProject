@@ -5,6 +5,7 @@ local Player = {}
 local Bullet = require("scripts/bullet")
 local Particle = require("scripts/particles/particle")
 local Tilemap = require("scripts/tilemap")
+local TransitionManager = require("scripts.managers.transitionManager")
 
 function Player:load(camera)
     self.x = 0
@@ -84,7 +85,7 @@ function Player:updateAnimation(dt, moving)
             local stepsound = love.audio.newSource("assets/sfx/footsteps/foot-steps-0.mp3", "static")
 
             stepsound:setVolume(0.75)
-            stepsound:setPitch(0.9 + math.random() * 0.4)
+            stepsound:setPitch((0.9 + math.random() * 0.4) * GAME_PITCH)
             stepsound:play()
 
         end
@@ -179,15 +180,22 @@ function Player:checkDamage()
             camera:shake(120, 0.95)
             self.life = self.life - 1
             local damageSound = love.audio.newSource("assets/sfx/damage.mp3", "static")
-            local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
-            bulletSound:setPitch(1.4 + math.random() * 0.1)
-            bulletSound:setVolume(0.4)
-            bulletSound:play()
+            local sound = love.audio.newSource("assets/sfx/menu/eletric-transition.mp3", "static")
+            sound:setVolume(0.9)
+            sound:setPitch((1.5 + math.random() * 0.1) * GAME_PITCH)
+            sound:play()
 
+            TransitionManager.distortion = 1
+            TransitionManager.distortionTimer = 0.5
             self.damageTimer = 0
             damageSound:setVolume(1.8)
-            damageSound:setPitch(0.9 + math.random() * 0.2)
+            damageSound:setPitch((0.9 + math.random() * 0.2) * GAME_PITCH)
             damageSound:play()
+            if self.life > 0 then
+                GAME_PITCH = 0.7
+            else
+                TransitionManager.distortionTimer = 1
+            end
             break
         end
     end

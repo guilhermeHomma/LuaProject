@@ -70,6 +70,15 @@ function Game:update(dt)
     self.drawQueue = {}
     --love.audio.setPosition(Player.x, Player.y, 0)
 
+    if GAME_PITCH ~= 1 then
+        
+        GAME_PITCH = GAME_PITCH + (1 - GAME_PITCH) * dt *  1.3
+        
+        if math.abs(1 - GAME_PITCH) < 0.01 then
+            GAME_PITCH = 1
+        end
+    end
+
     for _, enemy in ipairs(self.enemies) do
         if enemy.isAlive then
             enemy:update(dt) 

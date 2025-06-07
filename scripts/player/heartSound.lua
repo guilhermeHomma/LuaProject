@@ -29,7 +29,7 @@ function HeartSound:update(dt)
     if Player.life == 1 then 
         soundPlayer:setVolume(0.5)
     elseif Player.life == 2 then
-        soundPlayer:setVolume(0.2)
+        soundPlayer:setVolume(0.1)
     else 
         self:stop()
     end

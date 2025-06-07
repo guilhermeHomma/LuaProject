@@ -1,5 +1,5 @@
 function love.conf(t)
-    t.window.title = "Zombit Beach"
+    t.window.title = "mobize"
     t.window.resizable = true 
 
     t.window.width = 1600
@@ -23,9 +23,11 @@ function love.conf(t)
     t.window.width = 1280
     t.window.height = 720 
 
-    t.window.width = 1280
-    t.window.height = 720
+
 
     t.window.width = 960 * 1.5
     t.window.height = 540 * 1.5
+
+    t.window.width = 1280
+    t.window.height = 720
 end

@@ -27,13 +27,15 @@ shader:send("oldColors", unpack(oldColors))
 shader:send("newColors", unpack(newColors))
 
 
+
 DEBUG = false
 FPS = false
 
 scale = 1
 
 MUSIC_VOLUME = 0.9
-GAME_VOLUME = 0.4
+GAME_VOLUME = 0.8
+GAME_PITCH = 1
 
 function love.load()
     --love.window.setMode(0, 0, { fullscreen = true })
@@ -46,6 +48,7 @@ function love.load()
 
     scale = math.max(scaleX, scaleY)
     love.audio.setVolume(GAME_VOLUME)
+
     MainMenu:load()
     AmbienceSound:load()
     PauseMenu:load()
@@ -93,6 +96,7 @@ function changePause()
         state = (state == STATES.gamePause) and STATES.game or STATES.gamePause
 
         local isPaused = state == STATES.gamePause
+        TransitionManager.distortion = 0.4
         Music:changePause(isPaused)
 
     end
@@ -196,6 +200,7 @@ function love.draw()
     shader:send("threshold", 0.01)
     shader:send("saturation", 1.2)
     shader:send("brightness", 1.2)
+    shader:send("distortion", TransitionManager.distortion)
 
     love.graphics.setShader(shader)
     love.graphics.draw(canvas, 0, 0, 0, scale, scale)
