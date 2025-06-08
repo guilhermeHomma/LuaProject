@@ -2,6 +2,7 @@
 
 local HeartSound = {}
 soundPlayer = love.audio.newSource("assets/sfx/player/heart.mp3", "stream")
+local TransitionManager = require("scripts.managers.transitionManager")
 
 function HeartSound:load()    
     soundPlayer:stop()
@@ -35,7 +36,11 @@ function HeartSound:update(dt)
     end
     
     if not soundPlayer:isPlaying() and (Player.life == 1 or Player.life == 2) and state == STATES.game then
-        
+        if Player.life == 1 then
+            TransitionManager.distortion = 0.4
+        else
+            TransitionManager.distortion = 0.1
+        end
         soundPlayer:play()
     end
 end

@@ -99,11 +99,11 @@ function Grass:update(dt)
     if target ~= 0 then speed = 15 end
 
     if not self.tile == 1 then 
-        addToDrawQueue(self.y + 2, self)
+        addToDrawQueue(self.y , self)
     else
         addToDrawQueue(self.y + 8, self)
-        
     end
+    
     self.collisionDirection = self.collisionDirection + (target - self.collisionDirection) * dt * speed
 
     self.shaderDirection = (math.sin(love.timer.getTime() + (self.y/10)   )) / 2 + 1  + self.collisionDirection*0.7

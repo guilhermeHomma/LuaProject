@@ -38,7 +38,7 @@ GAME_VOLUME = 0.8
 GAME_PITCH = 1
 
 function love.load()
-    --love.window.setMode(0, 0, { fullscreen = true })
+    love.window.setMode(0, 0, { fullscreen = true })
     local scaleX = love.graphics.getWidth() / baseWidth
     local scaleY = love.graphics.getHeight() / baseHeight
 

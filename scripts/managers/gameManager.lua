@@ -36,6 +36,8 @@ function Game:load()
     self.particles = {}
     --self:openNorth()
     --self:openSouth()
+
+    
 end
 
 function Game:openSouth()
@@ -69,15 +71,14 @@ end
 function Game:update(dt)
     self.drawQueue = {}
     --love.audio.setPosition(Player.x, Player.y, 0)
+    local targetPitch = 1
 
-    if GAME_PITCH ~= 1 then
-        
-        GAME_PITCH = GAME_PITCH + (1 - GAME_PITCH) * dt *  1.3
-        
-        if math.abs(1 - GAME_PITCH) < 0.01 then
-            GAME_PITCH = 1
-        end
+    if Player.life == 1
+    then
+        targetPitch = 0.9
     end
+    GAME_PITCH = transitionValue(GAME_PITCH, targetPitch, 1.3, dt)
+
 
     for _, enemy in ipairs(self.enemies) do
         if enemy.isAlive then
@@ -168,6 +169,12 @@ function Game:draw()
     if DEBUG then
         love.graphics.print("enemies qty: " .. #self.enemies, 10, 110)
     end
+
+    --love.graphics.setColor(0.3, 0.45, 0.45, Player.damageAlha)
+    love.graphics.setColor(0, 0, 0.1, Player.damageAlha)
+    love.graphics.rectangle("fill", 0, 0, baseWidth, baseHeight)
+    love.graphics.setColor(1, 1, 1)
+
 end
 
 function Game:keypressed(key)

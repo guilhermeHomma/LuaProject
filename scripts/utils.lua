@@ -8,6 +8,18 @@ function checkCollision(a, b)
            a.y + a.height > b.y
 end
 
+function transitionValue(value, targetValue, speed, dt)
+
+    if value ~= targetValue then
+        value = value + (targetValue - value) * dt *  speed
+        if math.abs(targetValue - value) < 0.001 then
+            value = targetValue
+        end
+    end
+
+    return value
+end
+
 function drawOutline(text, x, y, width, def, color)
     if not color then color = "090909" end
     love.graphics.setColor(hexToRGB(color))

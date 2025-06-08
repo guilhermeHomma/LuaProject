@@ -50,6 +50,8 @@ function Player:load(camera)
         table.insert(self.quads, quad)
     end
 
+    self.damageAlha = 0
+
 end
 
 function Player:updateAnimation(dt, moving)
@@ -95,6 +97,15 @@ function Player:updateAnimation(dt, moving)
 end
 
 function Player:update(dt)
+
+    local damageAlphaTarget = 0
+
+    if self.life == 1 then 
+        damageAlphaTarget = 0.15
+    end
+    
+    self.damageAlha = transitionValue(self.damageAlha, damageAlphaTarget, 1.3, dt)
+
     if not self.isAlive then
         return
     end
@@ -191,7 +202,9 @@ function Player:checkDamage()
             damageSound:setVolume(1.8)
             damageSound:setPitch((0.9 + math.random() * 0.2) * GAME_PITCH)
             damageSound:play()
+            self.damageAlha = 0.2
             if self.life > 0 then
+                
                 GAME_PITCH = 0.7
             else
                 TransitionManager.distortionTimer = 1

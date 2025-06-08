@@ -11,7 +11,7 @@ function Gun:load()
     self.centerDistance = 0
     self.bullets = {}
     self.gunSheet = love.graphics.newImage("assets/sprites/player/guns.png")
-    self.particlesshootSheet = love.graphics.newImage("assets/sprites/particles/gunSmoke.png")
+    
     self.bulletSheet = love.graphics.newImage("assets/sprites/player/gun-bullet.png")
     self.gunSheet:setFilter("nearest", "nearest")
     self.bulletSheet:setFilter("nearest", "nearest")
@@ -35,6 +35,12 @@ function Gun:load()
 
     self.font = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 32)
     self.font:setFilter("nearest", "nearest")
+
+
+    self.particlesshootSheet = love.graphics.newImage("assets/sprites/particles/gunSmoke.png")
+    self.particlesTimer = 0
+    self.showParticles = false
+
 end
 
 function Gun:update(dt, playerX, playerY)
@@ -43,6 +49,7 @@ function Gun:update(dt, playerX, playerY)
     self.angle = math.floor(mouseAngle() * 6) / 6
     self.squareAngle = self.squareAngle + 0.8*dt
     self.shootTimer = self.shootTimer + dt
+    self.particlesTimer = self.particlesTimer + dt
 
     if self.shootTimer >= self.showGunTime then
         self.showGun = false
@@ -63,6 +70,11 @@ function Gun:update(dt, playerX, playerY)
             table.remove(self.bullets, i)
         end
     end
+end
+
+function Gun:showshootParticles()
+    self.particlesTimer = 0
+    self.showParticles = true
 end
 
 function Gun:shootShotgun()
@@ -151,6 +163,8 @@ function Gun:shoot()
     if self.currentMagCapacity > 0 then
         self.gunConfig[self.gunIndex].shootFunction(self)
         camera:shake(80, 0.88)
+        self:showshootParticles()
+
     elseif self.currentMagCount > 0 then
         self.currentMagCount = self.currentMagCount - 1
         self.currentMagCapacity = self.gunConfig[self.gunIndex].magCapacity
@@ -193,6 +207,39 @@ function Gun:drawSight()
     love.graphics.setColor(0.274, 0.4, 0.45, 1)
 
     Player:drawSquare(mouseX, mouseY, self.squareAngle*3.5, 3)
+end
+
+function Gun:drawParticles()
+
+    local frameDuration = 0.04
+    local totalFrames = 6
+
+    if self.particlesTimer > frameDuration * totalFrames then return end
+
+    local frameIndex = math.floor(self.particlesTimer / frameDuration) % totalFrames
+
+    local quad = love.graphics.newQuad(
+        frameIndex * 16, 0,
+        16, 16,
+        self.particlesshootSheet:getDimensions()
+    )
+
+    local offsetX = math.cos(self.angle) * (self.centerDistance + 11)
+    local offsetY = math.sin(self.angle) * (self.centerDistance + 11)
+
+    for i = 1, 0, -0.5 do
+
+        love.graphics.draw(
+            self.particlesshootSheet,
+            quad,
+            self.x + offsetX,
+            self.y + offsetY - self.height + i,
+            self.angle,
+            0.7, 0.7,
+            0,
+            self.size / 2
+        )
+    end 
 end
 
 function Gun:drawUI()
@@ -266,6 +313,8 @@ function Gun:drawUI()
 end
 
 function Gun:draw()
+
+    self:drawParticles()
 
     local quad = love.graphics.newQuad(
         (self.gunIndex - 1) * self.size, 
