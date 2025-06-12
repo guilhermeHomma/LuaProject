@@ -3,7 +3,8 @@ require("scripts/utils")
 local Player = {}
 
 local Bullet = require("scripts/bullet")
-local Particle = require("scripts/particles/particle")
+local BallParticle = require("scripts/particles/ballParticle")
+local WalkParticle = require("scripts/particles/walkParticle")
 local Tilemap = require("scripts/tilemap")
 local TransitionManager = require("scripts.managers.transitionManager")
 
@@ -89,7 +90,17 @@ function Player:updateAnimation(dt, moving)
             stepsound:setVolume(0.75)
             stepsound:setPitch((0.9 + math.random() * 0.4) * GAME_PITCH)
             stepsound:play()
+            
+            local lifetime = math.random(45, 55) / 100
+            local particle = WalkParticle:new(self.x, self.y, lifetime)
 
+            if math.random() > 0.1 then
+                table.insert(Game.particles, particle)
+                if math.random() > 0.5 then
+                    local particle = WalkParticle:new(self.x + 2, self.y + 1, lifetime)
+                    table.insert(Game.particles, particle)
+                end
+            end
         end
     end
 
@@ -152,7 +163,7 @@ function Player:update(dt)
     self.x = self.x + sumMoveX
     self.y = self.y + sumMoveY
 
-    addToDrawQueue(self.y+7, Player)
+    addToDrawQueue(self.y + 6, Player)
 
     self.gun:update(dt, self.x, self.y)
 
@@ -195,8 +206,7 @@ function Player:checkDamage()
             sound:setVolume(0.9)
             sound:setPitch((1.5 + math.random() * 0.1) * GAME_PITCH)
             sound:play()
-
-            TransitionManager.distortion = 1
+            TransitionManager:setDistortion(1)
             TransitionManager.distortionTimer = 0.5
             self.damageTimer = 0
             damageSound:setVolume(1.8)
@@ -204,8 +214,7 @@ function Player:checkDamage()
             damageSound:play()
             self.damageAlha = 0.2
             if self.life > 0 then
-                
-                GAME_PITCH = 0.7
+                GAME_PITCH = 0.6
             else
                 TransitionManager.distortionTimer = 1
             end
@@ -252,16 +261,17 @@ function Player:death()
     end
     
     self.isAlive = false 
-    local particle = Particle:new(self.x, self.y, 13, 7,0.3)
-    table.insert(Game.particles, particle)
-    for i = 1, 7 do
-        local particle = Particle:new(
-            self.x + math.random(-3, 3),
-            self.y + math.random(-3, 3),
-            math.random(5, 15),
-            math.random(7, 8),
-            math.random(0.4 + i*0.05, 0.5 + i*0.05)
-        )
+    for i = 1, -3 do
+        local angle = math.random() * 2 * math.pi
+
+        local dx = math.cos(angle)
+        local dy = math.sin(angle)
+        
+        local lifetime = math.random(30, 45) / 100
+        local size = math.random(8, 10) / 10
+        local particle = BallParticle:new(self.x, self.y, 1,dx, dy, lifetime, size)
+        table.insert(Game.particles, particle)
+        local particle = BallParticle:new(self.x, self.y, 1,-dx, -dy, lifetime, size)
         table.insert(Game.particles, particle)
     end
     playerDeath()

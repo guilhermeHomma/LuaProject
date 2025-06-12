@@ -19,7 +19,7 @@ function TileSet:createTileSet()
             local index = (y - 1) * 3 + x
 
             if y == 1 then 
-                self.tileSet[index] = love.graphics.newQuad(tileX, tileY-10, self.tileSize, self.tileSize+10, self.sheetWidth, self.sheetHeight)
+                self.tileSet[index] = love.graphics.newQuad(tileX, tileY-16, self.tileSize, self.tileSize, self.sheetWidth, self.sheetHeight)
             else
                 self.tileSet[index] = love.graphics.newQuad(tileX, tileY, self.tileSize, self.tileSize, self.sheetWidth, self.sheetHeight)
             end

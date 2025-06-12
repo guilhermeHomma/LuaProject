@@ -3,7 +3,7 @@ Particle.__index = Particle
 
 function Particle:new(x, y, height, radius, lifetime)
 
-    local particle = setmetatable({}, Particle)
+    local particle = setmetatable({}, {__index = self})
     particle.height = height
     particle.x = x
     particle.y = y
@@ -39,7 +39,6 @@ end
 
 function Particle:draw()
 
-    local alpha = 0.8
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.circle("fill", self.x, self.y -self.height, self.radius)
     love.graphics.setColor(1, 1, 1)

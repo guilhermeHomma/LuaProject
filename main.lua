@@ -19,13 +19,8 @@ state = STATES.mainMenu
 
 --baseWidth = 1120
 --baseHeight = 630
-local shader = love.graphics.newShader("scripts/shaders/palette.glsl")
+local shader = love.graphics.newShader("scripts/shaders/distortion.glsl")
 local paletteList = require("scripts/shaders/paletteList")
-local oldColors = paletteList[1]
-local newColors = paletteList[2]
-shader:send("oldColors", unpack(oldColors))
-shader:send("newColors", unpack(newColors))
-
 
 
 DEBUG = false
@@ -33,12 +28,12 @@ FPS = false
 
 scale = 1
 
-MUSIC_VOLUME = 0.9
+MUSIC_VOLUME = 0.3
 GAME_VOLUME = 0.8
 GAME_PITCH = 1
 
 function love.load()
-    love.window.setMode(0, 0, { fullscreen = true })
+    
     local scaleX = love.graphics.getWidth() / baseWidth
     local scaleY = love.graphics.getHeight() / baseHeight
 
@@ -79,7 +74,7 @@ function quitToMenu()
         Game:close()
         state=STATES.mainMenu
     end
-    TransitionManager:startTransition(function() callback() end, 10, 5)
+    TransitionManager:startTransition(function() callback() end, 14, 3)
 end
 
 function quitGame()
@@ -91,12 +86,21 @@ function quitGame()
     TransitionManager:startTransition(cb, 10, 1.4)
 end
 
+function fullscreen()
+    local isFullscreen = love.window.getFullscreen()
+    if isFullscreen then
+        love.window.setFullscreen(false)
+    else
+        love.window.setFullscreen(true)
+    end
+end
+
 function changePause()
     if state == STATES.game or state == STATES.gamePause then
         state = (state == STATES.gamePause) and STATES.game or STATES.gamePause
 
         local isPaused = state == STATES.gamePause
-        TransitionManager.distortion = 0.4
+        TransitionManager:setDistortion(0.4)
         Music:changePause(isPaused)
 
     end
@@ -110,12 +114,11 @@ function love.keypressed(key)
         changePause()
     end 
 
-    if key == "1" or key == "2" or key == "3" or key == "4" then
-        local paletteList = require("scripts/shaders/paletteList")
+    if key == "f11" then
+        fullscreen()
+    end
 
-        local newColors = paletteList[tonumber(key)]
-        shader:send("newColors", unpack(newColors))
-    end 
+
 
     if state == STATES.mainMenu then
         MainMenu:keypressed(key)
@@ -197,9 +200,8 @@ function love.draw()
 
     love.graphics.setCanvas()
 
-    shader:send("threshold", 0.01)
-    shader:send("saturation", 1.2)
-    shader:send("brightness", 1.2)
+    shader:send("saturation", 0.6)
+    shader:send("brightness", 1)
     shader:send("distortion", TransitionManager.distortion)
 
     love.graphics.setShader(shader)

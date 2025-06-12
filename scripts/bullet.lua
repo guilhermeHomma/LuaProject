@@ -20,6 +20,7 @@ function Bullet:new(x, y, angle, height, speed, damage, level)
     bullet.y = y
     bullet.dx = math.cos(angle) * speed
     bullet.dy = math.sin(angle) * speed
+    bullet.angle = angle
     bullet.radius = 1.3
     bullet.isAlive = true
     bullet.timer = 0
@@ -76,6 +77,8 @@ function Bullet:update(dt)
         bulletSound:setPitch((1.4 + math.random() * 0.3) * GAME_PITCH)
         bulletSound:play()
         self.isAlive = false
+
+        self:death()
     end
 
     self.lastParticle = self.lastParticle + dt
@@ -89,8 +92,22 @@ function Bullet:update(dt)
         if self:checkCollisionWithEnemy(enemy) and self.isAlive and enemy.isAlive then
             self.isAlive = false 
             enemy:takeDamage(self.damage, self.dx, self.dy)
+            self:death(0, 0)
         end
     end
+end
+
+function Bullet:death(dx, dy)
+    if not dy or not dy then
+        dx = math.cos(self.angle) / 2
+        dy = math.sin(self.angle) / 2
+    end
+
+    local angle = math.atan2(self.dy, self.dx)
+    local lifetime = math.random(15, 23) / 100
+    local particle = Ball:new(self.x, self.y, 5, -dx, -dy, lifetime, 0.6)
+    table.insert(Game.particles, particle)
+
 end
 
 function Bullet:drawShadow()
@@ -104,11 +121,9 @@ end
 function Bullet:draw()
     self:drawSquare(self.x, self.y -self.height, 90, self.radius*1.2)
 
-
     if self.level >= 2 then return end
 
     setColor255(0.70, 102, 115)
-
 
     local radius = self.radius * 1.4
 

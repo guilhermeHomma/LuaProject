@@ -37,9 +37,9 @@ function HeartSound:update(dt)
     
     if not soundPlayer:isPlaying() and (Player.life == 1 or Player.life == 2) and state == STATES.game then
         if Player.life == 1 then
-            TransitionManager.distortion = 0.4
+            TransitionManager:setDistortion(0.4)
         else
-            TransitionManager.distortion = 0.1
+            TransitionManager:setDistortion(0.1)
         end
         soundPlayer:play()
     end

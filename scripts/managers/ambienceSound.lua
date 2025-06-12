@@ -7,7 +7,7 @@ function AmbienceSound:load()
     self.targetPitch = 1
     self.pitch = 1
 
-    self.targetVolume = 0.05
+    self.targetVolume = 0.1
     self.volume = 0.05
 
     windSound:setLooping(true) 
@@ -24,10 +24,10 @@ function AmbienceSound:update(dt)
 
     if state == STATES.game or state == STATES.gameDead or state ==  STATES.mainMenu then
         self.targetPitch = 1
-        self.targetVolume = 0.03
+        self.targetVolume = 0.1
     elseif state == STATES.gamePause then
         self.targetPitch = 0.6
-        self.targetVolume = 0.03
+        self.targetVolume = 0.1
     else
         self.targetVolume = 0.0
     end

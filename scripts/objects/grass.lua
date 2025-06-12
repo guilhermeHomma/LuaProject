@@ -4,7 +4,7 @@ Grass.__index = Grass
 local sprite = love.graphics.newImage("assets/sprites/objects/grass/grass1.png")
 local sprite2 = love.graphics.newImage("assets/sprites/objects/grass/grass2.png")
 local sprite3 = love.graphics.newImage("assets/sprites/objects/grass/grass3.png")
-local sprite4 = love.graphics.newImage("assets/sprites/objects/grass/grass3.png")
+local sprite4 = love.graphics.newImage("assets/sprites/objects/grass/grass4.png")
 sprite:setFilter("nearest", "nearest")
 sprite2:setFilter("nearest", "nearest")
 sprite3:setFilter("nearest", "nearest")
@@ -34,9 +34,16 @@ grassShader:send("direction", 1.0)
 grassShader:send("spriteSize", {16.0, 16.0})
 
 
-local function getGrassIndex()
-    if math.random() < 0.6 then return 1 end
-    if math.random() < 0.5 then return 3 end
+local function getGrassIndex(tile)
+    if tile == 1 then
+        if math.random() < 0.1 then return 1 end
+        if math.random() < 0.6 then return 3 end
+        if math.random() < 0.4 then return 2 end
+    return 4 
+    end
+
+    if math.random() < 0.8 then return 1 end
+    if math.random() < 0.4 then return 3 end
     if math.random() < 0.15 then return 2 end
     return 4
 end
@@ -46,7 +53,7 @@ function Grass:new(x, y, tile)
 
     grass.x = x 
     grass.y = y 
-    grass.index = getGrassIndex()
+    grass.index = getGrassIndex(tile)
     grass.shaderDirection = 1
     grass.collisionDirection = 0
     grass.tile = tile

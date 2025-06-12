@@ -2,19 +2,24 @@ local Zombie = {}
 Zombie.__index = Zombie
 Zombie.states = { idle = 1, walk = 2, damage = 3 }
 
-local Particle = require("scripts/particles/particle")
+local ZParticle = require("scripts/particles/zombieDeadParticle")
 local Tilemap = require("scripts/tilemap")
 local whiteShader = love.graphics.newShader("scripts/shaders/whiteShader.glsl")
 
 
 require("scripts/utils")
 
-function Zombie:new(x, y)
+function Zombie:new(x, y, speed)
     local enemy = setmetatable({}, {__index = self})
+
+    local speedTotal = speed
+    if not speedTotal then
+        speedTotal = math.random(40, 50)
+    end
 
     enemy.x = x
     enemy.y = y
-    enemy.speed = math.random(40, 50)
+    enemy.speed = speedTotal
     enemy.totalLife = 40
     enemy.life = enemy.totalLife
     enemy.damageTimer = 0.1
@@ -60,7 +65,7 @@ function Zombie:new(x, y)
     enemy.animationSpeed = 0.15
     
     enemy.stateTimer = 0
-    enemy.idleDuration = math.random(0.7, 1.3)
+    enemy.idleDuration = math.random(7, 13) / 10
     enemy.walkDuration = math.random(4, 6)
 
     enemy.lastFlip = 0
@@ -96,6 +101,9 @@ local function sign(n)
 end
 
 function Zombie:update(dt)
+
+    addToDrawQueue(self.y + 6 + self.drawPriority, self)
+
     self.pathUpdateCounter = self.pathUpdateCounter + 1
 
     local velocityX = 0
@@ -244,7 +252,7 @@ function Zombie:stateManager(dt, animationDuration)
                 self.stateTimer = 0
             end
         elseif Player.isAlive then
-            self.idleDuration = math.random(0.7, 1.3)
+            self.idleDuration = math.random(7, 13) / 10
             self.state = Zombie.states.idle
         end
         self.stateTimer = 0
@@ -333,20 +341,17 @@ function Zombie:death()
         return
     end
 
-    local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
-    bulletSound:setVolume(0.3)
-    bulletSound:setPitch(0.8 * GAME_PITCH)
-    bulletSound:play()
+    if self.state == Zombie.states.damage then
+        return
+    end
+
+    local particle = ZParticle:new(self.x, self.y, self.spriteSheet)
+    table.insert(Game.particles, particle)
+
     Game:increasePlayerPoints(self.dropPoints)
     self.noise:stop()
 
     self.isAlive = false    
-    local particle = Particle:new(self.x, self.y, 12, 7,0.3)
-    table.insert(Game.particles, particle)
-    local particle = Particle:new(self.x +  math.random(-2, 2), self.y + math.random(-2, 2), math.random(5, 15), math.random(5, 7), math.random(0.2, 0.3))
-    table.insert(Game.particles, particle)
-    local particle = Particle:new(self.x +  math.random(-2,2), self.y + math.random(-2, 2), math.random(5, 15), math.random(5, 7), math.random(0.2, 0.3))
-    table.insert(Game.particles, particle)
 end
 
 function Zombie:animate(startFrame, endFrame, dt)
@@ -388,9 +393,6 @@ function Zombie:drawShadow()
         return
     end
 
-    local width = 14
-    local height = 14
-
     love.graphics.draw(self.spriteShadow, self.x - 6, self.y- 6, 0 , 1, 1)
 end
 
@@ -419,12 +421,18 @@ function Zombie:draw()
     end
 
     if self.state == Zombie.states.damage then
-        love.graphics.setShader(whiteShader)
+        if self.stateTimer < 0.015 then
+            
+            love.graphics.setColor(0, 0, 0, 1)
+        else
+            love.graphics.setShader(whiteShader)
+            
+        end
     end
 
     love.graphics.draw(self.spriteSheet, self.frames[self.currentFrame], xOffset +self.x, self.y, 0, scaleX, 1.5, self.frameWidth / 2, self.frameHeight)
     love.graphics.setShader()
-
+    love.graphics.setColor(1, 1, 1, 1)
     self:drawMouth()
 
 

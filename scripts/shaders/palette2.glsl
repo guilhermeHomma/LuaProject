@@ -80,7 +80,7 @@ vec4 effect(vec4 color, Image texture, vec2 texture_coords, vec2 screen_coords) 
 
         float influence = computeLightInfluence(screen_coords);
 
-        influence = floor(influence * 6.0) / 6.0;
+        //influence = floor(influence * 6.0) / 6.0;
         baseColor = mix(darkColor, lightColor, influence);
     }
 

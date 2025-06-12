@@ -83,7 +83,6 @@ function Game:update(dt)
     for _, enemy in ipairs(self.enemies) do
         if enemy.isAlive then
             enemy:update(dt) 
-            addToDrawQueue(enemy.y +6 + enemy.drawPriority, enemy)
         else
             table.remove(self.enemies, _)
         end
@@ -147,7 +146,7 @@ function Game:draw()
         local t = math.min(math.max((d - minDist) / (maxDist - minDist), 0), 1)
         local brightness = 1 - t * 0.8
         local r, g, b, a = 1,1,1,1
-        love.graphics.setColor(r * brightness, g * brightness, b * brightness, a)
+        --love.graphics.setColor(r * brightness, g * brightness, b * brightness, a)
         item.object:draw()
         love.graphics.setColor(r, g, b, a)
     end
@@ -179,12 +178,12 @@ end
 
 function Game:keypressed(key)
     if key == "f6" then
-        DEBUG = not DEBUG
+        --DEBUG = not DEBUG
     elseif key == "x" then
         Tilemap:keypressed(key)
     elseif key == "o" then
-        --DoorsManager:openSouth()
-        --DoorsManager:openNorth()
+        DoorsManager:openSouth()
+        DoorsManager:openNorth()
     elseif tonumber(key) then
         --self:changeShaders(tonumber(key))
     end

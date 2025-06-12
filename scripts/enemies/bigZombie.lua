@@ -66,7 +66,7 @@ function BigZombie:stateManager(dt, animationDuration)
                 self.stateTimer = 0
             end
         elseif Player.isAlive then
-            self.idleDuration = math.random(0.1, 0.15)
+            self.idleDuration = math.random(10, 15) / 100
             self.state = Zombie.states.idle
         end
         self.stateTimer = 0

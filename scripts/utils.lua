@@ -180,11 +180,15 @@ function autoTile(x, y, tilemap) -- grass wall
     if bottom and left then return 7 end
     if bottom and right then return 9 end
 
-    if leftNoBottom then return 13 end
-    if rightNoBottom then return 12 end
+
 
     if top then return 2 end
     if bottom then return 8 end
+
+
+    if leftNoBottom then return 13 end
+    if rightNoBottom then return 12 end
+
     if left then return 4 end
     if right then return 6 end
 

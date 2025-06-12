@@ -29,9 +29,10 @@ function Camera:new(x, y)
     cam.targetDistanceX = 0.5
     cam.targetDistanceY = 0.5
 
-    cam.minLeft = -1000
+    cam.minLeft = -1740
+    cam.maxRight = 838
     cam.minDown = 60
-    cam.maxTop = -590
+    cam.maxTop = -620
     cam.objectWorldPosition = cam:updateObjectPosition()
     return cam
 end
@@ -60,9 +61,10 @@ function Camera:update(dt)
         self.y = self.y + dy
         self.shakeIntensity = self.shakeIntensity * self.shakeDecay
     end
-    if self.y > self.minDown then self.y = self.minDown end
+    --if self.y > self.minDown then self.y = self.minDown end
     if self.x < self.minLeft then self.x = self.minLeft end
-    if self.y < self.maxTop then self.y = self.maxTop end
+    if self.x > self.maxRight then self.x = self.maxRight end
+    --if self.y < self.maxTop then self.y = self.maxTop end
 
     self.objectWorldPosition = self:updateObjectPosition()
 end

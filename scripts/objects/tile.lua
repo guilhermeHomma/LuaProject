@@ -7,7 +7,7 @@ function Tile:setTilemap(tilemap)
 end
 
 function Tile:new(x, y, quadIndex, collider)
-    if quadIndex == 14 and math.random() > 0.2 then
+    if quadIndex == 14 and math.random() > 0.4 then
         quadIndex = 18
     end
 
@@ -18,7 +18,13 @@ function Tile:new(x, y, quadIndex, collider)
     local tileSize = TileSet.tileSize
 
     tile.quad = tileSet[quadIndex]
+    tile.quad2 = tileSet[quadIndex]
     tile.quadIndex = quadIndex
+    if tile.quadIndex == 1 or tile.quadIndex == 2 or tile.quadIndex == 3 then
+        tile.quad2 = tileSet[quadIndex + 3]
+    end
+
+    
     tile.x = x
     tile.y = y
     tile.size = tileSize
@@ -41,8 +47,10 @@ function Tile:draw()
 
     if self.quadIndex == 14 or self.quadIndex == 18 then --box
         love.graphics.draw(tilesetImage, self.quad, self.xWorld, self.yWorld, 0, 1, 1, tileSize/2, tileSize*2)
+
     elseif self.quadIndex == 1 or self.quadIndex == 2 or self.quadIndex == 3  then
-        love.graphics.draw(tilesetImage, self.quad, self.xWorld, self.yWorld, 0, 1, 1, tileSize/2, tileSize+10)
+        love.graphics.draw(tilesetImage, self.quad, self.xWorld, self.yWorld - 16, 0, 1, 1, tileSize/2, tileSize)
+        love.graphics.draw(tilesetImage, self.quad2, self.xWorld, self.yWorld, 0, 1, 1, tileSize/2, tileSize)
     else
        love.graphics.draw(tilesetImage, self.quad, self.xWorld, self.yWorld, 0, 1, 1, tileSize/2, tileSize)
     end

@@ -211,8 +211,8 @@ end
 
 function Gun:drawParticles()
 
-    local frameDuration = 0.04
-    local totalFrames = 6
+    local frameDuration = 0.03
+    local totalFrames = 5
 
     if self.particlesTimer > frameDuration * totalFrames then return end
 
@@ -235,7 +235,7 @@ function Gun:drawParticles()
             self.x + offsetX,
             self.y + offsetY - self.height + i,
             self.angle,
-            0.7, 0.7,
+            1, 1,
             0,
             self.size / 2
         )

@@ -13,7 +13,7 @@ function WaveManager:load()
     self.wave = 0
     self.enemiesPerWave = 0
     self.spawnInterval = {0.1, 2}
-    self.nextInterval = 10
+    self.nextInterval = 0
     self.spawnTimer = 0
     self.enemiesSpawned = 0
 
@@ -40,8 +40,16 @@ end
 function WaveManager:instanceEnemy()
 
     local enemyX, enemyY = self:enemyPosition()
+
+    if self.wave == 1 then
+        
+        table.insert(Game.enemies, Zombie:new(enemyX, enemyY, math.random(28, 32)))
+
+    elseif self.wave < 4 then 
+        table.insert(Game.enemies, Zombie:new(enemyX, enemyY, math.random(30, 40)))
+
     --and self.wave > 8
-    if math.random(1, 9) > 8  and self.wave  >= 6 then
+    elseif math.random(1, 9) > 8  and self.wave  >= 6 then
         table.insert(Game.enemies, BigZombie:new(enemyX, enemyY) )
     elseif math.random(1, 7) > 6 and self.wave  >= 10  then
         table.insert(Game.enemies, BabyZombie:new(enemyX, enemyY))
@@ -77,7 +85,7 @@ end
 
 function WaveManager:startNextWave()
     self.wave = self.wave + 1
-    --self.nextInterval = 10
+    self.nextInterval = 4
     if self.wave == 14 then
         Game:openSouth()
     end

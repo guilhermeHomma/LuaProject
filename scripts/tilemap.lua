@@ -21,7 +21,7 @@ local tilemap = nil
 
 function loadTilemapFromImage()
     --map3 é o melhor
-    local imageData = love.image.newImageData("assets/sprites/map2.png")
+    local imageData = love.image.newImageData("assets/sprites/map4.png")
     local width, height = imageData:getDimensions()
     local tilemapLoad = {}
 
@@ -134,7 +134,7 @@ function Tilemap:load()
 
             if (tile == 0 or tile == 5 or tile == 6 or tile == 9 or (tile == 1 and not collider)) and math.random() > 0.45 then
                 local gx, gy = self:mapToWorld(x,y)
-                local grass = Grass:new(gx - 1, gy - 5, tile)
+                local grass = Grass:new(gx, gy - 5, tile)
                 table.insert(self.grass, grass)
                 if math.random() > 0.3 then
                     local gx, gy = self:mapToWorld(x,y)
@@ -155,8 +155,7 @@ function Tilemap:load()
                 table.insert(self.tiles, t)
 
             elseif tile == 3 then -- three
-                local indexes = {16, 17, 19}
-                local t = TreeTile:new(x, y, indexes[math.random(#indexes)], collider)
+                local t = TreeTile:new(x, y, tile, collider)
                 table.insert(self.tiles, t)
             
             elseif tile == 7 then --store

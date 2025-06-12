@@ -66,7 +66,7 @@ function babyZombie:stateManager(dt, animationDuration)
                 self.stateTimer = 0
             end
         elseif Player.isAlive then
-            self.idleDuration = math.random(0.15, 0.2)
+            self.idleDuration = math.random(15, 20) / 100
             self.state = Zombie.states.idle
         end
         self.stateTimer = 0
