@@ -1,7 +1,7 @@
 Store = setmetatable({}, {__index = Tile})
 Store.__index = Store
 
-local sheetImage = love.graphics.newImage("assets/sprites/objects/store.png")
+local sheetImage = love.graphics.newImage("assets/sprites/objects/pole.png")
 local sheetWidth, sheetHeight = sheetImage:getDimensions()
 local sheetGun = love.graphics.newImage("assets/sprites/player/guns.png")
 local font = love.graphics.newFont("assets/fonts/pixelart.ttf", 8)

@@ -37,13 +37,15 @@ end
 
 function ZombieParticle:death()
     self.isAlive = false
-
+    local playerDistance = distance(Player, self)
+    
     local bulletSound = love.audio.newSource("assets/sfx/particles/particle-end.mp3", "static")
+
+    getDistanceVolume(playerDistance, 0.2, 200)
     bulletSound:setVolume(0.1)
-    bulletSound:setPitch(1 + math.random() * GAME_PITCH)
+    bulletSound:setPitch((1 + math.random() * 0.1) * GAME_PITCH)
     bulletSound:play()
-
-
+    
     for i = 1, 3 do
         local angle = math.random() * 2 * math.pi
 
@@ -62,7 +64,7 @@ end
 function ZombieParticle:draw()
 
 
-    if self.timer < 0.1  then
+    if self.timer < 0.05  then
         love.graphics.setShader(whiteShader)   
     end
 
@@ -70,7 +72,7 @@ function ZombieParticle:draw()
     local sheetWidth = self.sprite:getWidth()
     local sheetHeight = self.sprite:getHeight()
     local quad = love.graphics.newQuad(7 * 32, 0, 32, 32, sheetWidth, sheetHeight)
-    if self.timer < 0.2 then
+    if self.timer < 0.3 then
         quad = love.graphics.newQuad(6 * 32, 0, 32, 32, sheetWidth, sheetHeight)
     end
     love.graphics.draw(self.sprite, quad, self.x, self.y + 3, 0, 1, 1.5, 32 / 2, 32)

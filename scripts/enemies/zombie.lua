@@ -233,9 +233,10 @@ function Zombie:noiseCheck(dt)
     if self.soundTimer >= 10 and Player.isAlive then
         self.soundTimer = 0
         local soundPositionX, soundPositionY = soundPosition(Player, self)
-
+        local playerDistance = distance(Player, self)
+        local volume = getDistanceVolume(playerDistance, 1, 200)
         self.noise:setPosition(soundPositionX, soundPositionY, 0)
-        self.noise:setVolume(1)
+        self.noise:setVolume(volume)
         self.noise:setPitch((1.2 + math.random() * 0.2) * GAME_PITCH)
         self.noise:play()
     end

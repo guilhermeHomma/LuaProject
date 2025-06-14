@@ -66,6 +66,10 @@ function getDistanceVolume(distance, maxVolume, maxDistance)
     return maxVolume * factor
 end
 
+function clamp(value, min, max)
+    return math.max(min, math.min(max, value))
+end
+
 function normalize(dx, dy)
     local mag = math.sqrt(dx * dx + dy * dy)
     if mag == 0 then return 0, 0 end
@@ -73,8 +77,14 @@ function normalize(dx, dy)
 end
 
 function soundPosition(player, soundObject) 
-    local playerDistanceX, playerDistanceY = vectorDistance(Player, soundObject)
-    return -playerDistanceX/30/2, -playerDistanceY/30/2
+    local dx = soundObject.x - player.x
+    local dy = soundObject.y - player.y
+
+    local pan = math.sin((dx / 30) / 2)
+
+    local depth = clamp(dy / 100, -1, 1)
+
+    return pan, depth
 end 
 
 function mousePosition()
