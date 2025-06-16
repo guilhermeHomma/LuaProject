@@ -9,6 +9,7 @@ require "scripts.objects.water"
 require "scripts.objects.tree"
 require "scripts.objects.grass"
 require "scripts.objects.house"
+require "scripts.objects.pole"
 
 tileSet = require("scripts.objects.tileset")
 
@@ -45,6 +46,7 @@ function loadTilemapFromImage()
                 {r = 0.5,   g = 0.5,   b = 0.5,   tile = 9}, -- sand
 
                 {r = 0.5,   g = 0.5,   b = 0,   tile = 10}, -- house                
+                {r = 0,   g = 0.5,   b = 0.5,   tile = 11}, -- pole                
             }
 
             for _, def in ipairs(tileDefinitions) do
@@ -128,6 +130,7 @@ function Tilemap:load()
                 self:hasTileClose(x, y, 8) or 
                 self:hasTileClose(x, y, 4) or 
                 self:hasTileClose(x, y, 9) or 
+                self:hasTileClose(x, y, 11) or 
                 self:hasTileClose(x, y, 6) then 
                 collider = true
             end 
@@ -149,6 +152,10 @@ function Tilemap:load()
                 local t = Water:new(x, y, index, c)
                 table.insert(self.tiles, t)
             elseif tile == 9 then
+
+            elseif tile == 11 then --house
+                local t = Pole:new(x, y, 30, collider)
+                table.insert(self.tiles, t)
             elseif tile == 10 then --house
 
                 local t = HouseTile:new(x, y, 30, collider)

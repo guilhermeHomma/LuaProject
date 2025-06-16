@@ -1,6 +1,6 @@
 local Ground = {}
 
-function Ground:load()
+function Ground:load(target)
     self.image = love.graphics.newImage("assets/sprites/ground.png")
     self.image:setFilter("nearest", "nearest")
     self.width = self.image:getWidth()

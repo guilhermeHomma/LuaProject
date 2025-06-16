@@ -9,15 +9,15 @@ font:setFilter("nearest", "nearest")
 
 
 camera = nil
-local target = {x = -140, y = 0}
+local target = {x = -330, y = 330}
 function GameIntro:load()
     
     math.randomseed(os.time())
     love.graphics.setDefaultFilter("nearest", "nearest")
-    camera = Camera:new(-140, -10, target)
+    camera = Camera:new(target.x, target.y-10, target)
 
     Ground:load()
-    Clouds:load({x = 1, y = 1})
+    Clouds:load(target)
     Tilemap:load()
 
     self.drawQueue = {}
@@ -37,6 +37,9 @@ function GameIntro:update(dt)
     self.drawQueue = {}
     self.timer = self.timer + dt
     local targetPitch = 1
+
+    target.x = target.x + 0.7 * dt
+    target.y = target.y - 1 * dt
 
     Clouds:update(dt)
 
@@ -62,9 +65,7 @@ function GameIntro:draw()
 
     love.graphics.scale(3, YSCALE) 
 
-    local mockPlayer = {x = 0, y = 0}
-
-    Ground:draw(mockPlayer)
+    Ground:draw(target)
     
     table.sort(self.drawQueue, function(a, b) return a.priority < b.priority end)
     Clouds:drawShadow()
@@ -95,7 +96,7 @@ function GameIntro:draw()
 
     love.graphics.setFont(font)
     local textWidth = font:getWidth(text)
-    love.graphics.print(text, -140 - textWidth/2, -50)
+    love.graphics.print(text, target.x - textWidth/2, target.y -50)
     Clouds:draw()
     
     love.graphics.scale(1, 1)
