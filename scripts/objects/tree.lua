@@ -63,16 +63,19 @@ function TreeTile:getTargetAlpha(box)
         return 1
     end
 
-    if checkCollision(box, Player:getCollisionBox()) then 
-        return 0.4
-    end
-
-    for _, enemy in ipairs(Game.enemies) do
-        if checkCollision(enemy:collisionBox(), box ) then
+    if Player.isAlive then
+        if checkCollision(box, Player:getCollisionBox()) then 
             return 0.4
-        end 
+        end
     end
-
+    
+    if Game.enemies then
+        for _, enemy in ipairs(Game.enemies) do
+            if checkCollision(enemy:collisionBox(), box ) then
+                return 0.4
+            end 
+        end
+    end
     return 1
 end
 
@@ -104,15 +107,15 @@ function TreeTile:draw()
 
     local targetAlpha = self:getTargetAlpha(box)
 
-
     self.alpha = self.alpha + (targetAlpha - self.alpha) * 0.1
     
     local r, g, b, a = love.graphics.getColor()
     love.graphics.setColor(r, g, b, self.alpha)
-    if Player.y + 100 < self.yWorld then 
-        
-        love.graphics.setColor(r, g, b, 1)
 
+    if Player.isAlive then
+        if Player.y + 100 < self.yWorld then         
+            love.graphics.setColor(r, g, b, 1)
+        end
     end
     
     love.graphics.draw(image, self.xWorld, self.yWorld, 0, 1, 1.5, 32, 93)

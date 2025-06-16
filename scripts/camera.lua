@@ -4,7 +4,8 @@ Camera.__index = Camera
 --local baseHeight = 540
 
 
-function Camera:new(x, y)
+
+function Camera:new(x, y, target)
     if not x then x = 0 end
     if not y then y = 0 end 
     
@@ -13,14 +14,13 @@ function Camera:new(x, y)
     cam.windowWidth = love.graphics.getWidth()
     cam.windowHeight = love.graphics.getHeight()
 
-    
     local scaleX = cam.windowWidth / baseWidth
     local scaleY = cam.windowHeight / baseHeight
 
     cam.scale = math.max(scaleX, scaleY)
 
     cam.x = x*3 - love.graphics.getWidth() / cam.scale / 2
-    cam.y = y*2 - love.graphics.getHeight() / cam.scale  / 2
+    cam.y = y*YSCALE - love.graphics.getHeight() / cam.scale  / 2
 
     cam.smoothSpeed = 3
     cam.shakeIntensity = 0
@@ -34,6 +34,7 @@ function Camera:new(x, y)
     cam.minDown = 60
     cam.maxTop = -620
     cam.objectWorldPosition = cam:updateObjectPosition()
+    cam.target = target
     return cam
 end
 
@@ -47,8 +48,8 @@ end
 
 function Camera:update(dt)
 
-    local targetX = Player.x*3 - love.graphics.getWidth() / self.scale / 2
-    local targetY = Player.y*2 - love.graphics.getHeight() / self.scale  / 2
+    local targetX = self.target.x*3 - love.graphics.getWidth() / self.scale / 2
+    local targetY = self.target.y*YSCALE - love.graphics.getHeight() / self.scale  / 2
 
     self:setCenterDistance(targetX, targetY)
 
@@ -72,7 +73,7 @@ end
 function Camera:updateObjectPosition()
     return {
         x = self.x/3 + love.graphics.getWidth() / self.scale / 6, 
-        y = self.y/2 + love.graphics.getHeight() / self.scale  / 4
+        y = self.y/YSCALE + love.graphics.getHeight() / self.scale  / (YSCALE * 2)
     }
 end
 

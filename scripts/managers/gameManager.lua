@@ -17,11 +17,12 @@ function Game:load()
     
     math.randomseed(os.time())
     love.graphics.setDefaultFilter("nearest", "nearest")
-    camera = Camera:new(10, 15)
+    camera = Camera:new(-5, -30, Player)
     Player:load(camera)
+
     Ground:load()
     WaveManager:load()
-    Clouds:load()
+    Clouds:load(Player)
     Tilemap:load()
     DoorsManager:load()
     PointsManager:load()
@@ -34,10 +35,13 @@ function Game:load()
     self.enemies = {}
     self.drawQueue = {}
     self.particles = {}
+    self.objects = {}
+
+    self.crowTimer = math.random(20, 50)
+    self.cricketTimer = math.random(30, 40)
+
     --self:openNorth()
     --self:openSouth()
-
-    
 end
 
 function Game:openSouth()
@@ -73,6 +77,17 @@ function Game:update(dt)
     --love.audio.setPosition(Player.x, Player.y, 0)
     local targetPitch = 1
 
+    self.crowTimer = self.crowTimer - dt
+    if self.crowTimer <= 0 then 
+        self:crowNoise()
+    end
+
+    self.cricketTimer = self.cricketTimer - dt
+    if self.cricketTimer <= 0 then
+        
+        self:cricketNoise()
+    end
+
     if Player.life == 1
     then
         targetPitch = 0.9
@@ -85,6 +100,14 @@ function Game:update(dt)
             enemy:update(dt) 
         else
             table.remove(self.enemies, _)
+        end
+    end
+
+    for _, obj in ipairs(self.objects) do
+        if obj.isAlive then
+            obj:update(dt) 
+        else
+            table.remove(self.objects, _)
         end
     end
 
@@ -107,20 +130,29 @@ function Game:update(dt)
     camera:update(dt)
 end
 
-function addToDrawQueue(priority, object)
-    if distance(camera:objectPosition(), object) > 300 then
+
+function Game:crowNoise()
+    if not (Player.isAlive and Player.life > 1) then 
         return
     end
-    table.insert(Game.drawQueue, {priority = priority, object = object})
+    self.crowTimer = math.random(20, 50)
+    AmbienceSound:playCrowSound()
+end
+
+function Game:cricketNoise()
+    if not (Player.isAlive and Player.life > 1) then 
+        return
+    end
+    self.cricketTimer = math.random(20, 30)
+    AmbienceSound:playCricketSound()
 end
 
 function Game:draw()
     camera:attach()
 
-    love.graphics.scale(3, 2) 
+    love.graphics.scale(3, YSCALE) 
 
     
-
     Ground:draw(Player)
     
     table.sort(self.drawQueue, function(a, b) return a.priority < b.priority end)
@@ -183,6 +215,7 @@ function Game:keypressed(key)
         Tilemap:keypressed(key)
     elseif key == "o" then
         DoorsManager:openSouth()
+    elseif key == "n" then
         DoorsManager:openNorth()
     elseif tonumber(key) then
         --self:changeShaders(tonumber(key))

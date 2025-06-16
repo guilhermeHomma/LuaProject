@@ -1,12 +1,13 @@
 local Clouds = {}
 
 
-function Clouds:load()
+function Clouds:load(target)
     self.image = love.graphics.newImage("assets/sprites/cloud.png")
     self.image:setFilter("nearest", "nearest")
     self.width = self.image:getWidth()
     self.height = self.image:getHeight()
     self.movement = 0
+    self.target = target
 end
 
 function Clouds:update(dt)
@@ -32,9 +33,9 @@ function Clouds:drawCloud(shadow)
     local screenHeight = love.graphics.getHeight()
 
     --local startX = math.floor(Player.x / self.width) * self.width + self.movement
-    local startX = math.floor((Player.x + self.movement) / self.width) * self.width
-    local startX = math.floor(Player.x / self.width) * self.width - self.movement
-    local startY = math.floor(Player.y / self.height) * self.height
+    local startX = math.floor((self.target.x + self.movement) / self.width) * self.width
+    local startX = math.floor(self.target.x / self.width) * self.width - self.movement
+    local startY = math.floor(self.target.y / self.height) * self.height
 
     local tilesX = 3
     local tilesY = 3

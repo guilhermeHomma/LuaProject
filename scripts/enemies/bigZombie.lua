@@ -7,7 +7,8 @@ function BigZombie:new(x, y)
     local zombie = Zombie.new(self, x, y)
     zombie.speed = math.random(33, 40)
     zombie.damageTimer = 0.1
-    zombie.dropPoints = 25
+    zombie.dropPoints = 20
+    zombie.coinDropQty = math.random(4, 5)
     zombie.totalLife = 70
     zombie.life = zombie.totalLife
     return zombie
@@ -16,7 +17,6 @@ end
 function BigZombie:getSprite()
     return love.graphics.newImage("assets/sprites/enemy/enemy-big.png")
 end
-
 
 function BigZombie:takeDamage(damage, dx, dy)
     self.animationTimer = 0.3
@@ -46,9 +46,10 @@ function BigZombie:noiseCheck(dt)
     if self.soundTimer >= 10 and Player.isAlive then
         self.soundTimer = 0
         local soundPositionX, soundPositionY = soundPosition(Player, self)
-
+        local playerDistance = distance(Player, self)
+        local volume = getDistanceVolume(playerDistance, 1, 200)
         self.noise:setPosition(soundPositionX, soundPositionY, 0)
-        self.noise:setVolume(1)
+        self.noise:setVolume(volume)
         self.noise:setPitch((0.75 + math.random() * 0.2) * GAME_PITCH)
         self.noise:play()
     end

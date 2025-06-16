@@ -21,20 +21,9 @@ end
 
 function TransitionManager:update(dt)
 
-    if self.distortion ~= self.targetDistortion and self.distortionTimer >= 1 then
-        self.distortion = self.distortion + (self.targetDistortion - self.distortion) * dt *  self.distortionSpeed
-        if math.abs(self.targetDistortion - self.distortion) < 0.005 then
-            self.distortion = self.targetDistortion
-        end
-    end
+    self.distortion = transitionValue(self.distortion, self.targetDistortion, self.distortionSpeed, dt)
 
-    if self.alpha ~= self.targetAlpha then
-        self.alpha = self.alpha + (self.targetAlpha - self.alpha) * dt *  self.speed
-        
-        if math.abs(self.targetAlpha - self.alpha) < 0.005 then
-            self.alpha = self.targetAlpha
-        end
-    end
+    self.alpha = transitionValue(self.alpha, self.targetAlpha, self.speed, dt)
 
     self.distortionTimer = self.distortionTimer + dt
 
@@ -52,8 +41,8 @@ function TransitionManager:startTransition(callback, speed, timer)
     if not speed or speed <= 0 then speed = 4 end
     if not timer or timer < 0 or timer >= 10 then timer = 2 end
     
-    sound:setVolume(0.2)
-    sound:setPitch(1 + math.random() * 0.3)
+    sound:setVolume(0.1)
+    sound:setPitch(0.4 + math.random() * 0.1)
     sound:play()
     self.callback = callback
     self.targetAlpha = 1

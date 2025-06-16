@@ -5,7 +5,9 @@ Zombie.states = { idle = 1, walk = 2, damage = 3 }
 local ZParticle = require("scripts/particles/zombieDeadParticle")
 local Tilemap = require("scripts/tilemap")
 local whiteShader = love.graphics.newShader("scripts/shaders/whiteShader.glsl")
+local WalkParticle = require("scripts/particles/walkParticle")
 
+local coinDrop = require("scripts/drops/coin")
 
 require("scripts/utils")
 
@@ -26,8 +28,12 @@ function Zombie:new(x, y, speed)
     enemy.kbdx = 0
     enemy.kbdy = 0
     enemy.size = 7
-    enemy.dropPoints = 10
+    enemy.dropPoints = 5
     enemy.drawPriority = math.random()
+    enemy.coinDropQty = 0
+    if math.random() > 0.4 then
+        enemy.coinDropQty = math.random(2, 3)
+    end
 
     enemy.isAlive = true
 
@@ -332,7 +338,7 @@ function Zombie:takeDamage(damage, dx, dy)
     end
 
     local bulletSound = love.audio.newSource("assets/sfx/enemyDamage.mp3", "static")
-    bulletSound:setVolume(2)
+    bulletSound:setVolume(1)
     bulletSound:setPitch((0.8 + math.random() * 0.1) * GAME_PITCH)
     bulletSound:play()
 end
@@ -344,6 +350,23 @@ function Zombie:death()
 
     if self.state == Zombie.states.damage then
         return
+    end
+
+    
+
+    local coinSound = love.audio.newSource("assets/sfx/drops/coin-drop.mp3", "static")
+    local playerDistance = distance(Player, self)
+    local volume = getDistanceVolume(playerDistance, 0.4, 200)
+
+    if self.coinDropQty > 0 then 
+        coinSound:setVolume(volume)
+        coinSound:setPitch((1 + math.random() * 0.1) * GAME_PITCH)
+        coinSound:play()
+    end
+
+    for i = 1, self.coinDropQty, 1 do
+        local drop = coinDrop:new(self.x, self.y)
+        table.insert(Game.objects, drop)
     end
 
     local particle = ZParticle:new(self.x, self.y, self.spriteSheet)
@@ -376,6 +399,15 @@ function Zombie:animate(startFrame, endFrame, dt)
 
                 stepsound:setPitch((0.4 + math.random() * 0.4) * GAME_PITCH)
                 stepsound:play()
+
+                if math.random() > 0.6 then
+                    table.insert(Game.particles, particle)
+                    if math.random() > 0.5 then
+                        local particle = WalkParticle:new(self.x + 2, self.y + 1, lifetime)
+                        table.insert(Game.particles, particle)
+                    end
+                end
+
             end
 
         end

@@ -58,6 +58,8 @@ function Grass:new(x, y, tile)
     grass.collisionDirection = 0
     grass.tile = tile
 
+    grass.changedTarget = true
+    grass.soundTimer = 2
     return grass
 end
 
@@ -65,33 +67,57 @@ end
 function Grass:getTarget()
     if self.tile == 1 then return 0 end
 
-    if distance(self, Player) < 10 then
-        if Player.x < self.x then
-            return -1
-        else
-            return 1
+    if Player.isAlive then
+        if distance(self, Player) < 10 then
+            if self.soundTimer >= 2 and self.changedTarget then
+
+                local sound = love.audio.newSource("assets/sfx/ambience/grass.mp3", "static")
+                
+                local volume = math.random() * 0.03
+                sound:setVolume(0.05 + volume)
+                sound:setPitch((1.2 + math.random() * 0.7) * GAME_PITCH)
+
+                if math.random() > 0.4 then
+                    sound:play()
+                end
+                self.changedTarget = false
+                self.soundTimer = 0
+
+            end
+
+            if Player.x < self.x then
+                return -1
+            else
+                return 1
+            end
+        end
+
+        self.changedTarget = true
+
+        for _, bullet in ipairs(Player.gun.bullets) do
+            if distance(self, bullet) < 10 then
+                if bullet.x < self.x then
+                    return -1
+                else
+                    return 1
+                end
+            end 
         end
     end
 
-    for _, bullet in ipairs(Player.gun.bullets) do
-        if distance(self, bullet) < 10 then
-            if bullet.x < self.x then
-                return -1
-            else
-                return 1
-            end
-        end 
+    if Game.enemies then
+        for _, enemy in ipairs(Game.enemies) do
+            if distance(self, enemy) < 10 then
+                if enemy.x < self.x then
+                    return -1
+                else
+                    return 1
+                end
+            end 
+        end
     end
 
-    for _, enemy in ipairs(Game.enemies) do
-        if distance(self, enemy) < 10 then
-            if enemy.x < self.x then
-                return -1
-            else
-                return 1
-            end
-        end 
-    end
+    
     return 0
 end
 
@@ -99,21 +125,23 @@ function Grass:update(dt)
     if distance(self, camera:objectPosition()) > 230 then
         return
     end
-
+    
+    self.soundTimer = self.soundTimer + dt
 
     local target = self:getTarget()
-    local speed = 2
-    if target ~= 0 then speed = 15 end
 
-    if not self.tile == 1 then 
-        addToDrawQueue(self.y , self)
+    local speed = 2
+    if target ~= 0 then speed = 12 end
+
+    if self.tile ~= 1 then 
+        addToDrawQueue(self.y + 3 , self)
     else
         addToDrawQueue(self.y + 8, self)
     end
     
     self.collisionDirection = self.collisionDirection + (target - self.collisionDirection) * dt * speed
 
-    self.shaderDirection = (math.sin(love.timer.getTime() + (self.y/10)   )) / 2 + 1  + self.collisionDirection*0.7
+    self.shaderDirection = (math.sin(love.timer.getTime() + (self.y/10)   )) / 2 + 1  + self.collisionDirection*0.8
 end
 
 function Grass:draw()

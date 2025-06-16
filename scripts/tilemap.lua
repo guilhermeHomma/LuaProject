@@ -170,7 +170,8 @@ function Tilemap:load()
                 
                 if tile == 6 then index = 22 end
 
-                if self:hasTileClose(x, y, 0) then index = index + 1 end
+                if self:hasTileClose(x, y, 0) and index == 22 then index = index + 1 end
+                if self:hasTileClose(x, y, 6) and index == 20 then index = index + 1 end
 
                 local t = DoorTile:new(x, y, index, collider)
                 table.insert(self.tiles, t)

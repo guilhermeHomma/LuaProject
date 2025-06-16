@@ -22,7 +22,7 @@ function Gun:load()
 
     self.gunConfig = {
         {shotCooldown = 0.54, magCount = 12 ,magCapacity = 6, damage = 10, bulletSpeed = 300, shootFunction = function() self:shootPistol() end},
-        {shotCooldown = 0.92, magCount = 15 ,magCapacity = 6, damage = 15, bulletSpeed = 230, shootFunction = function() self:shootShotgun() end},
+        {shotCooldown = 0.8, magCount = 15 ,magCapacity = 9, damage = 15, bulletSpeed = 250, shootFunction = function() self:shootShotgun() end},
         {shotCooldown = 0.3, magCount = 10, magCapacity = 10, damage = 15, bulletSpeed = 340, shootFunction = function() self:shootPistol() end},
         {shotCooldown = 0.6, magCount = 12, magCapacity = 8, damage = 10, bulletSpeed = 250, shootFunction = function() self:shootSquareGun() end},
     }
@@ -86,18 +86,18 @@ function Gun:shootShotgun()
     local damage = self.gunConfig[self.gunIndex].damage
     local bulletSpeed = self.gunConfig[self.gunIndex].bulletSpeed
 
-    local bullet = Bullet:new(self.x + offsetX, self.y + offsetY, angle + (math.random() * 0.1), self.height, bulletSpeed, damage)
+    local bullet = Bullet:new(self.x + offsetX, self.y + offsetY, angle + (math.random() * 0.08), self.height, bulletSpeed, damage)
     table.insert(self.bullets, bullet)
 
-    local bullet = Bullet:new(self.x + offsetX, self.y + offsetY, angle + (math.random() * 0.1) + 0.15, self.height, bulletSpeed, damage)
+    local bullet = Bullet:new(self.x + offsetX, self.y + offsetY, angle + (math.random() * 0.08) + 0.1, self.height, bulletSpeed, damage)
     table.insert(self.bullets, bullet)
 
-    local bullet = Bullet:new(self.x + offsetX, self.y + offsetY, angle + (math.random() * 0.1)- 0.15, self.height, bulletSpeed, damage)
+    local bullet = Bullet:new(self.x + offsetX, self.y + offsetY, angle + (math.random() * 0.08)- 0.1, self.height, bulletSpeed, damage)
     table.insert(self.bullets, bullet)
 
     local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
     self.currentMagCapacity = self.currentMagCapacity - 3
-    bulletSound:setVolume(1)
+    bulletSound:setVolume(0.7)
     bulletSound:setPitch((0.7 + math.random() * 0.1) * GAME_PITCH)
     bulletSound:play()
 end
@@ -120,7 +120,7 @@ function Gun:shootPistol()
 
     local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
 
-    bulletSound:setVolume(0.8)
+    bulletSound:setVolume(0.5)
     bulletSound:setPitch((0.9 + math.random() * 0.1) * GAME_PITCH)
     bulletSound:play()
 end
@@ -142,7 +142,7 @@ function Gun:shootSquareGun()
 
     local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
     self.currentMagCapacity = self.currentMagCapacity - 2
-    bulletSound:setVolume(0.8)
+    bulletSound:setVolume(0.6)
     bulletSound:setPitch((0.9 + math.random() * 0.1) * GAME_PITCH)
     bulletSound:play()
 end

@@ -9,7 +9,6 @@ require("scripts/utils")
 local maxEnemiesAlive = 80
 
 function WaveManager:load()
-    
     self.wave = 0
     self.enemiesPerWave = 0
     self.spawnInterval = {0.1, 2}
@@ -19,7 +18,6 @@ function WaveManager:load()
 
     self.font = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 32)
     self.font:setFilter("nearest", "nearest")
-
 end
 
 function WaveManager:update(dt)

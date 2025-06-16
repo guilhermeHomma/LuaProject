@@ -2,6 +2,7 @@
 require "scripts/utils"
 
 Game = require("scripts.managers.gameManager")
+local GameIntro = require("scripts.managers.gameIntro")
 love.graphics.setDefaultFilter("nearest", "nearest")
 
 local AmbienceSound = require("scripts/managers/ambienceSound")
@@ -14,8 +15,9 @@ local TransitionManager = require("scripts.managers.transitionManager")
 baseWidth = 960
 baseHeight = 540
 canvas = love.graphics.newCanvas(baseWidth, baseHeight)
-STATES = {mainMenu = 1, game = 2, gamePause = 3, gameDead = 4}
+STATES = {mainMenu = 1, game = 2, gamePause = 3, gameDead = 4, gameIntro = 5}
 state = STATES.mainMenu
+YSCALE = 2.4
 
 --baseWidth = 1120
 --baseHeight = 630
@@ -28,8 +30,8 @@ FPS = false
 
 scale = 1
 
-MUSIC_VOLUME = 0.3
-GAME_VOLUME = 0.8
+MUSIC_VOLUME = 0.6
+GAME_VOLUME = 1
 GAME_PITCH = 1
 
 function love.load()
@@ -51,6 +53,17 @@ function love.load()
     GameoverMenu:load()
     AmbienceSound:startGame()
     TransitionManager:load()
+
+    loadIntro()
+end
+
+function loadIntro()
+    local function callback()
+        state=STATES.gameIntro
+        GameIntro:load()
+    end
+
+    TransitionManager:startTransition(function() callback() end)
 end
 
 function loadGame()
@@ -95,6 +108,25 @@ function fullscreen()
     end
 end
 
+function addToDrawQueue(priority, object, checkDistance)
+    if not checkDistance then
+        checkDistance = true
+    end
+
+    if distance(camera:objectPosition(), object) > 280 and checkDistance then
+        return
+    end
+    
+    if STATES.gameIntro == state then
+        table.insert(GameIntro.drawQueue, {priority = priority, object = object})
+    else
+        table.insert(Game.drawQueue, {priority = priority, object = object})
+        
+    end
+        
+    
+end
+
 function changePause()
     if state == STATES.game or state == STATES.gamePause then
         state = (state == STATES.gamePause) and STATES.game or STATES.gamePause
@@ -124,6 +156,7 @@ function love.keypressed(key)
         MainMenu:keypressed(key)
     elseif state == STATES.game then
         Game:keypressed(key)
+
     elseif state == STATES.gamePause then
         PauseMenu:keypressed(key)
     elseif state == STATES.gameDead then
@@ -153,6 +186,9 @@ function love.update(dt)
         Game:update(dt)
     elseif state == STATES.mainMenu then
         MainMenu:update(dt)
+
+    elseif state == STATES.gameIntro then
+        GameIntro:update(dt)
     elseif state == STATES.gamePause then
         PauseMenu:update(dt)
     end
@@ -188,6 +224,8 @@ function love.draw()
         PauseMenu:draw()
     elseif state == STATES.mainMenu then
         MainMenu:draw()
+    elseif state == STATES.gameIntro then
+        GameIntro:draw()
     elseif state == STATES.gameDead then
         GameoverMenu:draw()
     end

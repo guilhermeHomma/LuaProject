@@ -1,7 +1,7 @@
 Store = setmetatable({}, {__index = Tile})
 Store.__index = Store
 
-local sheetImage = love.graphics.newImage("assets/sprites/objects/pole.png")
+local sheetImage = love.graphics.newImage("assets/sprites/objects/store.png")
 local sheetWidth, sheetHeight = sheetImage:getDimensions()
 local sheetGun = love.graphics.newImage("assets/sprites/player/guns.png")
 local font = love.graphics.newFont("assets/fonts/pixelart.ttf", 8)
@@ -17,8 +17,8 @@ local stretch = 1.5
 
 local gunDict  = {
     {name = "raygun", price = 600, index = 3, bulletPrice = 200},
-    {name = "squaregun", price = 200, index = 4, bulletPrice = 80},
-    {name = "shotgun", price = 400, index = 2, bulletPrice = 140},
+    {name = "squaregun", price = 220, index = 4, bulletPrice = 80},
+    {name = "shotgun", price = 450, index = 2, bulletPrice = 95},
 }
 
 for i = 0, (sheetWidth / frameWidth) - 1 do
@@ -38,13 +38,13 @@ end
 
 function Store:update(dt)
     addToDrawQueue(self.yWorld, self)
-
-    if distance(Player, self) < 20 and Player.isAlive then
-        self.targetAlpha = 1
-    else
-        self.targetAlpha = 0
+    if Player.isAlive then
+        if distance(Player, self) < 20 and Player.isAlive then
+            self.targetAlpha = 1
+        else
+            self.targetAlpha = 0
+        end
     end
-
     self.alpha= self.alpha + (self.targetAlpha - self.alpha) * dt * 10
 end
 
@@ -99,9 +99,11 @@ function Store:draw()
     local currentPrice = self.product.price
     local name = self.product.name 
 
-    if Player.gun.gunIndex == self.product.index then 
-        currentPrice = self.product.bulletPrice 
-        name = name .. " bullets"
+    if Player.isAlive then 
+        if Player.gun.gunIndex == self.product.index then 
+            currentPrice = self.product.bulletPrice 
+            name = name .. " bullets"
+        end
     end
 
     local text = "click X to buy"
@@ -116,15 +118,16 @@ function Store:draw()
 
     self:drawGun()
     love.graphics.setColor(0, 0, 0, self.alpha)
-    for i = 0, 1 do
-        if i == 1 then love.graphics.setColor(1, 1, 1, self.alpha) end
-        love.graphics.print(name, math.ceil(self.xWorld - nameWidth/2 + 2 + i) + 0.5 , self.yWorld - 95 + i)
-        love.graphics.print(price, self.xWorld - priceWidth/2 + 2 + i, self.yWorld - 80 + i)
-        if Game:getPlayerPoints() > currentPrice then 
-            love.graphics.print(text, self.xWorld - textWidth/2 + 2 + i , self.yWorld - 65 + i)
+    if Player.isAlive then 
+        for i = 0, 1 do
+            if i == 1 then love.graphics.setColor(1, 1, 1, self.alpha) end
+            love.graphics.print(name, math.ceil(self.xWorld - nameWidth/2 + 2 + i) + 0.5 , self.yWorld - 95 + i)
+            love.graphics.print(price, self.xWorld - priceWidth/2 + 2 + i, self.yWorld - 80 + i)
+            if Game:getPlayerPoints() > currentPrice then 
+                love.graphics.print(text, self.xWorld - textWidth/2 + 2 + i , self.yWorld - 65 + i)
+            end
         end
     end
-    
     love.graphics.setColor(1, 1, 1)
 
     self:drawDebug()

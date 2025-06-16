@@ -189,7 +189,7 @@ function Player:update(dt)
 end
 
 function Player:checkDamage()
-    if self.damageTimer < 1 then return end 
+    if self.damageTimer < 1.2 then return end 
 
     for _, enemy in ipairs(Game.enemies) do
         local dx = enemy.x - self.x
@@ -221,6 +221,13 @@ function Player:checkDamage()
             break
         end
     end
+end
+
+function Player:catchLife()
+    if self.life < self.totalLife then
+        self.life = self.life + 1
+    end
+    self.damageTimer = 0
 end
 
 function Player:getCollisionBox()
@@ -393,6 +400,12 @@ end
 
 function Player:draw()
     if not self.isAlive then return end
+
+    if self.damageTimer < 1 then
+        if math.floor(self.damageTimer * 15) % 2 == 0 then
+            return
+        end
+    end
 
     local anim = self.animations[self.currentAnimation]
     local frameIndex = anim.frames[self.currentFrame]

@@ -8,7 +8,7 @@ function pauseMenu:load()
     baseMenu.load(self)
     self.MenuTItle = "PAUSED"
     --self.menuOptions = {"Continue", "Restart", "Go to menu"}
-    self.menuOptions = {"Continue", "Restart"}
+    self.menuOptions = {"Continue", "Restart", "Exit Game"}
 end
 
 function pauseMenu:draw()
@@ -22,6 +22,8 @@ function pauseMenu:onSelect()
         changePause()
     elseif self.selectedOption == 2 then
         loadGame()
+    elseif self.selectedOption == 3 then
+        quitGame()
     end
 end
 

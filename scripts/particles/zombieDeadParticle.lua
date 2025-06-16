@@ -1,6 +1,8 @@
-Particle = require("scripts/particles/particle")
-Ball = require("scripts/particles/ballParticle")
-ZombieParticle = setmetatable({}, {__index = Particle})
+local Particle = require("scripts/particles/particle")
+local Ball = require("scripts/particles/ballParticle")
+local LifeDrop = require("scripts/drops/life")
+
+local ZombieParticle = setmetatable({}, {__index = Particle})
 ZombieParticle.__index = ZombieParticle
 local whiteShader = love.graphics.newShader("scripts/shaders/whiteShader.glsl")
 
@@ -45,7 +47,29 @@ function ZombieParticle:death()
     bulletSound:setVolume(0.1)
     bulletSound:setPitch((1 + math.random() * 0.1) * GAME_PITCH)
     bulletSound:play()
-    
+
+    local shouldDropLife = false
+
+    if math.random() > 0.94 and Player.life == 1 then
+        shouldDropLife = true
+    elseif Player.life < Player.totalLife and math.random() > 0.96 then
+        shouldDropLife = true
+        
+    end
+
+    if shouldDropLife then
+        local coinSound = love.audio.newSource("assets/sfx/drops/drop-life.mp3", "static")
+        local playerDistance = distance(Player, self)
+        local volume = getDistanceVolume(playerDistance, 0.6, 200)
+
+        coinSound:setVolume(volume)
+        coinSound:setPitch((1 + math.random() * 0.1) * GAME_PITCH)
+        coinSound:play()
+
+        local drop = LifeDrop:new(self.x, self.y)
+        table.insert(Game.objects, drop)
+    end
+
     for i = 1, 3 do
         local angle = math.random() * 2 * math.pi
 
@@ -72,7 +96,7 @@ function ZombieParticle:draw()
     local sheetWidth = self.sprite:getWidth()
     local sheetHeight = self.sprite:getHeight()
     local quad = love.graphics.newQuad(7 * 32, 0, 32, 32, sheetWidth, sheetHeight)
-    if self.timer < 0.3 then
+    if self.timer < 0.2 then
         quad = love.graphics.newQuad(6 * 32, 0, 32, 32, sheetWidth, sheetHeight)
     end
     love.graphics.draw(self.sprite, quad, self.x, self.y + 3, 0, 1, 1.5, 32 / 2, 32)

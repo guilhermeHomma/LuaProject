@@ -1,5 +1,5 @@
-Particle = require("scripts/particles/particle")
-Ball = setmetatable({}, {__index = Particle})
+local Particle = require("scripts/particles/particle")
+local Ball = setmetatable({}, {__index = Particle})
 Ball.__index = Ball
 
 function Ball:new(x, y, height, dx, dy, lifetime, size)

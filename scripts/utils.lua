@@ -92,7 +92,7 @@ function mousePosition()
     local mouseX, mouseY = love.mouse.getPosition()
 
     mouseX = mouseX/3/camera.scale+ camera.x/3
-    mouseY = mouseY/2/camera.scale + camera.y/2
+    mouseY = mouseY/YSCALE/camera.scale + camera.y/YSCALE
     return mouseX, mouseY
 end
 

@@ -4,6 +4,7 @@ Bullet.__index = Bullet
 require("scripts/utils")
 
 local Particle = require("scripts/particles/particle")
+local Ball = require("scripts/particles/ballParticle")
 local Tilemap = require("scripts/tilemap")
 
 function Bullet:new(x, y, angle, height, speed, damage, level)
@@ -74,7 +75,7 @@ function Bullet:update(dt)
     if self:isColliding() then
         local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
         bulletSound:setVolume(0.2)
-        bulletSound:setPitch((1.4 + math.random() * 0.3) * GAME_PITCH)
+        bulletSound:setPitch((1.4 + math.random() * 0.1) * GAME_PITCH)
         bulletSound:play()
         self.isAlive = false
 
@@ -103,11 +104,14 @@ function Bullet:death(dx, dy)
         dy = math.sin(self.angle) / 2
     end
 
-    local angle = math.atan2(self.dy, self.dx)
     local lifetime = math.random(15, 23) / 100
     local particle = Ball:new(self.x, self.y, 5, -dx, -dy, lifetime, 0.6)
     table.insert(Game.particles, particle)
 
+    if math.random() > 0.5 then
+        local particle = Ball:new(self.x, self.y, 5, -dx + 1, -dy + 1, lifetime, 0.6)
+        table.insert(Game.particles, particle)
+    end
 end
 
 function Bullet:drawShadow()
