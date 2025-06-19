@@ -53,6 +53,7 @@ end
 function Store:performBuy()
     if distance(Player, self) > 20 then return end
 
+    if (Player.gun:isFullBullets() and Player.gun.gunIndex == self.product.index) then return end
 
     local currentPrice = self.product.price
     if Player.gun.gunIndex == self.product.index then 
@@ -125,7 +126,7 @@ function Store:draw()
             if i == 1 then love.graphics.setColor(1, 1, 1, self.alpha) end
             love.graphics.print(name, math.ceil(self.xWorld - nameWidth/2 + 2 + i) + 0.5 , self.yWorld - 95 + i)
             love.graphics.print(price, self.xWorld - priceWidth/2 + 2 + i, self.yWorld - 80 + i)
-            if Game:getPlayerPoints() > currentPrice then 
+            if Game:getPlayerPoints() > currentPrice and not (Player.gun:isFullBullets() and Player.gun.gunIndex == self.product.index) then 
                 love.graphics.print(text, self.xWorld - textWidth/2 + 2 + i , self.yWorld - 65 + i)
             end
         end

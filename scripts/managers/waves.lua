@@ -20,11 +20,20 @@ function WaveManager:load()
     self.font:setFilter("nearest", "nearest")
 
     self.start = false
+
+
+    self.changeWaveTimer = 0
 end
 
 function WaveManager:update(dt)
-    if not self.start then return end
 
+    if not self.start then 
+        if Player.isAlive and Player.y < 268 then
+            self.start = true
+        end
+        return 
+    end
+    self.changeWaveTimer = self.changeWaveTimer + dt
     if self.enemiesSpawned < self.enemiesPerWave and #Game.enemies < maxEnemiesAlive then
         self.spawnTimer = self.spawnTimer + dt
         if self.spawnTimer >= self.nextInterval then
@@ -45,7 +54,7 @@ function WaveManager:instanceEnemy()
 
     if self.wave == 1 then
         
-        table.insert(Game.enemies, Zombie:new(enemyX, enemyY, math.random(28, 32)))
+        table.insert(Game.enemies, Zombie:new(enemyX, enemyY, math.random(20, 25)))
 
     elseif self.wave < 4 then 
         table.insert(Game.enemies, Zombie:new(enemyX, enemyY, math.random(30, 40)))
@@ -86,6 +95,7 @@ function WaveManager:enemyPosition()
 end
 
 function WaveManager:startNextWave()
+    self.changeWaveTimer = 0
     self.wave = self.wave + 1
     self.nextInterval = 4
     if self.wave == 14 then
@@ -109,6 +119,12 @@ function WaveManager:draw()
         return
     end
 
+    if self.changeWaveTimer < 1 then
+        if math.floor(self.changeWaveTimer * 10) % 2 == 0 then
+            return
+        end
+    end
+    
     local text = "WAVE: " .. self.wave
     local textWidth = self.font:getWidth(text)
 

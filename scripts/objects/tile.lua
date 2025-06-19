@@ -49,7 +49,7 @@ function Tile:onshoot()
     if not self.isAlive then return end
     if self.quadIndex == 14 or self.quadIndex == 18 then --box
         self.collider = false
-        Tile.tilemap.getTilemap()[self.x][self.y] = 0
+        Tile.tilemap.getTilemap()[self.y][self.x] = 0
         self.isAlive = false
 
         for i = 1, 3 do

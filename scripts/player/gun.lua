@@ -4,6 +4,7 @@ local Gun = {}
 
 local Bullet = require("scripts/bullet")
 
+
 function Gun:load()
     self.x = 0
     self.y = 0
@@ -187,12 +188,25 @@ function Gun:shoot()
     
 end
 
+
+
+
 function Gun:aim()
     if self.gunIndex <= 0 then return end
     self.showGun = true
     self.showSight = true
 end
 
+function Gun:isFullBullets()
+    if self.gunIndex == 0 then return true end
+
+    if self.currentMagCapacity == self.gunConfig[self.gunIndex].magCapacity and
+    self.currentMagCount == self.gunConfig[self.gunIndex].magCount then
+        return true
+    end
+
+    return false
+end
 
 function Gun:changeGun(index)
     self.gunIndex = index

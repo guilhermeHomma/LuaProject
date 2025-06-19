@@ -150,7 +150,7 @@ function Tilemap:load()
             end
             
             if tile == 8 then 
-                local c = self:hasTileClose(x, y, 0) or self:hasTileClose(x, y, 5) or self:hasTileClose(x, y, 6)
+                local c = self:hasTileClose(x, y, 0) or self:hasTileClose(x, y, 5) or self:hasTileClose(x, y, 6) or self:hasTileClose(x, y, 2)
                 index = autoTileWater(x, y, tilemap)
                 local t = Water:new(x, y, index, c)
                 table.insert(self.tiles, t)
