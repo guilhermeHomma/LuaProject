@@ -70,6 +70,15 @@ function clamp(value, min, max)
     return math.max(min, math.min(max, value))
 end
 
+
+function getScreenHeight()
+    return love.graphics.getHeight()/ scale
+end
+
+function getScreenWidth()
+    return love.graphics.getWidth() / scale
+end
+
 function normalize(dx, dy)
     local mag = math.sqrt(dx * dx + dy * dy)
     if mag == 0 then return 0, 0 end

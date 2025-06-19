@@ -1,4 +1,4 @@
-local WaveManager = {}
+WaveManager = {}
 local Zombie= require("scripts/enemies/zombie")
 local BigZombie = require("scripts/enemies/bigZombie")
 local BabyZombie = require("scripts/enemies/babyZombie")
@@ -21,6 +21,8 @@ function WaveManager:load()
 
     self.start = false
 
+    self.openSouthWave = 12
+    self.openNorthWave = 7
 
     self.changeWaveTimer = 0
 end
@@ -95,16 +97,29 @@ function WaveManager:enemyPosition()
 end
 
 function WaveManager:startNextWave()
+
+    if self.wave >= 4 then 
+        local sound = love.audio.newSource("assets/sfx/ambience/owl.mp3", "static")
+        sound:setVolume(0.15)
+        sound:setPitch((0.9 + math.random() * 0.1) * GAME_PITCH)
+        sound:play()
+    end
+
+    local sound = love.audio.newSource("assets/sfx/ambience/nextWave.mp3", "static")
+    sound:setVolume(0.3)
+    sound:setPitch((0.9 + math.random() * 0.1) * GAME_PITCH)
+    sound:play()
+
     self.changeWaveTimer = 0
     self.wave = self.wave + 1
     self.nextInterval = 4
-    if self.wave == 14 then
-        Game:openSouth()
-    end
+    -- if self.wave == self.openSouthWave then
+    --     Game:openSouth()
+    -- end
 
-    if self.wave == 7 then
-        Game:openNorth()
-    end
+    -- if self.wave == self.openNorthWave then
+    --     Game:openNorth()
+    -- end
 
     self.enemiesPerWave = self.enemiesPerWave + 2
     self.enemiesSpawned = 0

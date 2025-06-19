@@ -11,6 +11,8 @@ local PointsManager = require("scripts/managers/pointsManager")
 local DoorsManager = require("scripts/managers/doorsManager")
 local HeartSound = require("scripts/player/heartSound")
 
+
+local font = love.graphics.newFont("assets/fonts/pixelart.ttf", 24)
 camera = nil
 
 function Game:load()
@@ -41,18 +43,19 @@ function Game:load()
     self.crowTimer = math.random(20, 50)
     self.cricketTimer = math.random(30, 40)
 
+    self.drawtext = "init text\ninit text\nyou shouldnt see this"
+    self.textAlpha = 0
+    self.textAlphaTarget = 0
     --self:openNorth()
     --self:openSouth()
 end
 
 function Game:openSouth()
     DoorsManager:openSouth()
-    camera.minDown = 240
 end
 
 function Game:openNorth()
     DoorsManager:openNorth()
-    camera.maxTop = -1000
 end
 
 function Game:close()
@@ -94,6 +97,10 @@ function Game:update(dt)
         targetPitch = 0.9
     end
     GAME_PITCH = transitionValue(GAME_PITCH, targetPitch, 1.3, dt)
+
+
+    self.textAlpha = transitionValue(self.textAlpha, self.textAlphaTarget, 5, dt)
+    self.textAlphaTarget = 0
 
 
     for _, enemy in ipairs(self.enemies) do
@@ -186,10 +193,20 @@ function Game:draw()
     Clouds:draw()
     
     love.graphics.scale(1, 1)
-    
-    camera:detach()
-    
-    
+    camera:detach()  
+
+    love.graphics.setFont(font)
+    love.graphics.setColor(1, 1, 1, self.textAlpha)
+    love.graphics.printf(
+        self.drawtext,
+        0,        
+        getScreenHeight() - 80,           
+        getScreenWidth(),                
+        "center"
+    )
+
+    love.graphics.setColor(1, 1, 1, 1)
+
     PointsManager:draw()
     Player:drawLife()
     if Player and Player.isAlive then
@@ -197,7 +214,6 @@ function Game:draw()
     end
     WaveManager:draw()
   
-
     if DEBUG then
         love.graphics.print("enemies qty: " .. #self.enemies, 10, 110)
     end

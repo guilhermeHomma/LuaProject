@@ -1,6 +1,4 @@
-
-local doorsManager = {}
-
+local DoorsManager = {}
 require "scripts/utils"
 
 local Tilemap = require("scripts/tilemap")
@@ -8,7 +6,7 @@ local Tilemap = require("scripts/tilemap")
 local southTiles = {20, 21}
 local northTiles = {22, 23}
 
-function doorsManager:load()
+function DoorsManager:load()
     self.southOpen = false
     self.northOpen = false
 
@@ -19,12 +17,37 @@ function doorsManager:load()
     self.northOpening = false 
 end
 
-function doorsManager:update(dt)
+function DoorsManager:update(dt)
     self:updateDoor("south", southTiles, dt)
     self:updateDoor("north", northTiles, dt)
 end
 
-function doorsManager:updateDoor(direction, tileIndices, dt)
+function DoorsManager:getSouthText()
+    if self.southOpening or self.southOpen then 
+        return ""
+    end
+
+    if WaveManager.wave >= WaveManager.openSouthWave then
+        return "Click X to open this passage"
+    end
+
+    return "You need to reach wave " .. WaveManager.openSouthWave .. " to open this passage"
+end
+
+function DoorsManager:getNorthText()
+    if self.northOpening or self.northOpen then 
+        return ""
+    end
+
+    if WaveManager.wave >= WaveManager.openNorthWave then
+        return "Click X to open this passage"
+    end
+
+    return "You need to reach wave " .. WaveManager.openNorthWave .. " to open this passage"
+end
+
+
+function DoorsManager:updateDoor(direction, tileIndices, dt)
     local openingKey = direction .. "Opening"
     local frameKey = direction .. "FrameAnimation"
     local openKey = direction .. "Open"
@@ -54,7 +77,7 @@ function doorsManager:updateDoor(direction, tileIndices, dt)
 end
 
 
-function doorsManager:openTiles(tileIndices)
+function DoorsManager:openTiles(tileIndices)
     local tilemap = Tilemap.getTilemap()
     for _, tile in ipairs(Tilemap.tiles) do
         for _, index in ipairs(tileIndices) do
@@ -67,15 +90,30 @@ function doorsManager:openTiles(tileIndices)
     Tilemap:loadfinders()
 end
 
-function doorsManager:openSouth()
+function DoorsManager:openSouth()
+    if self.southOpening or self.southOpen then return end
+
     self.southFrameAnimation = 0
     self.southOpening = true
+
+    self:openSound()
 end
 
-function doorsManager:openNorth()
+function DoorsManager:openSound()
+    local sound = love.audio.newSource("assets/sfx/ambience/opendoor.mp3", "static")
+    sound:setVolume(1)
+    sound:setPitch((0.95 + math.random() * 0.1) * GAME_PITCH)
+    sound:play()
+end
+
+function DoorsManager:openNorth()
+    if self.northOpening or self.northOpen then return end
+
     self.northFrameAnimation = 0
     self.northOpening = true
+
+    self:openSound()
 end
 
 
-return doorsManager
+return DoorsManager

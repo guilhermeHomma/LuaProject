@@ -43,7 +43,7 @@ end
 function MainMenu:draw()
 
     love.graphics.setColor(hexToRGB("090909"))
-    love.graphics.rectangle("fill", 0, 0, baseWidth, baseHeight)
+    love.graphics.rectangle("fill", 0, 0, baseWidth * 2, baseHeight * 2)
 
     local quad = animationQuads[currentFrame]
     --love.graphics.draw(sheetImage, quad, -6, -6, 0, 3, 3)

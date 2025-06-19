@@ -43,9 +43,12 @@ function Store:update(dt)
     if Player.isAlive then
         if distance(Player, self) < 20 and Player.isAlive then
             self.targetAlpha = 1
+            Game.textAlphaTarget = 1
+            Game.drawtext = self:getText()
         else
             self.targetAlpha = 0
         end
+        
     end
     self.alpha= self.alpha + (self.targetAlpha - self.alpha) * dt * 10
 end
@@ -99,7 +102,29 @@ end
 function Store:draw()
     love.graphics.setFont(font)
 
+    love.graphics.draw(sheetImage, quads[2], self.xWorld - frameWidth/2, self.yWorld - frameHeight * stretch, 0, 1, stretch)
+
+    self:drawGun()
+    love.graphics.setColor(0, 0, 0, self.alpha)
+    if Player.isAlive then 
+        for i = 0, 1 do
+            if i == 1 then love.graphics.setColor(1, 1, 1, self.alpha) end
+            
+            local t = self:getText()
+
+        end
+    end
+    love.graphics.setColor(1, 1, 1)
+
+    self:drawDebug()
+end
+
+function Store:getText()
+
+    love.graphics.setFont(font)
+
     local currentPrice = self.product.price
+
     local name = self.product.name 
 
     if Player.isAlive then 
@@ -108,33 +133,21 @@ function Store:draw()
             name = name .. " bullets"
         end
     end
-
-    local text = "click X to buy"
-    local price = currentPrice .. " p"
     
-    
-    local textWidth = font:getWidth(text)
-    local priceWidth = font:getWidth(price)
-    local nameWidth = font:getWidth(name)
+    local buyT = "click X to buy"
+    local price = currentPrice .. " C"
 
-    love.graphics.draw(sheetImage, quads[2], self.xWorld - frameWidth/2, self.yWorld - frameHeight * stretch, 0, 1, stretch)
-
-    self:drawGun()
-    love.graphics.setColor(0, 0, 0, self.alpha)
-    if Player.isAlive then 
-        for i = 0, 1 do
-            if i == 1 then love.graphics.setColor(1, 1, 1, self.alpha) end
-            love.graphics.print(name, math.ceil(self.xWorld - nameWidth/2 + 2 + i) + 0.5 , self.yWorld - 95 + i)
-            love.graphics.print(price, self.xWorld - priceWidth/2 + 2 + i, self.yWorld - 80 + i)
-            if Game:getPlayerPoints() > currentPrice and not (Player.gun:isFullBullets() and Player.gun.gunIndex == self.product.index) then 
-                love.graphics.print(text, self.xWorld - textWidth/2 + 2 + i , self.yWorld - 65 + i)
-            end
-        end
+    if not Player.isAlive then 
+        return ""
     end
-    love.graphics.setColor(1, 1, 1)
 
-    self:drawDebug()
+    local text = name .. "\n" .. price
+
+    if Game:getPlayerPoints() > currentPrice and not (Player.gun:isFullBullets() and Player.gun.gunIndex == self.product.index) then 
+        text = text .. "\n" .. buyT
+    end
+
+    return text
 end
-
 
 return Store

@@ -5,6 +5,8 @@ TileSet = require("scripts.objects.tileset")
 local sprite = love.graphics.newImage("assets/sprites/objects/counter.png")
 local spriteWidth, spriteHeight = sprite:getDimensions()
 
+local font = love.graphics.newFont("assets/fonts/pixelart.ttf", 8)
+
 sprite:setFilter("nearest", "nearest")
 
 function Counter:new(x, y, quadIndex, collider)
