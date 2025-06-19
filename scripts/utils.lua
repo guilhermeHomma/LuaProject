@@ -160,12 +160,12 @@ function autoTile(x, y, tilemap) -- grass wall
 
     local function isNotSolid(y, x)
         local v = tilemap[y] and tilemap[y][x]
-        return v ~= 1 and v ~= 3 and v ~= 11 and v ~= 10
+        return v ~= 1 and v ~= 3 and v ~= 11 and v ~= 10 and v ~= 12
     end
 
     local function isSolid(y, x)
         local v = tilemap[y] and tilemap[y][x]
-        return v == 1 or v == 3 or v == 11 or v == 10
+        return v == 1 or v == 3 or v == 11 or v == 10 or v == 12
     end
 
     if x == 1 or y == 1 or x == #tilemap[y] or y == #tilemap then 

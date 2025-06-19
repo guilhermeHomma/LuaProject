@@ -1,6 +1,9 @@
 Tile = {}
 Tile.__index = Tile
 TileSet = require("scripts.objects.tileset")
+local Ball = require("scripts/particles/ballParticle")
+local BoxParticle = require("scripts/particles/boxParticle")
+
 
 function Tile:setTilemap(tilemap)
     Tile.tilemap = tilemap
@@ -32,15 +35,70 @@ function Tile:new(x, y, quadIndex, collider)
     tile.collider = collider
     tile.xWorld, tile.yWorld = Tile.tilemap:mapToWorld(x,y)
     tile.distance = 0
+    tile.isAlive = true
     return tile
 end
 
-function Tile:update(dt) 
-    addToDrawQueue(self.yWorld, self)
+function Tile:update(dt)
+    if self.isAlive then
+        addToDrawQueue(self.yWorld, self)
+    end
 end
 
+function Tile:onshoot()
+    if not self.isAlive then return end
+    if self.quadIndex == 14 or self.quadIndex == 18 then --box
+        self.collider = false
+        Tile.tilemap.getTilemap()[self.x][self.y] = 0
+        self.isAlive = false
+
+        for i = 1, 3 do
+            local angle = math.random() * 2 * math.pi
+
+            local dx = math.cos(angle)
+            local dy = math.sin(angle)
+            
+            local lifetime = math.random(40, 50) / 100
+            local size = math.random(8, 10) / 10
+            local particle = Ball:new(self.xWorld, self.yWorld, 1,dx, dy, lifetime, size )
+            table.insert(Game.particles, particle)
+            local particle = Ball:new(self.xWorld, self.yWorld, 1,-dx, -dy, lifetime, size )
+            table.insert(Game.particles, particle)
+        end
+
+        local bp = BoxParticle:new(self.xWorld, self.yWorld)
+        table.insert(Game.particles, bp)
+
+        local playerDistance = distance(Player, self)
+        
+        local bulletSound = love.audio.newSource("assets/sfx/particles/break-box.mp3", "static")
+
+        local volume = getDistanceVolume(playerDistance, 0.3, 200)
+        bulletSound:setVolume(volume)
+        bulletSound:setPitch((0.9 + math.random() * 0.1) * GAME_PITCH)
+        bulletSound:play()
+
+
+        local coinSound = love.audio.newSource("assets/sfx/drops/coin-drop.mp3", "static")
+        local playerDistance = distance(Player, self)
+        local volume = getDistanceVolume(playerDistance, 0.4, 200)
+
+        coinSound:setVolume(volume)
+        coinSound:setPitch((1 + math.random() * 0.1) * GAME_PITCH)
+        coinSound:play()
+
+        local coinDrop = require("scripts/drops/coin")
+        local drop = coinDrop:new(self.xWorld, self.yWorld)
+        table.insert(Game.objects, drop)
+
+    end
+end
 
 function Tile:draw()
+    if not self.isAlive then
+        return
+    end
+
     local tileSet = TileSet:getTileSet()
     local tileSize = TileSet.tileSize
     local tilesetImage = TileSet.tilesetImage

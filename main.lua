@@ -32,6 +32,7 @@ scale = 1
 MUSIC_VOLUME = 0.6
 GAME_VOLUME = 1
 GAME_PITCH = 1
+SLOW = false
 
 function love.load()
     
@@ -149,7 +150,9 @@ function love.keypressed(key)
         fullscreen()
     end
 
-
+    if key == "j" then
+        SLOW = not SLOW
+    end
 
     if state == STATES.mainMenu then
         MainMenu:keypressed(key)
@@ -180,7 +183,9 @@ function love.resize(w, h)
 end
 
 function love.update(dt)
-
+    if SLOW then
+        dt = dt * 0.001
+    end
     if state == STATES.game then
         Game:update(dt)
     elseif state == STATES.mainMenu then

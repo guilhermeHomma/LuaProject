@@ -16,7 +16,7 @@ function Gun:load()
     self.gunSheet:setFilter("nearest", "nearest")
     self.bulletSheet:setFilter("nearest", "nearest")
     self.squareAngle = 0
-    self.gunIndex = 1 -- 1 2 ou 3
+    self.gunIndex = 0 -- 1 2 ou 3
     self.height = 16
     self.angle = 0
 
@@ -26,8 +26,8 @@ function Gun:load()
         {shotCooldown = 0.3, magCount = 10, magCapacity = 10, damage = 15, bulletSpeed = 340, shootFunction = function() self:shootPistol() end},
         {shotCooldown = 0.6, magCount = 12, magCapacity = 8, damage = 10, bulletSpeed = 250, shootFunction = function() self:shootSquareGun() end},
     }
-    self.currentMagCapacity = self.gunConfig[self.gunIndex].magCapacity
-    self.currentMagCount = self.gunConfig[self.gunIndex].magCount
+    self.currentMagCapacity = 0
+    self.currentMagCount = 0
 
     self.shootTimer = 0
     self.showGunTime = 0.5
@@ -155,6 +155,8 @@ function Gun:shootRaygun()
 end
 
 function Gun:shoot()
+    if self.gunIndex == 0 then return end
+
     if self.gunConfig[self.gunIndex].shotCooldown >= self.shootTimer then return end
 
     self.showGun = true
@@ -186,6 +188,7 @@ function Gun:shoot()
 end
 
 function Gun:aim()
+    if self.gunIndex <= 0 then return end
     self.showGun = true
     self.showSight = true
 end
@@ -201,6 +204,7 @@ function Gun:changeGun(index)
 end
 
 function Gun:drawSight()
+    if self.gunIndex == 0 then return end
     if not self.showSight then return end
     self.showSight = false
     local mouseX, mouseY = mousePosition()
@@ -259,6 +263,7 @@ function Gun:drawUI()
     --love.graphics.rectangle("line", startX + size + 10, startY, size, size)
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.setLineWidth(1)
+    if self.gunIndex <= 0 then return end
     local quad = love.graphics.newQuad(
         (self.gunIndex - 1) * self.size, 16,
         self.size, self.size,

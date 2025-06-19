@@ -50,6 +50,9 @@ function Bullet:isColliding(size)
             local tileBox = { x = tile.xWorld - tile.size/2, y = tile.yWorld - tile.size, width = tile.size, height = tile.size }
 
             if checkCollision(box, tileBox) then
+                if type(tile.onshoot) == "function" then
+                    tile:onshoot()
+                end
                 return true
             end
         end

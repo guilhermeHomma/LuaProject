@@ -17,8 +17,9 @@ function Game:load()
     
     math.randomseed(os.time())
     love.graphics.setDefaultFilter("nearest", "nearest")
-    camera = Camera:new(-5, -30, Player)
     Player:load(camera)
+    camera = Camera:new(Player.x-5, Player.y-30, Player)
+    
 
     Ground:load()
     WaveManager:load()
@@ -210,7 +211,7 @@ end
 
 function Game:keypressed(key)
     if key == "f6" then
-        --DEBUG = not DEBUG
+        DEBUG = not DEBUG
     elseif key == "x" then
         Tilemap:keypressed(key)
     elseif key == "o" then

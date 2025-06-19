@@ -10,6 +10,7 @@ require "scripts.objects.tree"
 require "scripts.objects.grass"
 require "scripts.objects.house"
 require "scripts.objects.pole"
+require "scripts.objects.counter"
 
 tileSet = require("scripts.objects.tileset")
 
@@ -47,6 +48,7 @@ function loadTilemapFromImage()
 
                 {r = 0.5,   g = 0.5,   b = 0,   tile = 10}, -- house                
                 {r = 0,   g = 0.5,   b = 0.5,   tile = 11}, -- pole                
+                {r = 1,   g = 0.5,   b = 0.5,   tile = 12}, -- counter                
             }
 
             for _, def in ipairs(tileDefinitions) do
@@ -119,7 +121,7 @@ function Tilemap:load()
     self.grass = {}
     self.tiles = {}
     
-    local itemStoreList = {1, 2, 3}
+    local itemStoreList = {1, 2, 3, 4}
 
     for y = 1, #tilemap do
         for x = 1, #tilemap[y] do
@@ -130,6 +132,7 @@ function Tilemap:load()
                 self:hasTileClose(x, y, 8) or 
                 self:hasTileClose(x, y, 4) or 
                 self:hasTileClose(x, y, 9) or 
+                self:hasTileClose(x, y, 2) or 
                 self:hasTileClose(x, y, 11) or 
                 self:hasTileClose(x, y, 6) then 
                 collider = true
@@ -153,7 +156,10 @@ function Tilemap:load()
                 table.insert(self.tiles, t)
             elseif tile == 9 then
 
-            elseif tile == 11 then --house
+            elseif tile == 12 then --pole
+                local t = Counter:new(x, y, 30, collider)
+                table.insert(self.tiles, t)
+            elseif tile == 11 then --pole
                 local t = Pole:new(x, y, 30, collider)
                 table.insert(self.tiles, t)
             elseif tile == 10 then --house
@@ -210,7 +216,12 @@ function Tilemap:update(dt)
     end
 
     for _, tile in ipairs(self.tiles) do
-        tile:update(dt)
+        if tile.isAlive then
+            tile:update(dt) 
+        else
+            --table.remove(self.tiles, _)
+        end
+
     end
 end
 

@@ -18,9 +18,13 @@ function WaveManager:load()
 
     self.font = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 32)
     self.font:setFilter("nearest", "nearest")
+
+    self.start = false
 end
 
 function WaveManager:update(dt)
+    if not self.start then return end
+
     if self.enemiesSpawned < self.enemiesPerWave and #Game.enemies < maxEnemiesAlive then
         self.spawnTimer = self.spawnTimer + dt
         if self.spawnTimer >= self.nextInterval then

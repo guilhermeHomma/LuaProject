@@ -16,9 +16,11 @@ local frameHeight = sheetHeight
 local stretch = 1.5
 
 local gunDict  = {
+    {name = "pistol", price = 50, index = 1, bulletPrice = 35},
     {name = "raygun", price = 600, index = 3, bulletPrice = 200},
     {name = "squaregun", price = 220, index = 4, bulletPrice = 80},
     {name = "shotgun", price = 450, index = 2, bulletPrice = 95},
+
 }
 
 for i = 0, (sheetWidth / frameWidth) - 1 do
