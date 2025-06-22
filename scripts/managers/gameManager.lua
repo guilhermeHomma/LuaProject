@@ -12,7 +12,7 @@ local DoorsManager = require("scripts/managers/doorsManager")
 local HeartSound = require("scripts/player/heartSound")
 
 
-local font = love.graphics.newFont("assets/fonts/pixelart.ttf", 24)
+local font = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 32)
 camera = nil
 
 function Game:load()
@@ -196,6 +196,7 @@ function Game:draw()
     camera:detach()  
 
     love.graphics.setFont(font)
+    font:setLineHeight(0.65)
     love.graphics.setColor(1, 1, 1, self.textAlpha)
     love.graphics.printf(
         self.drawtext,

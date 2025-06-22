@@ -34,9 +34,15 @@ end
 function Bullet:checkCollisionWithEnemy(enemy)
     local dx = self.x - enemy.x
     local dy = self.y - enemy.y
-    local distance = math.sqrt(dx * dx + dy * dy)
 
-    return distance < (self.radius + 6)
+    
+    local dist= distance(self, enemy)
+    local dist2 = distance({x=enemy.x, y=enemy.y - 6}, self)
+    local dist3 = distance({x=enemy.x, y=enemy.y - 12}, self)
+
+    return dist < (self.radius + 6) 
+    or dist2 < (self.radius + 6)
+    or dist3 < (self.radius + 8)
 end
 
 

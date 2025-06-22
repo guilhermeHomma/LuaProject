@@ -10,7 +10,7 @@ sprite2:setFilter("nearest", "nearest")
 sprite3:setFilter("nearest", "nearest")
 sprite4:setFilter("nearest", "nearest")
 
-local stretch = 1.5
+local stretch = 1.4
 
 
 local grassShader = love.graphics.newShader([[

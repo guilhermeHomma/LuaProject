@@ -3,7 +3,9 @@
 local Gun = {}
 
 local Bullet = require("scripts/bullet")
+local whiteShader = love.graphics.newShader("scripts/shaders/whiteShader.glsl")
 
+local WalkParticle = require("scripts/particles/walkParticle")
 
 function Gun:load()
     self.x = 0
@@ -101,6 +103,10 @@ function Gun:shootShotgun()
     bulletSound:setVolume(0.7)
     bulletSound:setPitch((0.7 + math.random() * 0.1) * GAME_PITCH)
     bulletSound:play()
+
+    local lifetime = math.random(45, 55) / 100
+    local particle = WalkParticle:new(self.x + offsetX * 2.5, self.y + offsetY*2.5 - self.height, lifetime)
+    table.insert(Game.particles, particle)
 end
 
 function Gun:shootPistol()
@@ -124,6 +130,11 @@ function Gun:shootPistol()
     bulletSound:setVolume(0.5)
     bulletSound:setPitch((0.9 + math.random() * 0.1) * GAME_PITCH)
     bulletSound:play()
+
+    local lifetime = math.random(45, 55) / 100
+    local particle = WalkParticle:new(self.x + offsetX * 2.5, self.y + offsetY*2.5 - self.height, lifetime)
+    table.insert(Game.particles, particle)
+
 end
 
 function Gun:shootSquareGun()
@@ -146,6 +157,12 @@ function Gun:shootSquareGun()
     bulletSound:setVolume(0.6)
     bulletSound:setPitch((0.9 + math.random() * 0.1) * GAME_PITCH)
     bulletSound:play()
+
+    local lifetime = math.random(45, 55) / 100
+    local particle = WalkParticle:new(self.x + offsetX * 2.5, self.y + offsetY*2.5 - self.height, lifetime)
+    table.insert(Game.particles, particle)
+
+
 end
 
 function Gun:shootRaygun()
@@ -211,7 +228,7 @@ end
 function Gun:changeGun(index)
     self.gunIndex = index
     self.showGun = true
-    self.shootTimer = 0 - math.random() * 0.1
+    self.shootTimer = 0.2 - math.random() * 0.1
 
     self.currentMagCapacity = self.gunConfig[self.gunIndex].magCapacity
     self.currentMagCount = self.gunConfig[self.gunIndex].magCount
@@ -345,6 +362,17 @@ function Gun:draw()
     local offsetX = math.cos(self.angle) * self.centerDistance
     local offsetY = math.sin(self.angle) * self.centerDistance
 
+    if self.shootTimer <= 0.01 then
+        if self.shootTimer >= 0.01 then
+            
+            love.graphics.setColor(0, 0, 0, 1)
+        else
+            love.graphics.setShader(whiteShader)
+
+        end
+
+    end
+
     for i = 2, 0, -0.5 do
 
         love.graphics.draw(
@@ -358,7 +386,8 @@ function Gun:draw()
             self.size / 2
         )
     end 
-
+    love.graphics.setShader()
+    love.graphics.setColor(1, 1, 1, 1)
 end
 
 return Gun

@@ -35,8 +35,8 @@ vec4 effect(vec4 color, Image texture, vec2 texture_coords, vec2 screen_coords) 
     vec4 texel = blur(texture_coords, texture, blur_strength);
 
     texel.b = adjustSaturation(texel.rgb, saturation).b;
-    texel.g = adjustSaturation(texel.rgb, saturation/2).g;
-    texel.r = adjustSaturation(texel.rgb, saturation/2).r;
+    texel.g = adjustSaturation(texel.rgb, saturation*0.8).g;
+    texel.r = adjustSaturation(texel.rgb, saturation*0.8).r;
 
     texel.rgb = adjustBrightness(texel.rgb, brightness);
 

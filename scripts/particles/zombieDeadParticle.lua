@@ -99,7 +99,7 @@ function ZombieParticle:draw()
     if self.timer < 0.2 then
         quad = love.graphics.newQuad(6 * 32, 0, 32, 32, sheetWidth, sheetHeight)
     end
-    love.graphics.draw(self.sprite, quad, self.x, self.y + 3, 0, 1, 1.5, 32 / 2, 32)
+    love.graphics.draw(self.sprite, quad, self.x, self.y + 3, 0, 1, 1.4, 32 / 2, 32)
     love.graphics.setShader()   
 
     --love.graphics.circle("fill", self.x, self.y -self.height, self.radius)

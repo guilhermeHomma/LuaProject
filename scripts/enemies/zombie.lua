@@ -8,7 +8,7 @@ local whiteShader = love.graphics.newShader("scripts/shaders/whiteShader.glsl")
 local WalkParticle = require("scripts/particles/walkParticle")
 
 local coinDrop = require("scripts/drops/coin")
-
+local stretch = 1.4
 require("scripts/utils")
 
 function Zombie:new(x, y, speed)
@@ -463,7 +463,7 @@ function Zombie:draw()
         end
     end
 
-    love.graphics.draw(self.spriteSheet, self.frames[self.currentFrame], xOffset +self.x, self.y, 0, scaleX, 1.5, self.frameWidth / 2, self.frameHeight)
+    love.graphics.draw(self.spriteSheet, self.frames[self.currentFrame], xOffset +self.x, self.y, 0, scaleX, stretch, self.frameWidth / 2, self.frameHeight)
     love.graphics.setShader()
     love.graphics.setColor(1, 1, 1, 1)
     self:drawMouth()

@@ -31,7 +31,9 @@ function DoorsManager:getSouthText()
         return "Click X to open this passage"
     end
 
-    return "You need to reach wave " .. WaveManager.openSouthWave .. " to open this passage"
+    local waveNumber = tostring(WaveManager.openSouthWave)
+
+    return "You need to reach wave " .. waveNumber .. " to open this passage"
 end
 
 function DoorsManager:getNorthText()

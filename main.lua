@@ -17,7 +17,7 @@ baseHeight = 540
 canvas = love.graphics.newCanvas(baseWidth, baseHeight)
 STATES = {mainMenu = 1, game = 2, gamePause = 3, gameDead = 4, gameIntro = 5}
 state = STATES.mainMenu
-YSCALE = 2.4
+YSCALE = 2.6
 --baseWidth = 1120
 --baseHeight = 630
 local shader = love.graphics.newShader("scripts/shaders/distortion.glsl")
@@ -235,7 +235,7 @@ function love.draw()
 
     love.graphics.setCanvas()
 
-    shader:send("saturation", 0.6)
+    shader:send("saturation", 0.8)
     shader:send("brightness", 1)
     shader:send("distortion", TransitionManager.distortion)
 

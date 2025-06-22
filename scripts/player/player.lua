@@ -425,7 +425,7 @@ function Player:draw()
             self.x,
             self.y,
             0,
-            scaleX, 1.5,
+            scaleX, 1.4,
             originX, self.spriteSize
         )
         self:drawHand()
@@ -437,7 +437,7 @@ function Player:draw()
             self.x,
             self.y,
             0,
-            scaleX, 1.5,
+            scaleX, 1.4,
             originX, self.spriteSize
         )
     end

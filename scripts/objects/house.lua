@@ -27,7 +27,7 @@ function HouseTile:draw()
     local tilesetImage = TileSet.tilesetImage
     love.graphics.draw(tilesetImage, tileSet[5], self.xWorld, self.yWorld + 1, 0, 1, 1, tileSize/2, tileSize)
 
-    love.graphics.draw(sprite, self.xWorld, self.yWorld , 0, 1, 1.5, spriteWidth/2, spriteHeight)
+    love.graphics.draw(sprite, self.xWorld, self.yWorld , 0, 1, 1.4, spriteWidth/2, spriteHeight)
 end
 
 return HouseTile
