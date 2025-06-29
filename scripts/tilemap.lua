@@ -11,6 +11,7 @@ require "scripts.objects.grass"
 require "scripts.objects.house"
 require "scripts.objects.pole"
 require "scripts.objects.counter"
+require "scripts.objects.container"
 
 tileSet = require("scripts.objects.tileset")
 
@@ -49,6 +50,7 @@ function loadTilemapFromImage()
                 {r = 0.5,   g = 0.5,   b = 0,   tile = 10}, -- house                
                 {r = 0,   g = 0.5,   b = 0.5,   tile = 11}, -- pole                
                 {r = 1,   g = 0.5,   b = 0.5,   tile = 12}, -- counter                
+                {r = 0.5,   g = 0,   b = 1,   tile = 13}, -- container                
             }
 
             for _, def in ipairs(tileDefinitions) do
@@ -155,8 +157,15 @@ function Tilemap:load()
                 local t = Water:new(x, y, index, c)
                 table.insert(self.tiles, t)
             elseif tile == 9 then
+            elseif tile == 13 then --container
+                local mustDraw = false
+                if tilemap[y-1][x] ~= 13 and tilemap[y][x-1] ~= 13 then
+                    mustDraw = true
+                end
 
-            elseif tile == 12 then --pole
+                local t = Container:new(x, y, 30, true, mustDraw)
+                table.insert(self.tiles, t)
+            elseif tile == 12 then --car
                 local t = Counter:new(x, y, 30, collider)
                 table.insert(self.tiles, t)
             elseif tile == 11 then --pole

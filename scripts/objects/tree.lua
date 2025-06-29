@@ -40,12 +40,19 @@ function TreeTile:new(x, y, quadIndex, collider)
     tile.yAdd = math.random(3, 3)
     tile.treeIndex = math.random(3)
 
-    if math.random(34) == 1 and not collider then 
+    if math.random(30) == 1 and not collider then 
         tile.treeIndex = 4
     end
 
-    if math.random(50) == 1 and not collider then
+    if math.random(45) == 1 and not collider then
         tile.treeIndex = 5
+    end
+
+    tile.stretch = 1.4
+    if tile.treeIndex == 5 then 
+        tile.stretch = 1.2
+    elseif math.random() > 0.6 then
+        tile.stretch = 1.3
     end
 
     setmetatable(tile, TreeTile)
@@ -93,7 +100,7 @@ function TreeTile:draw()
     end
     shader:send("direction", self.shaderDirection)
     if not self.collider then
-        love.graphics.draw(tilesetImage, tileSet[5], self.xWorld, self.yWorld + 1, 0, 1, 1, tileSize/2, tileSize)
+        love.graphics.draw(tilesetImage, tileSet[5], self.xWorld, self.yWorld , 0, 1, 1, tileSize/2, tileSize)
     end
     local targetAlpha = 1
     local image = threeImage1
@@ -118,7 +125,7 @@ function TreeTile:draw()
         end
     end
     
-    love.graphics.draw(image, self.xWorld, self.yWorld, 0, 1, 1.5, 32, 93)
+    love.graphics.draw(image, self.xWorld, self.yWorld, 0, 1, self.stretch, 32, 93)
     love.graphics.setColor(r, g, b, a) 
     love.graphics.setShader()
     self:drawDebug()    

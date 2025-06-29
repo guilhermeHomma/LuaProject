@@ -127,19 +127,20 @@ function Player:update(dt)
     local moveX, moveY = 0, 0
 
     -- Input WASD
-    if love.keyboard.isDown("w") then
-        moveY = moveY - 1
+    if not Dialog.breakMovements then
+        if love.keyboard.isDown("w") then
+            moveY = moveY - 1
+        end
+        if love.keyboard.isDown("s") then
+            moveY = moveY + 1
+        end
+        if love.keyboard.isDown("a") then
+            moveX = moveX - 1
+        end
+        if love.keyboard.isDown("d") then
+            moveX = moveX + 1
+        end
     end
-    if love.keyboard.isDown("s") then
-        moveY = moveY + 1
-    end
-    if love.keyboard.isDown("a") then
-        moveX = moveX - 1
-    end
-    if love.keyboard.isDown("d") then
-        moveX = moveX + 1
-    end
-
     if moveX ~= 0 and moveY ~= 0 then
         local diagFactor = 1 / math.sqrt(2)
         moveX = moveX * diagFactor
@@ -341,6 +342,8 @@ function Player:drawSight()
     if not self.isAlive then
         return
     end
+    if Dialog.breakMovements then return end
+
 
     self.gun:drawSight()
 end
@@ -380,6 +383,7 @@ end
 
 function Player:drawHand()
     if not self.gun.showGun then return end
+    if Dialog.breakMovements then return end
 
     local handX = self.x + math.cos(self.mouseAngle) * 5
     local handY = self.y + math.sin(self.mouseAngle) * 7

@@ -23,10 +23,10 @@ function MainMenu:load()
     baseMenu.load(self)
     self.MenuTItle = "mobize"
     self.menuOptions = {"start game", "exit",} -- "options"}
-    self.fontTitle = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 80)
+    self.fontTitle = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 48)
     self.fontTitle:setFilter("nearest", "nearest")
 
-    self.fontOptions = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 48)
+    self.fontOptions = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 32)
     self.fontOptions:setFilter("nearest", "nearest")
 
 
@@ -58,6 +58,7 @@ end
 function MainMenu:onSelect()
     if self.selectedOption == 1 then
         loadGame()
+        --loadIntro()
     elseif self.selectedOption == #self.menuOptions then
         quitGame()
     end

@@ -49,7 +49,7 @@ function babyZombie:noiseCheck(dt)
         self.soundTimer = 0
         local soundPositionX, soundPositionY = soundPosition(Player, self)
         local playerDistance = distance(Player, self) / 2
-        local volume = getDistanceVolume(playerDistance, 0.7, 200)
+        local volume = getDistanceVolume(playerDistance, 0.5, 180)
         self.noise:setPosition(soundPositionX, soundPositionY, 0)
         self.noise:setVolume(volume)
         self.noise:setPitch((2 + math.random() * 0.2) * GAME_PITCH)

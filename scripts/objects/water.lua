@@ -5,7 +5,7 @@ Water.__index = Water
 local waterShader = love.graphics.newShader("scripts/shaders/waterShader.glsl")
 local sheetImage = love.graphics.newImage("assets/sprites/objects/water-tileset.png")
 local sheetWidth, sheetHeight = sheetImage:getDimensions()
-local frameQty = 2
+local frameQty = 3
 sheetImage:setFilter("nearest", "nearest")
 
 local function getQuadList(animIndex)
@@ -39,20 +39,34 @@ function Water:new(x, y, quadIndex, collider)
     tile.isWater = true
     tile.quad = getQuadList(0)[quadIndex]
     tile.quad2 = getQuadList(1)[quadIndex]
+    tile.quad3 = getQuadList(2)[quadIndex]
 
     tile.currentFrame = 0
     tile.timer = 0
+    tile.frameDirection = 1
     setmetatable(tile, Water)
     return tile
 end
 
 function Water:update(dt)
+    addToDrawQueue(self.yWorld - 16, self)
 
-    addToDrawQueue(self.yWorld-16, self)
     self.timer = self.timer + dt
-    if self.timer >= 0.9 then
-        self.timer = self.timer - 0.9
-        self.currentFrame = 1 - self.currentFrame
+
+    if self.timer >= 0.4 then
+        self.timer = self.timer - 0.4
+
+        -- Atualiza o frame
+        self.currentFrame = self.currentFrame + self.frameDirection
+
+        -- Verifica se chegou nos limites e inverte a direção
+        if self.currentFrame >= 2 then
+            self.currentFrame = 2
+            self.frameDirection = -1
+        elseif self.currentFrame <= 0 then
+            self.currentFrame = 0
+            self.frameDirection = 1
+        end
     end
 end
 
@@ -64,6 +78,9 @@ function Water:draw()
     local currentQuad = self.quad
     if self.currentFrame == 1 then
         currentQuad = self.quad2
+    end
+    if self.currentFrame == 2 then
+        currentQuad = self.quad3
     end
     love.graphics.draw(sheetImage, currentQuad, self.xWorld, self.yWorld + 16, 0, 1, 1, 16/2, 16*2)
     love.graphics.setShader()

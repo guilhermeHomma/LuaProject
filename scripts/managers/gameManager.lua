@@ -2,6 +2,7 @@ local Game = {}
 
 Player = require "scripts/player/player"
 Camera = require("scripts/camera")
+Dialog = require("scripts/dialog/dialog")
 
 local Ground = require("scripts/ground")
 local WaveManager = require("scripts/managers/waves")
@@ -10,7 +11,9 @@ local Tilemap = require("scripts/tilemap")
 local PointsManager = require("scripts/managers/pointsManager")
 local DoorsManager = require("scripts/managers/doorsManager")
 local HeartSound = require("scripts/player/heartSound")
+local CreatorManager = require "scripts.managers.CreatorManager"
 
+local Trail = require("scripts.objects.trails") 
 
 local font = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 32)
 camera = nil
@@ -22,7 +25,7 @@ function Game:load()
     Player:load(camera)
     camera = Camera:new(Player.x-5, Player.y-30, Player)
     
-
+    Trail:load()
     Ground:load()
     WaveManager:load()
     Clouds:load(Player)
@@ -30,6 +33,8 @@ function Game:load()
     DoorsManager:load()
     PointsManager:load()
     HeartSound:load()
+    Dialog:load()
+    CreatorManager:load()
 
     local cursorImage = love.image.newImageData("assets/sprites/cursor.png")
     local cursor = love.mouse.newCursor(cursorImage, 8, 8) 
@@ -46,6 +51,7 @@ function Game:load()
     self.drawtext = "init text\ninit text\nyou shouldnt see this"
     self.textAlpha = 0
     self.textAlphaTarget = 0
+
     --self:openNorth()
     --self:openSouth()
 end
@@ -98,7 +104,7 @@ function Game:update(dt)
     end
     GAME_PITCH = transitionValue(GAME_PITCH, targetPitch, 1.3, dt)
 
-
+    
     self.textAlpha = transitionValue(self.textAlpha, self.textAlphaTarget, 5, dt)
     self.textAlphaTarget = 0
 
@@ -134,7 +140,7 @@ function Game:update(dt)
     HeartSound:update(dt)
     Tilemap:update(dt)
     PointsManager:update(dt)
-
+    CreatorManager:update(dt)
     camera:update(dt)
 end
 
@@ -173,7 +179,7 @@ function Game:draw()
     end
 
     Player:drawSight()
-
+    Trail:draw()
     for _, item in ipairs(self.drawQueue) do
         local d = distance(camera:objectPosition(), item.object)
 
@@ -207,6 +213,8 @@ function Game:draw()
     )
 
     love.graphics.setColor(1, 1, 1, 1)
+
+    Dialog:draw()
 
     PointsManager:draw()
     Player:drawLife()

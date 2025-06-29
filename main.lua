@@ -29,8 +29,8 @@ FPS = false
 
 scale = 1
 
-MUSIC_VOLUME = 0.6
-GAME_VOLUME = 1
+MUSIC_VOLUME = 0.7--0.6
+GAME_VOLUME = 0.8
 GAME_PITCH = 1
 
 function love.load()
@@ -53,7 +53,7 @@ function love.load()
     AmbienceSound:startGame()
     TransitionManager:load()
 
-    loadIntro()
+    --loadIntro()
 end
 
 function loadIntro()

@@ -6,6 +6,7 @@ local Clouds = require("scripts/clouds")
 local Tilemap = require("scripts/tilemap")
 local font = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 80)
 font:setFilter("nearest", "nearest")
+local Trail = require("scripts.objects.trails") 
 
 
 camera = nil
@@ -21,6 +22,7 @@ function GameIntro:load()
     Tilemap:load()
 
     self.drawQueue = {}
+    Trail:load()
 
     self.timer = 0
     self.changed = false
@@ -75,6 +77,8 @@ function GameIntro:draw()
             item.object:drawShadow()
         end
     end
+
+    Trail:draw()
 
     for _, item in ipairs(self.drawQueue) do
         local d = distance(camera:objectPosition(), item.object)

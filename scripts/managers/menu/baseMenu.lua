@@ -6,10 +6,10 @@ function baseMenu:load()
     self.menuOptions = {}
     self.selectedOption = 1
     self.MenuTItle = "MENU BASE - make a new menu"
-    self.fontTitle = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 64)
+    self.fontTitle = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 48)
     self.fontTitle:setFilter("nearest", "nearest")
 
-    self.fontOptions = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 48)
+    self.fontOptions = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 32)
     self.fontOptions:setFilter("nearest", "nearest")
     self.scale = 1
     self.lastSelectChange = -1
@@ -28,7 +28,7 @@ end
 function baseMenu:drawSelectSprite(text, y)
 
     local spriteX =  math.ceil(self:getWidth()/ 2 - self.fontOptions:getWidth(text) / 2 - 30)
-    love.graphics.draw(self.selectSprite, spriteX, y+ 9, 0, 3, 3)
+    love.graphics.draw(self.selectSprite, spriteX, y+ 3, 0, 3, 3)
 end
 
 function baseMenu:drawTitle()
