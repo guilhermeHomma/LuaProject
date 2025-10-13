@@ -60,7 +60,7 @@ function TreeTile:new(x, y, quadIndex, collider)
 end
 
 function TreeTile:update(dt)
-    addToDrawQueue(self.yWorld+1 + self.yAdd, self)
+    addToDrawQueue(self.yWorld+1 + self.yAdd, self, false)
     self.shaderDirection = math.sin(love.timer.getTime() + (self.yWorld/10)) * 0.45 + 1
     --print(self.shaderDirection)
 end

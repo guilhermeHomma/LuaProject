@@ -34,7 +34,7 @@ function Game:load()
     PointsManager:load()
     HeartSound:load()
     Dialog:load()
-    CreatorManager:load()
+    --CreatorManager:load()
 
     local cursorImage = love.image.newImageData("assets/sprites/cursor.png")
     local cursor = love.mouse.newCursor(cursorImage, 8, 8) 
@@ -140,7 +140,7 @@ function Game:update(dt)
     HeartSound:update(dt)
     Tilemap:update(dt)
     PointsManager:update(dt)
-    CreatorManager:update(dt)
+    --CreatorManager:update(dt)
     camera:update(dt)
 end
 
@@ -204,14 +204,16 @@ function Game:draw()
     love.graphics.setFont(font)
     font:setLineHeight(0.65)
     love.graphics.setColor(1, 1, 1, self.textAlpha)
-    love.graphics.printf(
-        self.drawtext,
-        0,        
-        getScreenHeight() - 80,           
-        getScreenWidth(),                
-        "center"
-    )
 
+    if not Dialog.visible then
+        love.graphics.printf(
+            self.drawtext,
+            0,        
+            getScreenHeight() - 80,           
+            getScreenWidth(),                
+            "center"
+        )
+    end 
     love.graphics.setColor(1, 1, 1, 1)
 
     Dialog:draw()
@@ -236,9 +238,14 @@ end
 
 function Game:keypressed(key)
     if key == "f6" then
-        DEBUG = not DEBUG
+        --DEBUG = not DEBUG
     elseif key == "x" then
-        Tilemap:keypressed(key)
+        if not Dialog.visible then
+            Tilemap:keypressed(key)
+
+        else
+            CreatorManager:keypressed(key)
+        end
     elseif key == "o" then
         DoorsManager:openSouth()
     elseif key == "n" then

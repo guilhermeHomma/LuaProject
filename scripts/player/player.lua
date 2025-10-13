@@ -53,10 +53,13 @@ function Player:load(camera)
 
     self.damageAlha = 0
 
+    self.shadowTimer = 0
+
 end
 
 function Player:updateAnimation(dt, moving)
     local newAnimation = moving and "walk" or "idle"
+    self.shadowTimer = self.shadowTimer + dt
 
     if self.currentAnimation ~= newAnimation then
         self.currentAnimation = newAnimation
@@ -286,13 +289,6 @@ function Player:death()
 
 end
 
-
-function love.mousepressed(x, y, button)
-    if button == 1 and Player.isAlive then
-        --self.gun:shoot()
-    end
-end
-
 function Player:drawLife()
     if not self.isAlive then
         return
@@ -353,7 +349,13 @@ function Player:drawShadow()
         return
     end
 
-    love.graphics.draw(self.playerShadow, self.x, self.y, 0, 0.85, 0.85, 8, 8)
+    if math.floor(self.shadowTimer * 2) % 2 == 0 then
+        love.graphics.draw(self.playerShadow, self.x, self.y, 0, 0.85, 0.85, 8, 8)
+    else
+        love.graphics.draw(self.playerShadow, self.x, self.y, 0, 0.82, 0.85, 8, 8)
+
+    end
+    
 end
 
 function Player:drawSquare(x, y, angle, halfSize)

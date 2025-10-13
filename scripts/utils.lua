@@ -10,13 +10,13 @@ end
 
 function transitionValue(value, targetValue, speed, dt)
 
-    if value ~= targetValue then
-        value = value + (targetValue - value) * dt *  speed
-        if math.abs(targetValue - value) < 0.001 then
-            value = targetValue
-        end
+    local difference = targetValue - value
+    local step = difference * math.min(dt * speed, 1.0)
+    value = value + step
+    
+    if math.abs(targetValue - value) < 0.001 then
+        value = targetValue
     end
-
     return value
 end
 

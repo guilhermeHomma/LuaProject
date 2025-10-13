@@ -17,7 +17,7 @@ baseHeight = 540
 canvas = love.graphics.newCanvas(baseWidth, baseHeight)
 STATES = {mainMenu = 1, game = 2, gamePause = 3, gameDead = 4, gameIntro = 5}
 state = STATES.mainMenu
-YSCALE = 2.6
+YSCALE = 2
 --baseWidth = 1120
 --baseHeight = 630
 local shader = love.graphics.newShader("scripts/shaders/distortion.glsl")
@@ -29,7 +29,7 @@ FPS = false
 
 scale = 1
 
-MUSIC_VOLUME = 0.7--0.6
+MUSIC_VOLUME = 0.4--0.6
 GAME_VOLUME = 0.8
 GAME_PITCH = 1
 
@@ -108,14 +108,20 @@ function fullscreen()
 end
 
 function addToDrawQueue(priority, object, checkDistance)
-    if not checkDistance then
+    if checkDistance == nil then
         checkDistance = true
     end
 
-    if distance(camera:objectPosition(), object) > 280 and checkDistance then
+    local cameraDistance = distance(camera:objectPosition(), object)
+
+    if cameraDistance > 280 and checkDistance == true then
         return
     end
-    
+
+    if cameraDistance > 350 then
+        return
+    end
+
     if STATES.gameIntro == state then
         table.insert(GameIntro.drawQueue, {priority = priority, object = object})
     else

@@ -14,7 +14,7 @@ function Pole:new(x, y, quadIndex, collider)
 end
 
 function Pole:update(dt)
-    addToDrawQueue(self.yWorld + 2, self)
+    addToDrawQueue(self.yWorld + 2, self, false)
 end
 
 function Pole:drawShadow()

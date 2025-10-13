@@ -57,15 +57,15 @@ function Gun:update(dt, playerX, playerY)
     if self.shootTimer >= self.showGunTime then
         self.showGun = false
     end
+    if not Dialog.breakMovements then
+        if love.mouse.isDown(2) then
+            self:aim()
+        end
 
-    if love.mouse.isDown(2) then
-        self:aim()
+        if love.mouse.isDown(1) then
+            self:shoot()
+        end
     end
-
-    if love.mouse.isDown(1) then
-        self:shoot()
-    end
-
     for i = #self.bullets, 1, -1 do
         local bullet = self.bullets[i]
         bullet:update(dt)

@@ -22,7 +22,7 @@ end
 
 function DialogBox:hide()
     self.visible = false
-    self.breakMovements = true
+    self.breakMovements = false
 
 end
 

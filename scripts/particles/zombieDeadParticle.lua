@@ -13,6 +13,15 @@ function ZombieParticle:new(x, y, sprite)
     particle.sprite = sprite
     particle.spriteShadow = love.graphics.newImage("assets/sprites/enemy/enemyShadow.png")
     particle.spriteShadow:setFilter("nearest", "nearest")
+
+    local playerDistance = distance(Player, particle)
+    local bulletSound = love.audio.newSource("assets/sfx/particles/particle-end.mp3", "static")
+
+    getDistanceVolume(playerDistance, 0.2, 200)
+    bulletSound:setVolume(0.07)
+    bulletSound:setPitch((1.2 + math.random() * 0.1) * GAME_PITCH)
+    bulletSound:play()
+
     return particle
 end
 

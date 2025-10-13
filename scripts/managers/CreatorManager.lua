@@ -10,7 +10,11 @@ function CreatorManager:update(dt)
     Creator:update(dt)
 end
 
-function CreatorManager:draw()
+
+function CreatorManager:keypressed(key)
+    if not key == "x" then return end
+    
+    Creator:keypressed(key)
     
 end
 

@@ -42,7 +42,7 @@ function Creator:update(dt)
     local time = love.timer.getTime()
     self.height = 25 + math.sin(time * 2) * 5
 
-    addToDrawQueue(self.y + 6, self)
+    addToDrawQueue(self.y + 60, self)
 end
 
 function Creator:drawShadow()
