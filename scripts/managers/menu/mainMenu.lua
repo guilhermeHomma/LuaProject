@@ -57,8 +57,8 @@ end
 
 function MainMenu:onSelect()
     if self.selectedOption == 1 then
-        --loadGame()
-        loadIntro()
+        loadGame()
+        --loadIntro()
     elseif self.selectedOption == #self.menuOptions then
         quitGame()
     end

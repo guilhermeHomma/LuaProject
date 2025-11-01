@@ -56,7 +56,7 @@ function GameIntro:update(dt)
 
     if self.timer > 7 and not self.changed then
         
-        loadGame()
+        quitToMenu()
         self:close()
         self.changed = true
     end

@@ -350,9 +350,9 @@ function Player:drawShadow()
     end
 
     if math.floor(self.shadowTimer * 2) % 2 == 0 then
-        love.graphics.draw(self.playerShadow, self.x, self.y, 0, 0.85, 0.85, 8, 8)
+        love.graphics.draw(self.playerShadow, self.x, self.y, 0, 1, 1, 8, 8)
     else
-        love.graphics.draw(self.playerShadow, self.x, self.y, 0, 0.82, 0.85, 8, 8)
+        love.graphics.draw(self.playerShadow, self.x, self.y, 0, 0.98, 1, 8, 8)
 
     end
     

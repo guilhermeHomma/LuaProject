@@ -1,6 +1,6 @@
 
 function checkCollision(a, b)
-    if distance(a, b) >60 then return false end
+    if distance(a, b) >50 then return false end
 
     return a.x < b.x + b.width and
            a.x + a.width > b.x and

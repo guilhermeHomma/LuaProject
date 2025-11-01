@@ -10,14 +10,15 @@ local Music = require("scripts/managers/music")
 local PauseMenu = require("scripts/managers/menu/pauseMenu")
 local GameoverMenu = require("scripts/managers/menu/gameoverMenu")
 local MainMenu = require("scripts/managers/menu/mainMenu")
+local LogoIntro = require("scripts/managers/menu/logoIntro")
 local TransitionManager = require("scripts.managers.transitionManager")
 
 baseWidth = 960
 baseHeight = 540
 canvas = love.graphics.newCanvas(baseWidth, baseHeight)
-STATES = {mainMenu = 1, game = 2, gamePause = 3, gameDead = 4, gameIntro = 5}
-state = STATES.mainMenu
-YSCALE = 2
+STATES = {mainMenu = 1, game = 2, gamePause = 3, gameDead = 4, gameIntro = 5, startLogo = 6}
+state = STATES.startLogo
+YSCALE = 2.2
 --baseWidth = 1120
 --baseHeight = 630
 local shader = love.graphics.newShader("scripts/shaders/distortion.glsl")
@@ -30,7 +31,7 @@ FPS = false
 scale = 1
 
 MUSIC_VOLUME = 0.4--0.6
-GAME_VOLUME = 0.8
+GAME_VOLUME = 0.95
 GAME_PITCH = 1
 
 function love.load()
@@ -45,6 +46,7 @@ function love.load()
     scale = math.max(scaleX, scaleY)
     love.audio.setVolume(GAME_VOLUME)
 
+    LogoIntro:load()
     MainMenu:load()
     AmbienceSound:load()
     PauseMenu:load()
@@ -52,7 +54,7 @@ function love.load()
     GameoverMenu:load()
     AmbienceSound:startGame()
     TransitionManager:load()
-
+    
     --loadIntro()
 end
 
@@ -137,7 +139,7 @@ function changePause()
         state = (state == STATES.gamePause) and STATES.game or STATES.gamePause
 
         local isPaused = state == STATES.gamePause
-        TransitionManager:setDistortion(0.4)
+        TransitionManager:setDistortion(0.55)
         Music:changePause(isPaused)
 
     end
@@ -184,7 +186,8 @@ function love.resize(w, h)
 end
 
 function love.update(dt)
-
+    --if dt > 0.017 then print(dt) end
+    
     if state == STATES.game then
         Game:update(dt)
     elseif state == STATES.mainMenu then
@@ -192,6 +195,10 @@ function love.update(dt)
 
     elseif state == STATES.gameIntro then
         GameIntro:update(dt)
+    elseif state == STATES.startLogo then
+        
+        LogoIntro:update(dt)
+    
     elseif state == STATES.gamePause then
         PauseMenu:update(dt)
     end
@@ -225,6 +232,9 @@ function love.draw()
 
     if state == STATES.gamePause then
         PauseMenu:draw()
+    elseif state == STATES.startLogo then
+        
+        LogoIntro:draw()
     elseif state == STATES.mainMenu then
         MainMenu:draw()
     elseif state == STATES.gameIntro then
@@ -236,7 +246,7 @@ function love.draw()
     TransitionManager:draw()
 
     if FPS or DEBUG then 
-        love.graphics.print("FPS: " .. love.timer.getFPS(), 10, 95)
+        love.graphics.print("FPS: " .. love.timer.getFPS(), 10, 295)
     end
 
     love.graphics.setCanvas()

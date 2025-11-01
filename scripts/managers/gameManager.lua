@@ -247,9 +247,9 @@ function Game:keypressed(key)
             CreatorManager:keypressed(key)
         end
     elseif key == "o" then
-        DoorsManager:openSouth()
+        --DoorsManager:openSouth()
     elseif key == "n" then
-        DoorsManager:openNorth()
+        --DoorsManager:openNorth()
     elseif tonumber(key) then
         --self:changeShaders(tonumber(key))
     end
