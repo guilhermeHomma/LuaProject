@@ -16,6 +16,8 @@ font:setFilter("nearest", "nearest")
 local sheetW, sheetH = sheetImage:getDimensions()
 local gunW, gunH = sheetGun:getDimensions()
 
+PlayerCloseStore = false
+
 local quads = {}
 local frameWidth = 32
 local frameHeight = sheetHeight
@@ -47,12 +49,14 @@ end
 function Store:update(dt)
     addToDrawQueue(self.yWorld, self)
     self.playerIsClose = false
+    PlayerCloseStore = false
     if Player.isAlive then
         if distance(Player, self) < 20 and Player.isAlive then
             self.targetAlpha = 1
             Game.textAlphaTarget = 1
             Game.drawtext = self:getText()
             self.playerIsClose = true
+            PlayerCloseStore = true
         else
             self.targetAlpha = 0
         end

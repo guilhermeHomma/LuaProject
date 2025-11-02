@@ -40,17 +40,19 @@ end
 function Tutorial:update(dt)
     self.timer = self.timer + dt
     self.tutorialTimer = self.tutorialTimer + dt
-    local activeTime = 0.45
-    local inactiveTime = 0.15
+    local activeTime = 0.15
+    local inactiveTime = 0.45
 
     local cycle = activeTime + inactiveTime
     local t = self.tutorialTimer % cycle
 
     local blinkActive = t < activeTime
 
-    if (self.drawWalk or self.drawmouse or self.drawX) and self.tutorialTimer > self.startTutorialTime then
+    if (self.drawWalk or self.drawmouse or (self.drawX and PlayerCloseStore)) and self.tutorialTimer > self.startTutorialTime then
         -- toca o som quando o blink volta (transição true -> false)
-        if (not blinkActive and self._blinkWasActive) then
+        if (blinkActive and not self._blinkWasActive) then
+
+
             local sound = love.audio.newSource("assets/sfx/logo/madewith.mp3", "static")
             sound:setVolume(0.02)
             sound:setPitch(0.75)
@@ -73,8 +75,8 @@ function Tutorial:draw()
 
     if self.tutorialTimer <= self.startTutorialTime then return end
 
-    if not self._blinkWasActive  then
-        love.graphics.setColor(0, 0, 0, 0.4)
+    if self._blinkWasActive  then
+        love.graphics.setColor(1, 1, 1, 0.75)
         --return
     end
     
@@ -85,7 +87,7 @@ function Tutorial:draw()
         love.graphics.draw(self.keyWalkImage, x , y, 0 , scale * 2, scale * YSCALE)
     end
 
-    if self.drawX then 
+    if self.drawX and PlayerCloseStore then 
         local y = getScreenHeight() - 100*scale*YSCALE
         local x = -16 * scale*2
 
