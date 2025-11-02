@@ -11,7 +11,7 @@ local TransitionManager = require("scripts.managers.transitionManager")
 function Player:load(camera)
     self.x = 30
     self.y = 340
-    self.speed = 60
+    self.speed = 82
     self.size = 40
     self.gun = require("scripts/player/gun")
     self.spriteSize = 40

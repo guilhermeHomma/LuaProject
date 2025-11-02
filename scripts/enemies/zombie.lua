@@ -16,7 +16,7 @@ function Zombie:new(x, y, speed)
 
     local speedTotal = speed
     if not speedTotal then
-        speedTotal = math.random(40, 50)
+        speedTotal = math.random(60, 74)
     end
 
     enemy.x = x

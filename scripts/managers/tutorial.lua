@@ -76,29 +76,29 @@ function Tutorial:draw()
     if self.tutorialTimer <= self.startTutorialTime then return end
 
     if self._blinkWasActive  then
-        love.graphics.setColor(1, 1, 1, 0.75)
+        love.graphics.setColor(1, 1, 1, 0.65)
         --return
     end
     
     if self.drawWalk then 
-        local y = getScreenHeight() - 84*scale*YSCALE
-        local x = -8 * scale*2 --getScreenWidth()
+        local y = getScreenHeight() - 84*3
+        local x = -8 * 3 --getScreenWidth()
 
-        love.graphics.draw(self.keyWalkImage, x , y, 0 , scale * 2, scale * YSCALE)
+        love.graphics.draw(self.keyWalkImage, x , y, 0 , 3, 3)
     end
 
     if self.drawX and PlayerCloseStore then 
-        local y = getScreenHeight() - 100*scale*YSCALE
-        local x = -16 * scale*2
+        local y = getScreenHeight() - 100* 3
+        local x = getScreenWidth() -110 *3 
 
-        love.graphics.draw(self.keyXImage, x , y, 0 , scale * 2, scale * YSCALE)
+        love.graphics.draw(self.keyXImage, x , y, 0 , 3, 3)
     end
 
     if self.drawmouse then 
-        local y = getScreenHeight() - 100*scale*YSCALE
-        local x = getScreenWidth() -110 * scale*2 
+        local y = getScreenHeight() - 100*3
+        local x = getScreenWidth() -110 *3 
 
-        love.graphics.draw(self.keyMouseImage, x , y, 0 , scale * 2, scale * YSCALE)
+        love.graphics.draw(self.keyMouseImage, x , y, 0 ,  3, 3)
     end
     love.graphics.setColor(1, 1, 1)
 

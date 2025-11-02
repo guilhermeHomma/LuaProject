@@ -56,10 +56,10 @@ function WaveManager:instanceEnemy()
 
     if self.wave == 1 then
         
-        table.insert(Game.enemies, Zombie:new(enemyX, enemyY, math.random(20, 25)))
+        table.insert(Game.enemies, Zombie:new(enemyX, enemyY, math.random(40, 45)))
 
     elseif self.wave < 4 then 
-        table.insert(Game.enemies, Zombie:new(enemyX, enemyY, math.random(30, 40)))
+        table.insert(Game.enemies, Zombie:new(enemyX, enemyY, math.random(50, 60)))
 
     --and self.wave > 8
     elseif math.random(1, 9) > 8  and self.wave  >= 6 then
