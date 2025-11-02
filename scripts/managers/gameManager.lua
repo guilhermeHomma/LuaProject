@@ -6,6 +6,7 @@ Dialog = require("scripts/dialog/dialog")
 
 local Ground = require("scripts/ground")
 local WaveManager = require("scripts/managers/waves")
+local Tutorial = require("scripts/managers/tutorial")
 local Clouds = require("scripts/clouds")
 local Tilemap = require("scripts/tilemap")
 local PointsManager = require("scripts/managers/pointsManager")
@@ -25,6 +26,16 @@ function Game:load()
     Player:load(camera)
     camera = Camera:new(Player.x-5, Player.y-30, Player)
     
+    self.spot = {
+        radius = 1,
+        feather = 3,
+        target = 50,
+        speed = 160,
+        speedIncrease = 1000,
+        enabled = true
+    }
+
+    Tutorial:load()
     Trail:load()
     Ground:load()
     WaveManager:load()
@@ -40,6 +51,9 @@ function Game:load()
     local cursor = love.mouse.newCursor(cursorImage, 8, 8) 
     love.mouse.setCursor(cursor)
 
+    self.sPSoundPlayed = false
+    self.sPSoundPlayedOutro = false
+
     self.enemies = {}
     self.drawQueue = {}
     self.particles = {}
@@ -51,6 +65,8 @@ function Game:load()
     self.drawtext = "init text\ninit text\nyou shouldnt see this"
     self.textAlpha = 0
     self.textAlphaTarget = 0
+    self.timer = 0
+
 
     --self:openNorth()
     --self:openSouth()
@@ -81,12 +97,55 @@ function Game:decreasePlayerPoints(qty)
     return PointsManager:decreasePoints(qty)
 end
 
+function Game:playSLSound()
+    if self.sPSoundPlayed then return end
+    local sound = love.audio.newSource("assets/sfx/spotlight/spotlight1.mp3", "static")
+    self.sPSoundPlayed = true
+    sound:setVolume(0.4)
+    sound:setPitch(1.1)
+    sound:play()
+end
+
+function Game:playSLSoundOutro()
+    if self.sPSoundPlayedOutro then return end
+    local sound = love.
+    audio.newSource("assets/sfx/spotlight/spotlight2.mp3", "static")
+    sound:setVolume(0.3)
+    --sound:setPitch(0.8)
+    sound:setPitch(1)
+    self.sPSoundPlayedOutro = true
+    sound:play()
+end
+
 
 function Game:update(dt)
     self.drawQueue = {}
     --love.audio.setPosition(Player.x, Player.y, 0)
     local targetPitch = 1
 
+
+
+    if self.spot.enabled then
+        self:playSLSound()
+        if self.timer > 1.8 then
+            self:playSLSoundOutro()
+            self.spot.target = 10000
+            self.spot.speed = self.spot.speedIncrease
+            self.spot.feather = self.spot.feather + 10*dt
+            self.spot.speedIncrease = self.spot.speedIncrease + 1000*dt
+        end
+
+        if self.spot.radius < self.spot.target then
+            self.spot.radius = self.spot.radius + self.spot.speed*dt
+        end
+        
+        if self.timer > 4 then 
+            self.spot.enabled = false 
+           
+        end
+    end
+
+    self.timer = self.timer + dt
     self.crowTimer = self.crowTimer - dt
     if self.crowTimer <= 0 then 
         self:crowNoise()
@@ -133,6 +192,7 @@ function Game:update(dt)
         end
     end
 
+    Tutorial:update(dt)
     WaveManager:update(dt)
     Clouds:update(dt)
     Player:update(dt)
@@ -222,6 +282,7 @@ function Game:draw()
     Player:drawLife()
     if Player and Player.isAlive then
         Player.gun:drawUI()
+        Tutorial:draw()
     end
     WaveManager:draw()
   
@@ -234,6 +295,30 @@ function Game:draw()
     love.graphics.rectangle("fill", 0, 0, baseWidth, baseHeight)
     love.graphics.setColor(1, 1, 1)
 
+end
+
+function DisableMouseTutorial()
+    if Tutorial.drawmouse == false then return end
+    Tutorial:playSound()
+    Tutorial.drawmouse = false
+    Tutorial.tutorialTimer = 0
+end
+
+function DisableXTutorial()
+    if Tutorial.drawX == false then return end
+    Tutorial:playSound()
+    Tutorial.drawX = false
+    Tutorial.drawmouse = true
+    Tutorial.tutorialTimer = 0
+end
+
+
+function DisableWalkTutorial()
+    if Tutorial.drawWalk == false then return end
+    Tutorial:playSound()
+    Tutorial.drawWalk = false
+    Tutorial.drawX = true
+    Tutorial.tutorialTimer = 0
 end
 
 function Game:keypressed(key)

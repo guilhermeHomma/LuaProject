@@ -12,7 +12,7 @@ function pauseMenu:load()
 end
 
 function pauseMenu:draw()
-    love.graphics.setColor(0, 0, 0, 0.5)
+    love.graphics.setColor(0.03, 0.02, 0.02, 1)
     love.graphics.rectangle("fill", 0, 0, baseWidth * 2, baseHeight * 2)
     baseMenu.draw(self)
 end

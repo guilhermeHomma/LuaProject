@@ -6,9 +6,15 @@ local sheetWidth, sheetHeight = sheetImage:getDimensions()
 local sheetGun = love.graphics.newImage("assets/sprites/player/guns.png")
 local font = love.graphics.newFont("assets/fonts/pixelart.ttf", 8)
 
+local outlineShader = love.graphics.newShader("scripts/shaders/outline.glsl")
+outlineShader:send("u_threshold", 0.1)
+outlineShader:send("u_outlineColor", {1, 1, 1, 1})
 sheetGun:setFilter("nearest", "nearest")
 sheetImage:setFilter("nearest", "nearest")
 font:setFilter("nearest", "nearest")
+
+local sheetW, sheetH = sheetImage:getDimensions()
+local gunW, gunH = sheetGun:getDimensions()
 
 local quads = {}
 local frameWidth = 32
@@ -34,17 +40,19 @@ function Store:new(x, y, quadIndex, collider, productIndex)
     tile.alpha = 1
     tile.targetAlpha = 1
     tile.product = gunDict[productIndex]
-
+    tile.playerIsClose = false
     return tile
 end
 
 function Store:update(dt)
     addToDrawQueue(self.yWorld, self)
+    self.playerIsClose = false
     if Player.isAlive then
         if distance(Player, self) < 20 and Player.isAlive then
             self.targetAlpha = 1
             Game.textAlphaTarget = 1
             Game.drawtext = self:getText()
+            self.playerIsClose = true
         else
             self.targetAlpha = 0
         end
@@ -101,9 +109,12 @@ end
 
 function Store:draw()
     love.graphics.setFont(font)
-
+    if tutorialGunActive or self.playerIsClose then
+        love.graphics.setShader(outlineShader)
+    end
+    outlineShader:send("u_texel", {1 / sheetW, 1 / sheetH})
     love.graphics.draw(sheetImage, quads[2], self.xWorld - frameWidth/2, self.yWorld - frameHeight * stretch, 0, 1, stretch)
-
+    love.graphics.setShader()
     self:drawGun()
     love.graphics.setColor(0, 0, 0, self.alpha)
     if Player.isAlive then 

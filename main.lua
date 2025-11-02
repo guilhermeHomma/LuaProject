@@ -24,6 +24,8 @@ YSCALE = 2.2
 local shader = love.graphics.newShader("scripts/shaders/distortion.glsl")
 local paletteList = require("scripts/shaders/paletteList")
 
+local spotlightShader = love.graphics.newShader("scripts/shaders/spotlight.glsl")
+local sceneCanvas, postCanvas
 
 DEBUG = false
 FPS = false
@@ -34,6 +36,19 @@ MUSIC_VOLUME = 0.4--0.6
 GAME_VOLUME = 0.95
 GAME_PITCH = 1
 
+
+
+
+local function createCanvases()
+  local w, h = love.graphics.getWidth(), love.graphics.getHeight()
+  sceneCanvas = love.graphics.newCanvas(w, h)
+  sceneCanvas:setFilter("nearest","nearest")
+  postCanvas  = love.graphics.newCanvas(w, h)
+  postCanvas:setFilter("nearest","nearest")
+  Game.spot.target = math.sqrt(w*w + h*h) * 0.7 -- cobre a diagonal
+end
+
+
 function love.load()
     
     local scaleX = love.graphics.getWidth() / baseWidth
@@ -42,7 +57,7 @@ function love.load()
     local icon = love.image.newImageData("assets/sprites/icon.png")
     --icon:setFilter("nearest", "nearest")
     love.window.setIcon(icon)
-
+    
     scale = math.max(scaleX, scaleY)
     love.audio.setVolume(GAME_VOLUME)
 
@@ -66,6 +81,7 @@ function loadIntro()
 
     TransitionManager:startTransition(function() callback() end)
 end
+
 
 function loadGame()
     local function callback()
@@ -183,6 +199,7 @@ function love.resize(w, h)
 
     scale = math.max(scaleX, scaleY)
 
+
 end
 
 function love.update(dt)
@@ -216,7 +233,7 @@ end
 
 
 function love.draw()
-
+    
     love.graphics.scale(1, 1)
     love.graphics.clear(0, 0, 0)
     
@@ -245,7 +262,7 @@ function love.draw()
 
     TransitionManager:draw()
 
-    if FPS or DEBUG then 
+    if (FPS or DEBUG) and state == STATES.game then 
         love.graphics.print("FPS: " .. love.timer.getFPS(), 10, 295)
     end
 
@@ -254,8 +271,14 @@ function love.draw()
     shader:send("saturation", 0.8)
     shader:send("brightness", 1)
     shader:send("distortion", TransitionManager.distortion)
-
-    love.graphics.setShader(shader)
+    if state == STATES.game and Game.spot.enabled then
+        local px, py = camera:getTargetScreenPosition()
+        spotlightShader:send("u_center", {px, py - 28*scale})
+        spotlightShader:send("u_radius", Game.spot.radius * scale)
+        spotlightShader:send("u_feather", Game.spot.feather)
+        love.graphics.setShader(spotlightShader)
+    end
+    
     love.graphics.draw(canvas, 0, 0, 0, scale, scale)
     love.graphics.setShader()
 end

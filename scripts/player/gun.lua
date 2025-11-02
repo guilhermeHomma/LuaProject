@@ -173,6 +173,8 @@ function Gun:shootRaygun()
 end
 
 function Gun:shoot()
+    DisableMouseTutorial()
+
     if self.gunIndex == 0 then return end
 
     if self.gunConfig[self.gunIndex].shotCooldown >= self.shootTimer then return end
@@ -209,6 +211,8 @@ end
 
 
 function Gun:aim()
+
+
     if self.gunIndex <= 0 then return end
     self.showGun = true
     self.showSight = true
@@ -226,6 +230,9 @@ function Gun:isFullBullets()
 end
 
 function Gun:changeGun(index)
+
+    DisableXTutorial()
+
     self.gunIndex = index
     self.showGun = true
     self.shootTimer = 0.2 - math.random() * 0.1

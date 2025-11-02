@@ -150,6 +150,10 @@ function Player:update(dt)
         moveY = moveY * diagFactor
     end
 
+    if moveX ~= 0 or moveY ~= 0 then
+        DisableWalkTutorial()
+    end
+
     local collidedX, collidedY = self:isColliding(
         moveX * self.speed * dt,
         moveY * self.speed * dt 

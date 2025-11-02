@@ -99,6 +99,18 @@ function Camera:attach()
     love.graphics.translate(-self.x, -self.y)
 end
 
+
+function Camera:getTargetScreenPosition()
+    if not self.target then return 0, 0 end
+    return self:worldToScreen(self.target.x, self.target.y)
+end
+
+function Camera:worldToScreen(wx, wy)
+    local px = (wx * 3 - self.x) * self.scale
+    local py = (wy * YSCALE - self.y) * self.scale
+    return px, py
+end
+
 function Camera:shake(intensity, decay)
     self.shakeIntensity = intensity or 50
     self.shakeDecay = decay or 0.4
