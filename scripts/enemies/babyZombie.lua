@@ -5,7 +5,7 @@ babyZombie.__index = babyZombie
 
 function babyZombie:new(x, y)
     local zombie = Zombie.new(self, x, y)
-    zombie.speed = math.random(68, 87)
+    zombie.speed = math.random(58, 77)
     zombie.damageTimer = 0.1
     zombie.dropPoints = 15
     zombie.totalLife = 35

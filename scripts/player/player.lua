@@ -11,7 +11,7 @@ local TransitionManager = require("scripts.managers.transitionManager")
 function Player:load(camera)
     self.x = 30
     self.y = 340
-    self.speed = 82
+    self.speed = 72
     self.size = 40
     self.gun = require("scripts/player/gun")
     self.spriteSize = 40
@@ -22,7 +22,7 @@ function Player:load(camera)
     self.life = self.totalLife
     self.isAlive = true
     self.flipX = false
-    self.playerSheet = love.graphics.newImage("assets/sprites/player/soldier/girl.png")
+    self.playerSheet = love.graphics.newImage("assets/sprites/player/soldier/girl-dir.png")
     self.playerShadow = love.graphics.newImage("assets/sprites/player/shadow.png")
     self.handImage = love.graphics.newImage("assets/sprites/player/hand.png")
     self.handImage:setFilter("nearest", "nearest")
@@ -39,12 +39,32 @@ function Player:load(camera)
 
     self.damageTimer = 4
     self.gun:load()
-
+    self.moveX = 0
+    self.moveY = 0
+    self.sideChangeTimer = 0
     self.quads = {}
     local sheetWidth = self.playerSheet:getWidth()
     for i = 0, 5 do
         local quad = love.graphics.newQuad(
             i * self.spriteSize, 0,
+            self.spriteSize, self.spriteSize,
+            sheetWidth, self.playerSheet:getHeight()
+        )
+        table.insert(self.quads, quad)
+    end
+
+    for i = 0, 5 do
+        local quad = love.graphics.newQuad(
+            i * self.spriteSize, 40,
+            self.spriteSize, self.spriteSize,
+            sheetWidth, self.playerSheet:getHeight()
+        )
+        table.insert(self.quads, quad)
+    end
+
+    for i = 0, 5 do
+        local quad = love.graphics.newQuad(
+            i * self.spriteSize, 80,
             self.spriteSize, self.spriteSize,
             sheetWidth, self.playerSheet:getHeight()
         )
@@ -113,7 +133,7 @@ end
 function Player:update(dt)
 
     local damageAlphaTarget = 0
-
+    self.sideChangeTimer = self.sideChangeTimer + dt
     if self.life == 1 then 
         damageAlphaTarget = 0.15
     end
@@ -177,21 +197,51 @@ function Player:update(dt)
 
     local mouseX, mouseY = mousePosition()
 
-    if not self.gun.showGun and moveX ~= 0 then
+    local canChangeSide = self.sideChangeTimer > 0.25
+    local haschangedSide = false
+    if moveX ~= 0 or moveY ~= 0 and canChangeSide then
+        self.moveX = moveX
+        self.moveY = moveY
+        if self.moveX ~= moveX or self.moveY ~= moveY then
+            self.sideChangeTimer = 0
+        end
+    end
+
+    if not self.gun.showGun and moveX ~= 0 and canChangeSide then
         if moveX > 0 then 
             self.flipH = true
         else 
             self.flipH = false
         end
-    elseif self.gun.showGun then
+    elseif self.gun.showGun and canChangeSide then
+
         if mouseX > self.x then
+            self.moveX = 1
             self.flipH = true
+            self.sideChangeTimer = 0
         elseif mouseX < self.x then
             self.flipH = false
+            self.moveX = -1
+            self.sideChangeTimer = 0
         end
+        if math.abs(mouseX - self.x) < 30 then
+            if mouseY > self.y then
+                self.moveY = 1
+                self.moveX = 0
+                self.sideChangeTimer = 0
+            elseif mouseY < self.y then
+                self.moveY = -1
+                self.moveX = 0
+                self.sideChangeTimer = 0
+            end
+        end
+
+ 
     end 
 
     self:checkDamage()
+
+
     self:updateAnimation(dt, moveX ~= 0 or moveY ~= 0)
     self:death()
 end
@@ -422,6 +472,17 @@ function Player:draw()
 
     local quad = self.quads[frameIndex + 1] -- +1 porque Lua começa em 1
 
+    if self.moveX == 0 and self.moveY > 0  then
+        quad = self.quads[frameIndex + 1 + 6]
+
+    end
+
+    if self.moveX == 0 and self.moveY < 0  then
+        quad = self.quads[frameIndex + 1 + 12]
+
+    end
+    
+
     local scaleX = self.flipH and -1 or 1
     local originX = self.flipH and (self.spriteSize - self.spriteSize / 2) or (self.spriteSize / 2)
     
@@ -435,7 +496,7 @@ function Player:draw()
             self.x,
             self.y,
             0,
-            scaleX, 1.4,
+            scaleX, 1.5,
             originX, self.spriteSize
         )
         self:drawHand()
@@ -447,7 +508,7 @@ function Player:draw()
             self.x,
             self.y,
             0,
-            scaleX, 1.4,
+            scaleX, 1.5,
             originX, self.spriteSize
         )
     end

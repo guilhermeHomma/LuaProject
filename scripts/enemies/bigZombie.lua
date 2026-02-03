@@ -5,7 +5,7 @@ BigZombie.__index = BigZombie
 
 function BigZombie:new(x, y)
     local zombie = Zombie.new(self, x, y)
-    zombie.speed = math.random(43, 64)
+    zombie.speed = math.random(33, 47)
     zombie.damageTimer = 0.1
     zombie.dropPoints = 20
     zombie.coinDropQty = math.random(4, 5)
