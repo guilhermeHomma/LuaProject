@@ -38,13 +38,13 @@ local function getGrassIndex(tile)
     if tile == 1 then
         if math.random() < 0.1 then return 1 end
         if math.random() < 0.6 then return 3 end
-        if math.random() < 0.4 then return 2 end
+        if math.random() < 0.04 then return 2 end
     return 4 
     end
 
     if math.random() < 0.8 then return 1 end
     if math.random() < 0.4 then return 3 end
-    if math.random() < 0.15 then return 2 end
+    if math.random() < 0.05 then return 2 end
     return 4
 end
 
