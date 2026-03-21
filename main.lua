@@ -32,7 +32,7 @@ FPS = false
 
 scale = 1
 
-MUSIC_VOLUME = 0.4--0.6
+MUSIC_VOLUME = 0--0.4--0.6
 GAME_VOLUME = 0.95
 GAME_PITCH = 1
 
