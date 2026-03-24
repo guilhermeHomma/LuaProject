@@ -44,7 +44,7 @@ function TreeTile:new(x, y, quadIndex, collider)
         tile.treeIndex = 4
     end
 
-    if math.random(45) == 1 and not collider then
+    if math.random(30) == 1 and not collider then
         tile.treeIndex = 5
     end
 

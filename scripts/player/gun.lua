@@ -100,7 +100,7 @@ function Gun:shootShotgun()
 
     local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
     self.currentMagCapacity = self.currentMagCapacity - 3
-    bulletSound:setVolume(0.7)
+    bulletSound:setVolume(0.6)
     bulletSound:setPitch((0.7 + math.random() * 0.1) * GAME_PITCH)
     bulletSound:play()
 
@@ -127,8 +127,8 @@ function Gun:shootPistol()
 
     local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
 
-    bulletSound:setVolume(0.5)
-    bulletSound:setPitch((0.9 + math.random() * 0.1) * GAME_PITCH)
+    bulletSound:setVolume(0.2)
+    bulletSound:setPitch((1.0 + math.random() * 0.1) * GAME_PITCH)
     bulletSound:play()
 
     local lifetime = math.random(45, 55) / 100
@@ -154,8 +154,8 @@ function Gun:shootSquareGun()
 
     local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
     self.currentMagCapacity = self.currentMagCapacity - 2
-    bulletSound:setVolume(0.6)
-    bulletSound:setPitch((0.9 + math.random() * 0.1) * GAME_PITCH)
+    bulletSound:setVolume(0.33)
+    bulletSound:setPitch((0.8 + math.random() * 0.1) * GAME_PITCH)
     bulletSound:play()
 
     local lifetime = math.random(45, 55) / 100

@@ -46,7 +46,7 @@ function Drop:drawShadow()
         return
     end
 
-    love.graphics.setColor(0.70, 0.63, 0.52)
+    love.graphics.setColor(0,0,0, 0.2)
     love.graphics.circle("fill", self.x , self.y, 3)
     
     love.graphics.setColor(1, 1, 1)

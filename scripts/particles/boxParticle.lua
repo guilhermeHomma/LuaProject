@@ -17,12 +17,7 @@ end
 
 function boxParticle:update(dt)
     addToDrawQueue(self.y -10, self)
-
     self.timer = self.timer + dt
-
-    -- if self.timer >= self.lifeTime then
-    --     self:death()
-    -- end
 end
 
 

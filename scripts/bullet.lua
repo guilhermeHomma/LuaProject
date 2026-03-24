@@ -22,7 +22,7 @@ function Bullet:new(x, y, angle, height, speed, damage, level)
     bullet.dx = math.cos(angle) * speed
     bullet.dy = math.sin(angle) * speed
     bullet.angle = angle
-    bullet.radius = 1.3
+    bullet.radius = 1.1
     bullet.isAlive = true
     bullet.timer = 0
     bullet.lastParticle = 0
@@ -53,7 +53,12 @@ function Bullet:isColliding(size)
     
     for _, tile in ipairs(Tilemap.tiles) do
         if tile.collider and not tile.isWater then
-            local tileBox = { x = tile.xWorld - tile.size/2, y = tile.yWorld - tile.size, width = tile.size, height = tile.size }
+            local tileBox = { 
+                x = tile.xWorld - tile.size/2, 
+                y = tile.yWorld - tile.size, 
+                width = tile.size, 
+                height = tile.size 
+            }
 
             if checkCollision(box, tileBox) then
                 if type(tile.onshoot) == "function" then
@@ -83,7 +88,7 @@ function Bullet:update(dt)
 
     if self:isColliding() then
         local bulletSound = love.audio.newSource("assets/sfx/bullet.mp3", "static")
-        bulletSound:setVolume(0.2)
+        bulletSound:setVolume(0.1)
         bulletSound:setPitch((1.4 + math.random() * 0.1) * GAME_PITCH)
         bulletSound:play()
         self.isAlive = false
@@ -179,4 +184,4 @@ function Bullet:drawSquare(x, y, angle, halfSize)
 end
 
 
-return Bullet
+return Bullet 

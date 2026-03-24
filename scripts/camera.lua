@@ -49,7 +49,7 @@ end
 function Camera:update(dt)
 
     local targetX = self.target.x*3 - love.graphics.getWidth() / self.scale / 2
-    local targetY = self.target.y*YSCALE - love.graphics.getHeight() / self.scale  / 2
+    local targetY = (self.target.y-5)*YSCALE - love.graphics.getHeight() / self.scale  / 2
 
     self:setCenterDistance(targetX, targetY)
 

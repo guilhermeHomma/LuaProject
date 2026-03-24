@@ -5,6 +5,7 @@ local Player = {}
 local Bullet = require("scripts/bullet")
 local BallParticle = require("scripts/particles/ballParticle")
 local WalkParticle = require("scripts/particles/walkParticle")
+local WalkParticleSquare = require("scripts/particles/walkParticleSquare")
 local Tilemap = require("scripts/tilemap")
 local TransitionManager = require("scripts.managers.transitionManager")
 
@@ -36,7 +37,7 @@ function Player:load(camera)
     self.currentAnimation = "idle"
     self.currentFrame = 1
     self.animationTimer = 0
-
+    self.SquareParticleTime = 0
     self.damageTimer = 4
     self.gun:load()
     self.moveX = 0
@@ -82,11 +83,24 @@ function Player:updateAnimation(dt, moving)
     self.shadowTimer = self.shadowTimer + dt
 
     if self.currentAnimation ~= newAnimation then
+        if self.SquareParticleTime > 1.2 and self.animationTimer >0.05 then
+            local lifetime = math.random(190, 195) / 100
+            local particle = WalkParticleSquare:new(self.x, self.y, lifetime)
+            table.insert(Game.particles, particle)
+            self.SquareParticleTime = 0
+
+            local stepsound = love.audio.newSource("assets/sfx/footsteps/foot-steps-0.mp3", "static")
+
+            stepsound:setVolume(0.3)
+            stepsound:setPitch((2.5 + math.random() * 0.4) * GAME_PITCH)
+            stepsound:play()
+
+        end
         self.currentAnimation = newAnimation
         self.currentFrame = 1
         self.animationTimer = 0
     end
-
+    self.SquareParticleTime = self.SquareParticleTime + dt
     local anim = self.animations[self.currentAnimation]
 
     local duration = anim.duration

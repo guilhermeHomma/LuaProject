@@ -101,8 +101,8 @@ function Game:playSLSound()
     if self.sPSoundPlayed then return end
     local sound = love.audio.newSource("assets/sfx/spotlight/spotlight1.mp3", "static")
     self.sPSoundPlayed = true
-    sound:setVolume(0.4)
-    sound:setPitch(1.1)
+    sound:setVolume(0.2)
+    sound:setPitch(1.3)
     sound:play()
 end
 
@@ -110,9 +110,9 @@ function Game:playSLSoundOutro()
     if self.sPSoundPlayedOutro then return end
     local sound = love.
     audio.newSource("assets/sfx/spotlight/spotlight2.mp3", "static")
-    sound:setVolume(0.3)
+    sound:setVolume(0.1)
     --sound:setPitch(0.8)
-    sound:setPitch(1)
+    sound:setPitch(1.1)
     self.sPSoundPlayedOutro = true
     sound:play()
 end

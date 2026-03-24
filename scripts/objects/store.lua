@@ -47,7 +47,7 @@ function Store:new(x, y, quadIndex, collider, productIndex)
 end
 
 function Store:update(dt)
-    addToDrawQueue(self.yWorld, self)
+    addToDrawQueue(self.yWorld+0.1, self)
     self.playerIsClose = false
     PlayerCloseStore = false
     if Player.isAlive then
