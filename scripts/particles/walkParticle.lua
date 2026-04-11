@@ -3,9 +3,9 @@ WalkP = setmetatable({}, {__index = Particle})
 WalkP.__index = WalkP
 
 function WalkP:new(x, y, lifetime)
-    local size = 0.2
+    local size = 0.3
 
-    if not lifetime  then lifetime = math.random(8, 10) / 10 end
+    if not lifetime  then lifetime = math.random(9, 11) / 10 end
 
     local particle = Particle.new(self, x, y, 1, size, lifetime)
     particle.sprite = love.graphics.newImage("assets/sprites/particles/ball.png")

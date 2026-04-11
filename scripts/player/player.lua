@@ -6,6 +6,7 @@ local Bullet = require("scripts/bullet")
 local BallParticle = require("scripts/particles/ballParticle")
 local WalkParticle = require("scripts/particles/walkParticle")
 local WalkParticleSquare = require("scripts/particles/walkParticleSquare")
+local FootStep = require("scripts/particles/footstep")
 local Tilemap = require("scripts/tilemap")
 local TransitionManager = require("scripts.managers.transitionManager")
 
@@ -75,6 +76,7 @@ function Player:load(camera)
     self.damageAlha = 0
 
     self.shadowTimer = 0
+    self.footStepTimer = 0 
 
 end
 
@@ -112,7 +114,17 @@ function Player:updateAnimation(dt, moving)
     end
 
     self.animationTimer = self.animationTimer + dt
+    self.footStepTimer = self.footStepTimer + dt
+    if moving and self.footStepTimer > 0.11 then
+        self.footStepTimer = 0
+        local randx = math.random(-1.5,1.5)
+        local randy = math.random(-1.5,1.5)
+        local footstep = FootStep:new(self.x + randx, self.y +randy)
+        table.insert(Game.footsteps, footstep)
 
+    
+    end
+    
     if self.animationTimer >= frameTime then
         self.animationTimer = self.animationTimer - frameTime
         self.currentFrame = self.currentFrame + 1
@@ -134,7 +146,7 @@ function Player:updateAnimation(dt, moving)
             if math.random() > 0.1 then
                 table.insert(Game.particles, particle)
                 if math.random() > 0.5 then
-                    local particle = WalkParticle:new(self.x + 2, self.y + 1, lifetime)
+                    local particle = WalkParticle:new(self.x + 2, self.y + 2, lifetime)
                     table.insert(Game.particles, particle)
                 end
             end
@@ -318,7 +330,8 @@ function Player:isColliding(moveX, moveY, size)
     local collidedX = false
     local collidedY = false
 
-    for _, tile in ipairs(Tilemap.tiles) do
+    local closeTiles = Tilemap:getNearbyTiles(self.x, self.y)
+    for _, tile in ipairs(closeTiles) do
         if tile.collider then
             local tileBox = { x = tile.xWorld - tile.size/2, y = tile.yWorld - tile.size, width = tile.size, height = tile.size }
 

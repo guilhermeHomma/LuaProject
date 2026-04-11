@@ -26,6 +26,9 @@ function Game:load()
     Player:load(camera)
     camera = Camera:new(Player.x-5, Player.y-30, Player)
     
+    self.fogShader = love.graphics.newShader("scripts/shaders/fog.glsl")
+    self.fogTime = 0
+
     self.spot = {
         radius = 1,
         feather = 3,
@@ -56,6 +59,7 @@ function Game:load()
 
     self.enemies = {}
     self.drawQueue = {}
+    self.footsteps = {}
     self.particles = {}
     self.objects = {}
 
@@ -120,9 +124,10 @@ end
 
 function Game:update(dt)
     self.drawQueue = {}
+
     --love.audio.setPosition(Player.x, Player.y, 0)
     local targetPitch = 1
-
+    self.fogTime = self.fogTime + dt
 
 
     if self.spot.enabled then
@@ -192,6 +197,14 @@ function Game:update(dt)
         end
     end
 
+    for i = #self.footsteps, 1, -1 do
+        local footstep = self.footsteps[i]
+        footstep:update(dt)
+        if not footstep.isAlive then
+            table.remove(self.footsteps, i)
+        end
+    end
+
     Tutorial:update(dt)
     WaveManager:update(dt)
     Clouds:update(dt)
@@ -232,6 +245,25 @@ function Game:draw()
     table.sort(self.drawQueue, function(a, b) return a.priority < b.priority end)
     Clouds:drawShadow()
 
+
+   for _, item in ipairs(self.footsteps) do
+        if type(item.drawLayer1) == "function" then
+            item:drawLayer1()
+        end
+    end
+
+    for _, item in ipairs(self.footsteps) do
+        if type(item.drawLayer2) == "function" then
+            item:drawLayer2()
+        end
+    end
+
+    for _, item in ipairs(self.footsteps) do
+        if type(item.drawLayer3) == "function" then
+            item:drawLayer3()
+        end
+    end
+
     for _, item in ipairs(self.drawQueue) do
         if type(item.object.drawShadow) == "function" then
             item.object:drawShadow()
@@ -239,6 +271,7 @@ function Game:draw()
     end
 
     Player:drawSight()
+
     Trail:draw()
     for _, item in ipairs(self.drawQueue) do
         local d = distance(camera:objectPosition(), item.object)
@@ -276,7 +309,7 @@ function Game:draw()
     end 
     love.graphics.setColor(1, 1, 1, 1)
 
-    Dialog:draw()
+    --Dialog:draw()
 
     PointsManager:draw()
     Player:drawLife()
@@ -332,9 +365,9 @@ function Game:keypressed(key)
             CreatorManager:keypressed(key)
         end
     elseif key == "o" then
-        DoorsManager:openSouth()
+        --DoorsManager:openSouth()
     elseif key == "n" then
-        DoorsManager:openNorth()
+        --DoorsManager:openNorth()
     elseif tonumber(key) then
         --self:changeShaders(tonumber(key))
     end

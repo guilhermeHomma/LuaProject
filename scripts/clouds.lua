@@ -21,10 +21,10 @@ end
 
 
 function Clouds:drawCloud(shadow)
-    love.graphics.setColor(1, 1, 1, 0.2)
-    local cloudHeight = 80
+    love.graphics.setColor(1, 1, 1, 0.14)
+    local cloudHeight = 50
     if shadow == true then
-        love.graphics.setColor(0.70, 0.63, 0.52, 0.3)
+        love.graphics.setColor(0, 0, 0, 0.07)
         cloudHeight = 0
     end
 

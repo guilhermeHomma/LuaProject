@@ -10,7 +10,7 @@ function babyZombie:new(x, y)
     zombie.dropPoints = 15
     zombie.totalLife = 35
     zombie.coinDropQty = math.random(3, 4)
-
+    zombie.footStepAlpha = 0.3
     zombie.life = zombie.totalLife
     return zombie
 end
@@ -49,7 +49,7 @@ function babyZombie:noiseCheck(dt)
         self.soundTimer = 0
         local soundPositionX, soundPositionY = soundPosition(Player, self)
         local playerDistance = distance(Player, self) / 2
-        local volume = getDistanceVolume(playerDistance, 0.3, 180)
+        local volume = getDistanceVolume(playerDistance, 0.1, 180)
         self.noise:setPosition(soundPositionX, soundPositionY, 0)
         self.noise:setVolume(volume)
         self.noise:setPitch((2 + math.random() * 0.2) * GAME_PITCH)

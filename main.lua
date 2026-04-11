@@ -32,10 +32,10 @@ FPS = false
 
 scale = 1
 
-MUSIC_VOLUME = 0--0.4--0.6
+MUSIC_VOLUME = 0.6
 GAME_VOLUME = 0.95
 GAME_PITCH = 1
-
+SCAPE_INTRO = true
 
 
 
@@ -63,6 +63,8 @@ function love.load()
 
     LogoIntro:load()
     MainMenu:load()
+    
+
     AmbienceSound:load()
     PauseMenu:load()
     Music:load()
@@ -70,6 +72,10 @@ function love.load()
     AmbienceSound:startGame()
     TransitionManager:load()
     
+    if SCAPE_INTRO then
+        state=STATES.game
+        Game:load()
+    end
     --loadIntro()
 end
 
@@ -144,10 +150,7 @@ function addToDrawQueue(priority, object, checkDistance)
         table.insert(GameIntro.drawQueue, {priority = priority, object = object})
     else
         table.insert(Game.drawQueue, {priority = priority, object = object})
-        
     end
-        
-    
 end
 
 function changePause()
@@ -282,4 +285,5 @@ function love.draw()
     love.graphics.draw(canvas, 0, 0, 0, scale, scale)
     love.graphics.setShader()
 end
+
 

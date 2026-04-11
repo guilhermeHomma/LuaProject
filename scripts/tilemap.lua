@@ -88,6 +88,34 @@ function Tilemap:worldToMap(x, y)
     return xMap, yMap
 end
 
+function Tilemap:getNearbyTiles(worldX, worldY)
+    local tiles = {}
+    local mapX, mapY = self:worldToMap(worldX, worldY)
+
+    for y = mapY - 1, mapY + 1 do
+        if tilemap[y] then
+            for x = mapX - 1, mapX + 1 do
+                if tilemap[y][x] then
+                    local xWorld, yWorld = self:mapToWorld(x, y)
+                    local hasCollision = false
+                    if tilemap[y][x] ~= 0 then hasCollision = true end
+                    table.insert(tiles, {
+                        mapX = x,
+                        mapY = y,
+                        collider = hasCollision,
+                        tileIndex = tilemap[y][x],
+                        xWorld = xWorld,
+                        yWorld = yWorld,
+                        size = tileSize
+                    })
+                end
+            end
+        end
+    end
+
+    return tiles
+end
+
 function Tilemap:hasTileClose(x, y, tileIndex)
     if x -1  <= 1 or y - 1 <= 1 then return false end
     
@@ -140,7 +168,7 @@ function Tilemap:load()
                 collider = true
             end 
 
-            if (tile == 0 or tile == 5 or tile == 6 or tile == 9 or (tile == 1 and not collider )) and math.random() > 0.7 then
+            if (tile == 0 or tile == 5 or tile == 6 or tile == 9 or (tile == 1 and not collider )) and math.random() > 0.9 then
                 local gx, gy = self:mapToWorld(x,y)
                 local grass = Grass:new(gx, gy - 5, tile)
                 table.insert(self.grass, grass)

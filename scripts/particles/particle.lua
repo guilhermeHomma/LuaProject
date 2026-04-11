@@ -31,7 +31,7 @@ end
 
 function Particle:drawShadow()
 
-    love.graphics.setColor(0.70, 0.63, 0.52)
+    love.graphics.setColor(0, 0, 0, 0.07)
     love.graphics.circle("fill", self.x, self.y, self.radius * 1.2)
     
     love.graphics.setColor(1, 1, 1)

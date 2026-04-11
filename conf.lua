@@ -1,7 +1,7 @@
 function love.conf(t)
     t.window.title = "mobize"
-    t.window.resizable = false --true 
-    t.window.borderless = true
+    t.window.resizable = true 
+    --t.window.borderless = true
     
     t.window.width = 1600
     t.window.height = 900 
@@ -20,7 +20,7 @@ function love.conf(t)
 
     t.window.width = 1120
     t.window.height = 630 
-    t.window.vsync = 1
+    t.window.vsync = 0
     t.window.width = 1280
     t.window.height = 720 
 

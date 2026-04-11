@@ -11,6 +11,7 @@ function BigZombie:new(x, y)
     zombie.coinDropQty = math.random(4, 5)
     zombie.totalLife = 70
     zombie.life = zombie.totalLife
+    zombie.footStepAlpha = 0.7
     return zombie
 end
 
@@ -26,7 +27,7 @@ function BigZombie:takeDamage(damage, dx, dy)
     self.kbdy = dy 
     self.life = self.life - damage
     self.noise:stop()
-
+    
     if self.soundTimer <= 1 then
         self.soundTimer = 1.1
     end
@@ -47,7 +48,7 @@ function BigZombie:noiseCheck(dt)
         self.soundTimer = 0
         local soundPositionX, soundPositionY = soundPosition(Player, self)
         local playerDistance = distance(Player, self) / 2
-        local volume = getDistanceVolume(playerDistance, 0.5, 180)
+        local volume = getDistanceVolume(playerDistance, 0.2, 180)
         self.noise:setPosition(soundPositionX, soundPositionY, 0)
         self.noise:setVolume(volume)
         self.noise:setPitch((0.75 + math.random() * 0.2) * GAME_PITCH)

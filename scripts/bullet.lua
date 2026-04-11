@@ -130,7 +130,7 @@ end
 
 function Bullet:drawShadow()
 
-    love.graphics.setColor(0.70, 0.63, 0.52)
+    love.graphics.setColor(0, 0, 0, 0.1)
     love.graphics.circle("fill", self.x, self.y, self.radius * 1.2)
 
     love.graphics.setColor(1, 1, 1)
@@ -148,8 +148,12 @@ function Bullet:draw()
     love.graphics.rectangle("fill", self.x- radius/2, self.y -self.height - radius/2, radius, radius)
     
     love.graphics.setColor(1, 1, 1)
+end
 
-    --love.graphics.circle("fill", self.x, self.y -self.height, self.radius)
+function Bullet:onDestroy()
+    self.death = true
+
+    
 end
 
 function Bullet:drawSquare(x, y, angle, halfSize)

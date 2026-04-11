@@ -6,6 +6,7 @@ local ZParticle = require("scripts/particles/zombieDeadParticle")
 local Tilemap = require("scripts/tilemap")
 local whiteShader = love.graphics.newShader("scripts/shaders/whiteShader.glsl")
 local WalkParticle = require("scripts/particles/walkParticle")
+local FootStep = require("scripts/particles/footstep")
 
 local coinDrop = require("scripts/drops/coin")
 local stretch = 1.4
@@ -69,7 +70,8 @@ function Zombie:new(x, y, speed)
     enemy.currentFrame = 1
     enemy.animationTimer = 0
     enemy.animationSpeed = 0.15
-    
+    enemy.footStepTimer = 0
+    enemy.footStepAlpha = 0.4
     enemy.stateTimer = 0
     enemy.idleDuration = math.random(7, 13) / 10
     enemy.walkDuration = math.random(4, 6)
@@ -147,7 +149,7 @@ function Zombie:update(dt)
     
     if self.path and #self.path > 1 then
 
-        local nextNode = self.path[2] -- porque path 1 e o tile atual
+        local nextNode = self.path[2]
 
         nextTileX, nextTileY = Tilemap:mapToWorld(nextNode.x, nextNode.y)
 
@@ -240,7 +242,7 @@ function Zombie:noiseCheck(dt)
         self.soundTimer = 0
         local soundPositionX, soundPositionY = soundPosition(Player, self)
         local playerDistance = distance(Player, self) / 2
-        local volume = getDistanceVolume(playerDistance, 0.3, 180)
+        local volume = getDistanceVolume(playerDistance, 0.1, 180)
         self.noise:setPosition(soundPositionX, soundPositionY, 0)
         self.noise:setVolume(volume)
         self.noise:setPitch((1.2 + math.random() * 0.2) * GAME_PITCH)
@@ -308,8 +310,9 @@ function Zombie:isColliding(moveX, moveY)
     local collidedX = false
     local collidedY = false
 
-    for _, tile in ipairs(Tilemap.tiles) do
-        if tile.collider and distance(self, tile) < 70 then
+    local closeTiles = Tilemap:getNearbyTiles(self.x, self.y)
+    for _, tile in ipairs(closeTiles) do
+        if tile.collider then
             local tileBox = { x = tile.xWorld - tile.size/2, y = tile.yWorld - tile.size, width = tile.size, height = tile.size }
 
             if checkCollision(selfBoxX, tileBox) then
@@ -380,6 +383,17 @@ end
 
 function Zombie:animate(startFrame, endFrame, dt)
     self.animationTimer = self.animationTimer + dt
+
+    self.footStepTimer = self.footStepTimer + dt
+    if self.footStepTimer > 0.12 and (self.state == Zombie.states.damage or self.state == Zombie.states.walk) then
+        self.footStepTimer = 0
+        local randx = math.random(-2,2)
+        local randy = math.random(-2,2)
+        local footstep = FootStep:new(self.x + randx, self.y +randy, self.footStepAlpha)
+        table.insert(Game.footsteps, footstep)
+    end
+    
+
     if self.animationTimer >= self.animationSpeed then
         self.animationTimer = 0
         self.currentFrame = self.currentFrame + 1

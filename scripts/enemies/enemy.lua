@@ -35,8 +35,9 @@ function Enemy:isColliding(moveX, moveY)
     local collidedX = false
     local collidedY = false
 
-    for _, tile in ipairs(Tilemap.tiles) do
-        if tile.quadIndex ~= 5 and distance(self, tile) < 70 then
+    local closeTiles = Tilemap:getNearbyTiles(self.x, self.y)
+    for _, tile in ipairs(closeTiles) do
+        if tile.collider then
             local tileBox = { x = tile.xWorld - tile.size/2, y = tile.yWorld - tile.size, width = tile.size, height = tile.size }
 
             if checkCollision(selfBoxX, tileBox) then
@@ -46,6 +47,7 @@ function Enemy:isColliding(moveX, moveY)
                 collidedY = true
             end
         end
+
     end
 
     return collidedX, collidedY

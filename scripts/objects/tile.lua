@@ -66,6 +66,10 @@ function Tile:onshoot()
             table.insert(Game.particles, particle)
         end
 
+        local FootStep = require("scripts/particles/footstep")
+        local footstep = FootStep:new(self.xWorld, self.yWorld-8)
+        table.insert(Game.footsteps, footstep)
+
         local bp = BoxParticle:new(self.xWorld, self.yWorld)
         table.insert(Game.particles, bp)
 
