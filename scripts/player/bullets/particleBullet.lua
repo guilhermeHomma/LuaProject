@@ -1,0 +1,330 @@
+local Bullet = {}
+Bullet.__index = Bullet
+
+require("scripts/utils")
+
+local Particle = require("scripts/particles/particle")
+local Ball = require("scripts/particles/ballParticle")
+local GunStarParticle = require("scripts/particles/gunStarParticle")
+local BulletSpriteParticle = require("scripts/particles/bulletSpriteParticle")
+local Tilemap = require("scripts/tilemap")
+
+local defaultGlow = {
+    enabled = true,
+    outerColor = {0.15, 1, 0.28, 0.12},
+    midColor = {1, 0.08, 0.08, 0.16},
+    innerColor = {1, 0.96, 0.82, 0.35},
+    outerScale = 4,
+    midScale = 0.65,
+    innerScale = 2.2,
+    pulseSpeed = 42,
+    pulseAmount = 0.15
+}
+
+local defaultShadow = {
+    enabled = true,
+    alpha = 0.12,
+    scaleX = 1.8,
+    scaleY = 0.7,
+    minRadius = 2.2
+}
+
+local function copyTable(source)
+    local result = {}
+    for key, value in pairs(source) do
+        if type(value) == "table" then
+            result[key] = copyTable(value)
+        else
+            result[key] = value
+        end
+    end
+    return result
+end
+
+local function mergeTables(base, overrides)
+    local result = copyTable(base)
+    if not overrides then
+        return result
+    end
+
+    for key, value in pairs(overrides) do
+        if type(value) == "table" and type(result[key]) == "table" then
+            result[key] = mergeTables(result[key], value)
+        else
+            result[key] = value
+        end
+    end
+
+    return result
+end
+
+local function setGlowColor(color)
+    love.graphics.setColor(color[1], color[2], color[3], color[4] or 1)
+end
+
+function Bullet:new(x, y, angle, height, speed, damage, options)
+    if type(options) ~= "table" then
+        options = { level = options }
+    end
+
+    options = options or {}
+
+    local bullet = setmetatable({}, Bullet)
+    bullet.level = options.level or 1
+    bullet.height = height
+    bullet.damage = damage + (bullet.level - 1) * 5
+    bullet.x = x
+    bullet.y = y
+    bullet.dx = math.cos(angle) * speed
+    bullet.dy = math.sin(angle) * speed
+    bullet.angle = angle
+    bullet.radius = options.radius or 1.1
+    bullet.isAlive = true
+    bullet.timer = 0
+    bullet.lastParticle = 0
+    bullet.lifeTime = options.lifeTime or (0.3 + math.random() * 0.1)
+    bullet.glow = mergeTables(defaultGlow, options.glow)
+    bullet.shadow = mergeTables(defaultShadow, options.shadow)
+    bullet.projectileSprite = options.projectileSprite
+    bullet.spriteTrailDistance = options.spriteTrailDistance or 8
+    bullet.spriteTrailLifetime = options.spriteTrailLifetime or 0.13
+    bullet.spriteTrailScale = options.spriteTrailScale or 0.75
+    bullet.spriteTrailRemainder = 0
+    bullet.spriteTrailMaxPerUpdate = options.spriteTrailMaxPerUpdate or 5
+    bullet.impactFlashSprite = options.impactFlashSprite
+    bullet.impactShockwave = options.impactShockwave
+
+    return bullet
+end
+
+function Bullet:spawnSpriteTrailPoint(x, y)
+    table.insert(Game.particles, BulletSpriteParticle:new(
+        x,
+        y,
+        self.height,
+        self.projectileSprite,
+        self.angle,
+        self.spriteTrailLifetime,
+        self.spriteTrailScale
+    ))
+end
+
+function Bullet:spawnSpriteTrail(previousX, previousY)
+    if not self.projectileSprite then
+        return
+    end
+
+    local dx = self.x - previousX
+    local dy = self.y - previousY
+    local traveled = math.sqrt(dx * dx + dy * dy)
+
+    if traveled <= 0 then
+        return
+    end
+
+    local nextDistance = self.spriteTrailDistance - self.spriteTrailRemainder
+    local spawned = 0
+    while nextDistance <= traveled and spawned < self.spriteTrailMaxPerUpdate do
+        local t = nextDistance / traveled
+        self:spawnSpriteTrailPoint(previousX + dx * t, previousY + dy * t)
+        nextDistance = nextDistance + self.spriteTrailDistance
+        spawned = spawned + 1
+    end
+
+    self.spriteTrailRemainder = (self.spriteTrailRemainder + traveled) % self.spriteTrailDistance
+end
+
+function Bullet:checkCollisionWithEnemy(enemy)
+    local dist = distance(self, enemy)
+    local dist2 = distance({x = enemy.x, y = enemy.y - 6}, self)
+    local dist3 = distance({x = enemy.x, y = enemy.y - 12}, self)
+
+    return dist < (self.radius + 6)
+        or dist2 < (self.radius + 6)
+        or dist3 < (self.radius + 8)
+end
+
+function Bullet:isColliding(size)
+    size = size or 4
+
+    local box = { x = self.x - size / 2, y = self.y - size / 2, width = size, height = size }
+
+    for _, tile in ipairs(Tilemap.tiles) do
+        if tile.collider and not tile.isWater then
+            local tileBox = {
+                x = tile.xWorld - tile.size / 2,
+                y = tile.yWorld - tile.size,
+                width = tile.size,
+                height = tile.size
+            }
+
+            if checkCollision(box, tileBox) then
+                if type(tile.onshoot) == "function" then
+                    tile:onshoot(self.damage)
+                end
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+function Bullet:update(dt)
+    if not self.isAlive then return end
+
+    local previousX = self.x
+    local previousY = self.y
+
+    self.x = self.x + self.dx * dt
+    self.y = self.y + self.dy * dt
+    self:spawnSpriteTrail(previousX, previousY)
+
+    addToDrawQueue(self.y, self)
+    if Game and Game.addLightSource then
+        Game:addLightSource("projectile", self.x, self.y - self.height)
+    end
+
+    self.timer = self.timer + dt
+    if self.timer >= self.lifeTime then
+        self.isAlive = false
+        self:death()
+        return
+    end
+
+    if self:isColliding() then
+        self.isAlive = false
+        self:death()
+    end
+
+    self.lastParticle = self.lastParticle + dt
+    if not self.projectileSprite and self.lastParticle > 0.005 then
+        self.lastParticle = 0
+        table.insert(Game.particles, Particle:new(self.x, self.y, self.height - 2, 1.2, 0.07))
+    end
+
+    for _, enemy in ipairs(Game.enemies) do
+        if self:checkCollisionWithEnemy(enemy) and self.isAlive and enemy.isAlive then
+            self.isAlive = false
+            enemy:takeDamage(self.damage, self.dx, self.dy)
+            self:death(0, 0)
+        end
+    end
+end
+
+function Bullet:death(dx, dy)
+    if self.impactShockwave and self.impactShockwave.enabled ~= false and Game and Game.addWeaponShockwave then
+        Game:addWeaponShockwave(self.x, self.y - self.height, self.impactShockwave)
+    end
+
+    table.insert(Game.particles, GunStarParticle:new(self.x, self.y, self.height, 1, self.impactFlashSprite))
+
+    if not dy or not dx then
+        dx = math.cos(self.angle) / 2
+        dy = math.sin(self.angle) / 2
+    end
+
+    local lifetime = math.random(15, 23) / 100
+    table.insert(Game.particles, Ball:new(self.x, self.y, 5, -dx, -dy, lifetime, 0.6, {
+        rgbShift = { duration = 0.1, shift = 1 }
+    }))
+
+    if math.random() > 0.5 then
+        table.insert(Game.particles, Ball:new(self.x, self.y, 5, -dx + 1, -dy + 1, lifetime, 0.6, {
+            rgbShift = { duration = 0.1, shift = 1 }
+        }))
+    end
+end
+
+function Bullet:drawShadow()
+    if not self.shadow.enabled then
+        return
+    end
+
+    local radius = math.max(self.radius, self.shadow.minRadius)
+    love.graphics.setColor(0, 0, 0, self.shadow.alpha)
+    love.graphics.ellipse("fill", self.x, self.y, radius * self.shadow.scaleX, radius * self.shadow.scaleY)
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
+function Bullet:drawGlow()
+    if not self.glow.enabled then
+        return
+    end
+
+    local x = self.x
+    local y = self.y - self.height
+    local pulse = 1 - self.glow.pulseAmount + math.sin(self.timer * self.glow.pulseSpeed) * self.glow.pulseAmount
+    local outerRadius = self.radius * self.glow.outerScale * pulse
+    local innerRadius = self.radius * self.glow.innerScale * pulse
+
+    love.graphics.setBlendMode("add")
+    setGlowColor(self.glow.outerColor)
+    love.graphics.circle("fill", x, y, outerRadius)
+    setGlowColor(self.glow.midColor)
+    love.graphics.circle("fill", x, y, outerRadius * self.glow.midScale)
+    setGlowColor(self.glow.innerColor)
+    love.graphics.circle("fill", x, y, innerRadius)
+    love.graphics.setBlendMode("alpha")
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
+function Bullet:draw()
+    if self.projectileSprite then
+        local progress = (self.timer % self.spriteTrailLifetime) / self.spriteTrailLifetime
+        local frameIndex = math.floor(math.min(0.999, progress) * 5)
+        BulletSpriteParticle.drawSprite(
+            self.projectileSprite,
+            self.x,
+            self.y - self.height,
+            self.angle,
+            frameIndex,
+            1,
+            self.spriteTrailScale
+        )
+        return
+    end
+
+    self:drawGlow()
+    self:drawSquare(self.x, self.y - self.height, 90, self.radius * 1.2)
+
+    if self.level >= 2 then return end
+
+    setColor255(0.70, 102, 115)
+    local radius = self.radius * 1.4
+    love.graphics.rectangle("fill", self.x - radius / 2, self.y - self.height - radius / 2, radius, radius)
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
+function Bullet:onDestroy()
+    self.death = true
+end
+
+function Bullet:drawSquare(x, y, angle, halfSize)
+    local cx, cy = x, y
+    local cosA, sinA = math.cos(angle), math.sin(angle)
+
+    local x1 = cx + (-halfSize * cosA - (-halfSize) * sinA)
+    local y1 = cy + (-halfSize * sinA + (-halfSize) * cosA)
+    local x2 = cx + (halfSize * cosA - (-halfSize) * sinA)
+    local y2 = cy + (halfSize * sinA + (-halfSize) * cosA)
+    local x3 = cx + (halfSize * cosA - halfSize * sinA)
+    local y3 = cy + (halfSize * sinA + halfSize * cosA)
+    local x4 = cx + (-halfSize * cosA - halfSize * sinA)
+    local y4 = cy + (-halfSize * sinA + halfSize * cosA)
+
+    love.graphics.setLineWidth(0.8)
+    love.graphics.setColor(1, 1, 1, 1)
+    if self.level == 2 then
+        setColor255(0.70, 102, 115)
+    end
+
+    love.graphics.line(x1, y1, x2, y2)
+    love.graphics.line(x2, y2, x3, y3)
+    love.graphics.line(x3, y3, x4, y4)
+    love.graphics.line(x4, y4, x1, y1)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.setLineWidth(1)
+end
+
+return Bullet

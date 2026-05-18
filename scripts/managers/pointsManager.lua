@@ -4,7 +4,7 @@ PointsManager = {}
 function PointsManager:load()
     self.font = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 32)
     self.font:setFilter("nearest", "nearest")
-    self.points = 100
+    self.points = (GAME_FLAGS and GAME_FLAGS.weaponTestLevel) and 10000 or 100
 
     self.animationColor = "c7c093"
     self.animationTimer = 10
@@ -36,7 +36,7 @@ function PointsManager:draw()
     local textWidth = self.font:getWidth(self.points)
     local x = love.graphics.getWidth() / scale - textWidth - 15
 
-    x = 66
+    x = 128
     local y = 6
     
     love.graphics.setFont(self.font)

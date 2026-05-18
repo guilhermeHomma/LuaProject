@@ -4,7 +4,7 @@ local TileSet = {}
 
 
 function TileSet:createTileSet()
-    self.tilesetImage = love.graphics.newImage("assets/sprites/tileset.png")
+    self.tilesetImage = love.graphics.newImage("assets/sprites/florest/tileset.png")
     self.tileSize = 16
     self.tileSet = {}
 

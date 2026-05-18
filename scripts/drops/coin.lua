@@ -4,6 +4,7 @@ local Coin = setmetatable({}, {__index = Life})
 Coin.__index = Coin
 
 local Ball = require("scripts/particles/ballParticle")
+local DropShine = require("scripts/drops/dropShine")
 
 
 local sheetImage = love.graphics.newImage("assets/sprites/objects/coin.png")
@@ -34,7 +35,7 @@ function Coin:new(x, y)
 end
 
 function Coin:changeHeight()
-    self.height = 0
+    self.hoverHeight = 0
 end 
 
 function Coin:onCatch()
@@ -83,13 +84,14 @@ function Coin:draw()
         return
     end
     local alpha = 1
-    if self.lifeTime - self.lifetimeTimer <= 4 then
+    if not self.neverExpires and self.lifeTime - self.lifetimeTimer <= 4 then
         local blink = math.floor(self.lifetimeTimer * 10) % 2
         alpha = blink == 0 and 0.2 or 1
     end
 
     love.graphics.setColor(1, 1, 1, alpha)
-    love.graphics.draw(sheetImage, self.sprite, self.x, self.y - self.height, 0, 1, 1.4, 4, 8)
+    local scaleX, scaleY = self:getDrawScale()
+    DropShine.draw(sheetImage, self.sprite, self.x, self.y - self.height, 0, scaleX, scaleY, 4, 8)
     love.graphics.setColor(1, 1, 1, 1)
 
 end

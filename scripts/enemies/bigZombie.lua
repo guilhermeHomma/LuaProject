@@ -2,40 +2,55 @@ Zombie = require("scripts/enemies/zombie")
 
 BigZombie = setmetatable({}, {__index = Zombie})
 BigZombie.__index = BigZombie
+BigZombie.enemyTypeId = "bigZombie"
+
+local damageBase = love.audio.newSource("assets/sfx/enemyDamage.mp3", "static")
+local DamageStretch = require("scripts/effects/damageStretch")
+
+local function playClonedSound(baseSource, volume, pitch)
+    local sound = baseSource:clone()
+    sound:setVolume(volume)
+    sound:setPitch(pitch)
+    sound:play()
+    return sound
+end
 
 function BigZombie:new(x, y)
     local zombie = Zombie.new(self, x, y)
-    zombie.speed = math.random(33, 47)
-    zombie.damageTimer = 0.1
-    zombie.dropPoints = 20
-    zombie.coinDropQty = math.random(4, 5)
-    zombie.totalLife = 70
+    zombie.speed = math.random(43, 47)
+    zombie.damageTimer = 0.14
+    zombie.totalLife = 50
     zombie.life = zombie.totalLife
     zombie.footStepAlpha = 0.7
+    zombie.roamAroundPlayer = false
     return zombie
 end
 
 function BigZombie:getSprite()
-    return love.graphics.newImage("assets/sprites/enemy/enemy-big.png")
+    return Zombie.getSprite(self)
+end
+
+function BigZombie:getSpriteKey()
+    return "assets/sprites/enemy/zombie/enemy-big.png"
 end
 
 function BigZombie:takeDamage(damage, dx, dy)
-    self.animationTimer = 0.3
-    self.state = BigZombie.states.damage
-    self.stateTimer = 0
-    self.kbdx = dx
-    self.kbdy = dy 
     self.life = self.life - damage
-    self.noise:stop()
-    
-    if self.soundTimer <= 1 then
-        self.soundTimer = 1.1
-    end
 
-    local bulletSound = love.audio.newSource("assets/sfx/enemyDamage.mp3", "static")
-    bulletSound:setVolume(2)
-    bulletSound:setPitch((0.6 + math.random() * 0.1) * GAME_PITCH)
-    bulletSound:play()
+    if self:canStartDamageAnimation() then
+        DamageStretch:start(self)
+        self.animationTimer = 0.3
+        self.state = BigZombie.states.damage
+        self.stateTimer = 0
+        self.kbdx = dx
+        self.kbdy = dy 
+        self.noise:stop()
+        
+        if self.soundTimer <= 1 then
+            self.soundTimer = 1.1
+        end
+        playClonedSound(damageBase, 1.2, (0.9 + math.random() * 0.1) * GAME_PITCH)
+    end
 end
 
 function BigZombie:drawMouth()
@@ -44,11 +59,13 @@ end
 
 function BigZombie:noiseCheck(dt)
     self.soundTimer = self.soundTimer + dt
+
     if self.soundTimer >= 10 and Player.isAlive then
         self.soundTimer = 0
         local soundPositionX, soundPositionY = soundPosition(Player, self)
         local playerDistance = distance(Player, self) / 2
         local volume = getDistanceVolume(playerDistance, 0.2, 180)
+        self.noise:stop()
         self.noise:setPosition(soundPositionX, soundPositionY, 0)
         self.noise:setVolume(volume)
         self.noise:setPitch((0.75 + math.random() * 0.2) * GAME_PITCH)

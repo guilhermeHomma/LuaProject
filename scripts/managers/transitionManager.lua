@@ -98,4 +98,10 @@ function TransitionManager:draw()
     love.graphics.setColor(1, 1, 1)
 end
 
+function TransitionManager:drawFullscreen()
+    love.graphics.setColor(0, 0, 0, self.alpha)
+    love.graphics.rectangle("fill", 0, 0, love.graphics.getWidth(), love.graphics.getHeight())
+    love.graphics.setColor(1, 1, 1)
+end
+
 return TransitionManager

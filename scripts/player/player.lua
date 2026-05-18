@@ -9,25 +9,53 @@ local WalkParticleSquare = require("scripts/particles/walkParticleSquare")
 local FootStep = require("scripts/particles/footstep")
 local Tilemap = require("scripts/tilemap")
 local TransitionManager = require("scripts.managers.transitionManager")
+local playerGlitchShader = love.graphics.newShader("scripts/shaders/playerGlitch.glsl")
+local footstepBase = love.audio.newSource("assets/sfx/footsteps/foot-steps-0.mp3", "static")
+local damageBase = love.audio.newSource("assets/sfx/damage.mp3", "static")
+local electricBase = love.audio.newSource("assets/sfx/menu/eletric-transition.mp3", "static")
+local heartImage = love.graphics.newImage("assets/sprites/ui/heart.png")
+local heartWhiteShader = love.graphics.newShader("scripts/shaders/whiteShader.glsl")
+local heartFrameSize = 16
+local heartFrames = {
+    full = love.graphics.newQuad(0, 0, heartFrameSize, heartFrameSize, heartImage:getDimensions()),
+    half = love.graphics.newQuad(heartFrameSize, 0, heartFrameSize, heartFrameSize, heartImage:getDimensions()),
+    empty = love.graphics.newQuad(heartFrameSize * 2, 0, heartFrameSize, heartFrameSize, heartImage:getDimensions()),
+}
 
-function Player:load(camera)
-    self.x = 30
-    self.y = 340
-    self.speed = 72
+heartImage:setFilter("nearest", "nearest")
+
+local function playClonedSound(baseSource, volume, pitch)
+    local sound = baseSource:clone()
+    sound:setVolume(volume)
+    sound:setPitch(pitch)
+    sound:play()
+    return sound
+end
+
+function Player:load(camera, spawnX, spawnY)
+    self.x = spawnX or 30
+    self.y = spawnY or 340
+    self.speed = 83
+    self.velocityX = 0
+    self.velocityY = 0
+    self.acceleration = 12
+    self.friction = 7
     self.size = 40
     self.gun = require("scripts/player/gun")
     self.spriteSize = 40
     self.bullets = {}
     self.bulletSpeed = 340
     self.camera = camera
-    self.totalLife = 4
+    self.totalLife = 6
     self.life = self.totalLife
     self.isAlive = true
     self.flipX = false
-    self.playerSheet = love.graphics.newImage("assets/sprites/player/soldier/girl-dir.png")
+    self.playerSheet = love.graphics.newImage("assets/sprites/player/soldier/pink-girl.png")
     self.playerShadow = love.graphics.newImage("assets/sprites/player/shadow.png")
     self.handImage = love.graphics.newImage("assets/sprites/player/hand.png")
+    self.idleHandSheet = love.graphics.newImage("assets/sprites/player/soldier/hand.png")
     self.handImage:setFilter("nearest", "nearest")
+    self.idleHandSheet:setFilter("nearest", "nearest")
     self.playerSheet:setFilter("nearest", "nearest")
     self.playerShadow:setFilter("nearest", "nearest")
     self.mouseAngle = 0
@@ -38,6 +66,8 @@ function Player:load(camera)
     self.currentAnimation = "idle"
     self.currentFrame = 1
     self.animationTimer = 0
+    self.idleHandFrame = 1
+    self.idleHandTimer = 0
     self.SquareParticleTime = 0
     self.damageTimer = 4
     self.gun:load()
@@ -77,6 +107,13 @@ function Player:load(camera)
 
     self.shadowTimer = 0
     self.footStepTimer = 0 
+    self.glitchDuration = 0.35
+    self.glitchTimer = 0
+    self.glitchDisplacementPixels = 2
+    self.whiteFlashDuration = 0.12
+    self.whiteFlashTimer = 0
+    self.damageBlinkDelay = 0.1
+    self.damageVignettePulse = 0
 
 end
 
@@ -91,16 +128,14 @@ function Player:updateAnimation(dt, moving)
             table.insert(Game.particles, particle)
             self.SquareParticleTime = 0
 
-            local stepsound = love.audio.newSource("assets/sfx/footsteps/foot-steps-0.mp3", "static")
-
-            stepsound:setVolume(0.3)
-            stepsound:setPitch((2.5 + math.random() * 0.4) * GAME_PITCH)
-            stepsound:play()
+            playClonedSound(footstepBase, 0.3, (2.5 + math.random() * 0.4) * GAME_PITCH)
 
         end
         self.currentAnimation = newAnimation
         self.currentFrame = 1
         self.animationTimer = 0
+        self.idleHandFrame = 1
+        self.idleHandTimer = 0
     end
     self.SquareParticleTime = self.SquareParticleTime + dt
     local anim = self.animations[self.currentAnimation]
@@ -108,6 +143,17 @@ function Player:updateAnimation(dt, moving)
     local duration = anim.duration
     if self.gun.showGun then duration = duration * 1.25 end
     local frameTime = duration / #anim.frames
+
+    if self.currentAnimation == "idle" then
+        self.idleHandTimer = self.idleHandTimer + dt
+        if self.idleHandTimer >= 0.6 then
+            self.idleHandTimer = self.idleHandTimer - 0.6
+            self.idleHandFrame = self.idleHandFrame == 1 and 2 or 1
+        end
+    else
+        self.idleHandFrame = self.currentFrame
+        self.idleHandTimer = 0
+    end
 
     if self.currentAnimation == "idle" and self.currentFrame == 2 then
         frameTime = 0.1
@@ -134,11 +180,7 @@ function Player:updateAnimation(dt, moving)
 
         if moving and self.currentFrame % 2 == 0 then
             
-            local stepsound = love.audio.newSource("assets/sfx/footsteps/foot-steps-0.mp3", "static")
-
-            stepsound:setVolume(0.75)
-            stepsound:setPitch((0.9 + math.random() * 0.4) * GAME_PITCH)
-            stepsound:play()
+            playClonedSound(footstepBase, 0.75, (0.9 + math.random() * 0.4) * GAME_PITCH)
             
             local lifetime = math.random(45, 55) / 100
             local particle = WalkParticle:new(self.x, self.y, lifetime)
@@ -160,17 +202,23 @@ function Player:update(dt)
 
     local damageAlphaTarget = 0
     self.sideChangeTimer = self.sideChangeTimer + dt
-    if self.life == 1 then 
-        damageAlphaTarget = 0.15
+    if self.life <= 2 then
+        damageAlphaTarget = 1
     end
+
+    self.damageVignettePulse = transitionValue(self.damageVignettePulse or 0, 0, 2.4, dt)
     
-    self.damageAlha = transitionValue(self.damageAlha, damageAlphaTarget, 1.3, dt)
+    local vignetteTarget = math.max(damageAlphaTarget, self.damageVignettePulse or 0)
+    local vignetteSpeed = self.damageAlha < vignetteTarget and 14 or 2.4
+    self.damageAlha = transitionValue(self.damageAlha, vignetteTarget, vignetteSpeed, dt)
 
     if not self.isAlive then
         return
     end
 
     self.damageTimer = self.damageTimer + dt
+    self.glitchTimer = math.max(0, self.glitchTimer - dt)
+    self.whiteFlashTimer = math.max(0, self.whiteFlashTimer - dt)
 
     self.mouseAngle = math.floor(mouseAngle() * 4) / 4
     local moveX, moveY = 0, 0
@@ -200,19 +248,32 @@ function Player:update(dt)
         DisableWalkTutorial()
     end
 
-    local collidedX, collidedY = self:isColliding(
-        moveX * self.speed * dt,
-        moveY * self.speed * dt 
-    )
-
-    if collidedX then moveX = 0 end
-    if collidedY then moveY = 0 end
-    
     local speed = self.speed
     if self.gun.showGun then speed = speed * 0.7 end
 
-    local sumMoveX = moveX * speed * dt
-    local sumMoveY = moveY * speed * dt
+    local targetVelocityX = moveX * speed
+    local targetVelocityY = moveY * speed
+    local movementSpeed = (moveX ~= 0 or moveY ~= 0) and self.acceleration or self.friction
+
+    self.velocityX = transitionValue(self.velocityX, targetVelocityX, movementSpeed, dt)
+    self.velocityY = transitionValue(self.velocityY, targetVelocityY, movementSpeed, dt)
+
+    if math.abs(self.velocityX) < 2 then self.velocityX = 0 end
+    if math.abs(self.velocityY) < 2 then self.velocityY = 0 end
+
+    local sumMoveX = self.velocityX * dt
+    local sumMoveY = self.velocityY * dt
+
+    local collidedX, collidedY = self:isColliding(sumMoveX, sumMoveY)
+
+    if collidedX then
+        sumMoveX = 0
+        self.velocityX = 0
+    end
+    if collidedY then
+        sumMoveY = 0
+        self.velocityY = 0
+    end
 
     self.x = self.x + sumMoveX
     self.y = self.y + sumMoveY
@@ -225,16 +286,23 @@ function Player:update(dt)
 
     local canChangeSide = self.sideChangeTimer > 0.25
     local haschangedSide = false
-    if moveX ~= 0 or moveY ~= 0 and canChangeSide then
-        self.moveX = moveX
-        self.moveY = moveY
+    local visualMoveX = moveX
+    local visualMoveY = moveY
+    if visualMoveX == 0 and visualMoveY == 0 and (self.velocityX ~= 0 or self.velocityY ~= 0) then
+        visualMoveX = self.velocityX
+        visualMoveY = self.velocityY
+    end
+
+    if (visualMoveX ~= 0 or visualMoveY ~= 0) and canChangeSide then
+        self.moveX = visualMoveX
+        self.moveY = visualMoveY
         if self.moveX ~= moveX or self.moveY ~= moveY then
             self.sideChangeTimer = 0
         end
     end
 
-    if not self.gun.showGun and moveX ~= 0 and canChangeSide then
-        if moveX > 0 then 
+    if not self.gun.showGun and visualMoveX ~= 0 and canChangeSide then
+        if visualMoveX > 0 then 
             self.flipH = true
         else 
             self.flipH = false
@@ -268,8 +336,32 @@ function Player:update(dt)
     self:checkDamage()
 
 
-    self:updateAnimation(dt, moveX ~= 0 or moveY ~= 0)
+    local animationSpeed = math.sqrt(self.velocityX * self.velocityX + self.velocityY * self.velocityY)
+    self:updateAnimation(dt, animationSpeed > 8)
     self:death()
+end
+
+function Player:takeDamage(amount)
+    if self.damageTimer < 1.2 then return false end
+
+    camera:shake(10, 0.97)
+    camera:damageZoom(0.85, 16, 8, 0.06)
+    self.life = math.max(0, self.life - (amount or 1))
+    playClonedSound(electricBase, 0.9, (1.5 + math.random() * 0.1) * GAME_PITCH)
+    TransitionManager:setDistortion(1)
+    TransitionManager.distortionTimer = 0.5
+    self.damageTimer = 0
+    self.glitchTimer = self.glitchDuration
+    self.whiteFlashTimer = self.whiteFlashDuration
+    playClonedSound(damageBase, 1.8, (0.9 + math.random() * 0.2) * GAME_PITCH)
+    self.damageVignettePulse = 0.85
+    if self.life > 0 then
+        GAME_PITCH = 0.6
+    else
+        TransitionManager.distortionTimer = 1
+    end
+
+    return true
 end
 
 function Player:checkDamage()
@@ -280,28 +372,10 @@ function Player:checkDamage()
         local dy = enemy.y - self.y
         local distance = math.sqrt(dx * dx + dy * dy)
 
-        if distance < 10 then
+        if enemy.canDamagePlayer ~= false and distance < 10 then
             --enemy.life = 0
             --enemy:death()
-            camera:shake(120, 0.95)
-            self.life = self.life - 1
-            local damageSound = love.audio.newSource("assets/sfx/damage.mp3", "static")
-            local sound = love.audio.newSource("assets/sfx/menu/eletric-transition.mp3", "static")
-            sound:setVolume(0.9)
-            sound:setPitch((1.5 + math.random() * 0.1) * GAME_PITCH)
-            sound:play()
-            TransitionManager:setDistortion(1)
-            TransitionManager.distortionTimer = 0.5
-            self.damageTimer = 0
-            damageSound:setVolume(1.8)
-            damageSound:setPitch((0.9 + math.random() * 0.2) * GAME_PITCH)
-            damageSound:play()
-            self.damageAlha = 0.2
-            if self.life > 0 then
-                GAME_PITCH = 0.6
-            else
-                TransitionManager.distortionTimer = 1
-            end
+            self:takeDamage(1)
             break
         end
     end
@@ -309,9 +383,10 @@ end
 
 function Player:catchLife()
     if self.life < self.totalLife then
-        self.life = self.life + 1
+        self.life = math.min(self.totalLife, self.life + 2)
     end
     self.damageTimer = 0
+    self.whiteFlashTimer = self.whiteFlashDuration
 end
 
 function Player:getCollisionBox()
@@ -339,6 +414,18 @@ function Player:isColliding(moveX, moveY, size)
                 collidedX = true
             end
             if checkCollision(playerBoxY, tileBox) then
+                collidedY = true
+            end
+        end
+    end
+
+    for _, enemy in ipairs((Game and Game.enemies) or {}) do
+        if enemy.isAlive and enemy.blocksPlayer and enemy.collisionBox then
+            local enemyBox = enemy:collisionBox()
+            if checkCollision(playerBoxX, enemyBox) then
+                collidedX = true
+            end
+            if checkCollision(playerBoxY, enemyBox) then
                 collidedY = true
             end
         end
@@ -374,44 +461,41 @@ function Player:drawLife()
     if not self.isAlive then
         return
     end
-    local heartColor = "466673"
-    local outlineColor = "090909"
-    if self.damageTimer < 0.4 then
-        heartColor = "fbfaf7"
-        --outlineColor = "fbfaf7"
-    end
-
     local blink = false
-    if self.life == 1 then 
+    if self.life <= 1 then
         local time = love.timer.getTime()
-        
-        blink = math.floor(time * 3) % 2 ~= 0 
+        blink = math.floor(time * 3) % 2 ~= 0
     end
 
-    local size = 24
-    local spacing = 6
-    local startX = 15
-    local startY = 70
-    local line = 3
-    local SquareLineSize = size - line
-    for _, color in ipairs({outlineColor, heartColor}) do
-        for i = 1, self.totalLife do
-            love.graphics.setColor(hexToRGB(color))
-            local drawTipe = "fill"
-            local squareSize = size
-            local currentStartX = startX + (i - 1) * (size + spacing) - _*3
-            local currentStartY = startY - _*3
-            if self.life < i or (i == 1 and blink)then
-                drawTipe = "line"
-                squareSize = SquareLineSize
-                currentStartX = currentStartX + line/2
-                currentStartY = currentStartY + line/2
-            end
-            love.graphics.setLineWidth(line)
-            love.graphics.rectangle(drawTipe, currentStartX, currentStartY, squareSize, squareSize)
-            love.graphics.setLineWidth(1)
-        end
+    local scale = 3
+    local spacing = -16
+    local startX = 3
+    local startY = 46
+    local shouldFlashWhite = self.damageTimer < 0.4
+
+    if shouldFlashWhite then
+        love.graphics.setShader(heartWhiteShader)
     end
+
+    for i = 1, 3 do
+        local remaining = self.life - ((i - 1) * 2)
+        local frame = heartFrames.empty
+
+        if remaining >= 2 then
+            frame = heartFrames.full
+        elseif remaining == 1 and not (i == 1 and blink) then
+            frame = heartFrames.half
+        end
+
+        local x = startX + (i - 1) * (heartFrameSize * scale + spacing)
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.draw(heartImage, frame, x, startY, 0, scale, scale)
+    end
+
+    if shouldFlashWhite then
+        love.graphics.setShader()
+    end
+
     love.graphics.setColor(1, 1, 1, 1)
 end
 
@@ -473,22 +557,101 @@ function Player:drawHand()
 
     local scaleX = (math.cos(self.mouseAngle) < 0) and -1 or 1
 
-    love.graphics.draw(
+    self:drawPlayerImage(
         self.handImage,
-        handX-8,
-        handY - 2 ,
+        nil,
+        handX - 8,
+        handY - 2,
         0,
-        1, 1.2,
-        0, 16
+        1,
+        1.2,
+        0,
+        16
     )
     self.gun:draw()
 
 end
 
+function Player:drawIdleHand(quad, scaleX, originX)
+    if self.gun.showGun then return end
+
+    self:drawPlayerImage(
+        self.idleHandSheet,
+        quad,
+        self.x,
+        self.y,
+        0,
+        scaleX,
+        1.5,
+        originX,
+        self.spriteSize
+    )
+end
+
+function Player:applyGlitchShader(image)
+    if self.glitchTimer <= 0 and self.whiteFlashTimer <= 0 then
+        return false
+    end
+
+    local intensity = 0
+    if self.glitchTimer > 0 then
+        intensity = self.glitchTimer / self.glitchDuration
+    end
+
+    local flash = 0
+    if self.whiteFlashTimer > 0 and math.floor(self.whiteFlashTimer * 18) % 2 == 0 then
+        flash = 1
+    end
+
+    playerGlitchShader:send("texturePixelSize", {
+        1 / image:getWidth(),
+        1 / image:getHeight()
+    })
+    playerGlitchShader:send("displacementPixels", self.glitchDisplacementPixels)
+    playerGlitchShader:send("time", love.timer.getTime())
+    playerGlitchShader:send("intensity", intensity)
+    playerGlitchShader:send("flash", flash)
+    love.graphics.setShader(playerGlitchShader)
+    return true
+end
+
+function Player:drawPlayerImage(image, quad, x, y, rotation, scaleX, scaleY, originX, originY)
+    local hasGlitch = self:applyGlitchShader(image)
+
+    if quad then
+        love.graphics.draw(
+            image,
+            quad,
+            x,
+            y,
+            rotation or 0,
+            scaleX or 1,
+            scaleY or 1,
+            originX or 0,
+            originY or 0
+        )
+    else
+        love.graphics.draw(
+            image,
+            x,
+            y,
+            rotation or 0,
+            scaleX or 1,
+            scaleY or 1,
+            originX or 0,
+            originY or 0
+        )
+    end
+
+    if hasGlitch then
+        love.graphics.setShader()
+    end
+end
+
 function Player:draw()
     if not self.isAlive then return end
 
-    if self.damageTimer < 1 then
+    if self.damageTimer > (self.damageBlinkDelay or 0) and self.damageTimer < 1 then
         if math.floor(self.damageTimer * 15) % 2 == 0 then
             return
         end
@@ -496,48 +659,73 @@ function Player:draw()
 
     local anim = self.animations[self.currentAnimation]
     local frameIndex = anim.frames[self.currentFrame]
+    local handFrameIndex = frameIndex
 
     local quad = self.quads[frameIndex + 1] -- +1 porque Lua começa em 1
 
+    local handQuad = quad
+
     if self.moveX == 0 and self.moveY > 0  then
         quad = self.quads[frameIndex + 1 + 6]
+        handQuad = quad
 
     end
 
     if self.moveX == 0 and self.moveY < 0  then
         quad = self.quads[frameIndex + 1 + 12]
+        handQuad = quad
 
+    end
+
+    if self.currentAnimation == "idle" then
+        handFrameIndex = anim.frames[self.idleHandFrame]
+        handQuad = self.quads[handFrameIndex + 1]
+
+        if self.moveX == 0 and self.moveY > 0 then
+            handQuad = self.quads[handFrameIndex + 1 + 6]
+        end
+
+        if self.moveX == 0 and self.moveY < 0 then
+            handQuad = self.quads[handFrameIndex + 1 + 12]
+        end
     end
     
 
-    local scaleX = self.flipH and -1 or 1
+    local walkStretchX = 1
+    local walkStretchY = 1
+    if self.currentAnimation == "walk" then
+        local walkDuration = anim.duration
+        if self.gun.showGun then walkDuration = walkDuration * 1.25 end
+
+        local walkFrameTime = walkDuration / #anim.frames
+        local frameProgress = math.min(self.animationTimer / walkFrameTime, 1)
+        local loopProgress = ((self.currentFrame - 1) + frameProgress) / #anim.frames
+        local walkPulse = math.sin(loopProgress * math.pi * 4)
+
+        walkStretchX = 1 + walkPulse * 0.025
+        walkStretchY = 1 - walkPulse * 0.018
+    end
+
+    local scaleX = (self.flipH and -1 or 1) * walkStretchX
+    local scaleY = 1.5 * walkStretchY
     local originX = self.flipH and (self.spriteSize - self.spriteSize / 2) or (self.spriteSize / 2)
     
     local mouseX, mouseY = mousePosition()
 
     if mouseY > self.y then
 
-        love.graphics.draw(
-            self.playerSheet,
-            quad,
-            self.x,
-            self.y,
-            0,
-            scaleX, 1.5,
-            originX, self.spriteSize
-        )
-        self:drawHand()
+        self:drawPlayerImage(self.playerSheet, quad, self.x, self.y, 0, scaleX, scaleY, originX, self.spriteSize)
+        if self.gun.showGun then
+            self:drawHand()
+        else
+            self:drawIdleHand(handQuad, scaleX, originX)
+        end
     else 
-        self:drawHand()
-        love.graphics.draw(
-            self.playerSheet,
-            quad,
-            self.x,
-            self.y,
-            0,
-            scaleX, 1.5,
-            originX, self.spriteSize
-        )
+        if self.gun.showGun then
+            self:drawHand()
+        end
+        self:drawPlayerImage(self.playerSheet, quad, self.x, self.y, 0, scaleX, scaleY, originX, self.spriteSize)
+        self:drawIdleHand(handQuad, scaleX, originX)
     end
 
     if DEBUG then

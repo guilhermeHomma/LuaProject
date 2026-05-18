@@ -1,17 +1,32 @@
 local Particle = require("scripts/particles/particle")
-local Ball = require("scripts/particles/ballParticle")
+local RgbShiftDraw = require("scripts/effects/rgbShiftDraw")
 
 local boxParticle = setmetatable({}, {__index = Particle})
 boxParticle.__index = boxParticle
-local whiteShader = love.graphics.newShader("scripts/shaders/whiteShader.glsl")
+local sprite = love.graphics.newImage("assets/sprites/particles/box-particles.png")
+local quads = {}
+
+sprite:setFilter("nearest", "nearest")
+
+do
+    local sheetWidth = sprite:getWidth()
+    local sheetHeight = sprite:getHeight()
+    for index = 1, 3 do
+        quads[index] = love.graphics.newQuad((index - 1) * 32, 0, 32, 32, sheetWidth, sheetHeight)
+    end
+end
 
 
 function boxParticle:new(x, y)
 
     local particle = Particle.new(self, x, y, 0, 4, 100)
-    particle.sprite = love.graphics.newImage("assets/sprites/particles/box-particles.png")
-    particle.sprite:setFilter("nearest", "nearest")
+    particle.sprite = sprite
+    particle.particleType = "boxParticle"
     particle.index = math.random(1, 3)
+    particle.rgbShift = RgbShiftDraw.createConfig({
+        duration = 0.1,
+        shift = 1
+    })
     return particle
 end
 
@@ -33,20 +48,28 @@ function boxParticle:death()
 end
 
 function boxParticle:draw()
+    local r, g, b, a = love.graphics.getColor()
+    local tint = {r, g, b, a}
 
+    RgbShiftDraw.drawSprite(
+        self.sprite,
+        quads[self.index],
+        self.x,
+        self.y + 3,
+        0,
+        1,
+        1.1,
+        32 / 2,
+        32,
+        self.timer,
+        self.rgbShift,
+        1,
+        tint
+    )
 
-    if self.timer < 0.05  then
-        love.graphics.setShader(whiteShader)   
-    end
-
-    love.graphics.setColor(1, 1, 1, 1)
-    local sheetWidth = self.sprite:getWidth()
-    local sheetHeight = self.sprite:getHeight()
-    local quad = love.graphics.newQuad((self.index-1) * 32, 0, 32, 32, sheetWidth, sheetHeight)
-
-    love.graphics.draw(self.sprite, quad, self.x, self.y + 3, 0, 1, 1.1, 32 / 2, 32)
-    love.graphics.setShader()   
-    love.graphics.setColor(1, 1, 1)
+    love.graphics.setColor(r, g, b, a)
+    love.graphics.draw(self.sprite, quads[self.index], self.x, self.y + 3, 0, 1, 1.1, 32 / 2, 32)
+    love.graphics.setColor(r, g, b, a)
 end
 
 return boxParticle

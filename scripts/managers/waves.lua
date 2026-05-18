@@ -2,11 +2,12 @@ WaveManager = {}
 local Zombie= require("scripts/enemies/zombie")
 local BigZombie = require("scripts/enemies/bigZombie")
 local BabyZombie = require("scripts/enemies/babyZombie")
+local NoHead = require("scripts/enemies/noHead")
 local Tilemap = require("scripts/tilemap")
 
 require("scripts/utils")
 
-local maxEnemiesAlive = 80
+local maxEnemiesAlive = 60
 
 function WaveManager:load()
     self.wave = 0
@@ -28,6 +29,9 @@ function WaveManager:load()
 end
 
 function WaveManager:update(dt)
+    if CURRENT_LEVEL and CURRENT_LEVEL.enableWaves == false then
+        return
+    end
 
     if not self.start then 
         if Player.isAlive and Player.y < 268 then
@@ -64,8 +68,12 @@ function WaveManager:instanceEnemy()
     --and self.wave > 8
     elseif math.random(1, 9) > 8  and self.wave  >= 6 then
         table.insert(Game.enemies, BigZombie:new(enemyX, enemyY) )
-    elseif math.random(1, 7) > 6 and self.wave  >= 10  then
-        table.insert(Game.enemies, BabyZombie:new(enemyX, enemyY))
+    elseif self.wave >= 10 and math.random(1, 7) > 6 then
+        if math.random(1, 2) == 1 then
+            table.insert(Game.enemies, BabyZombie:new(enemyX, enemyY))
+        else
+            table.insert(Game.enemies, NoHead:new(enemyX, enemyY))
+        end
     else
         table.insert(Game.enemies, Zombie:new(enemyX, enemyY))
         
@@ -74,26 +82,7 @@ function WaveManager:instanceEnemy()
 end
 
 function WaveManager:enemyPosition()
-    local tilemap = Tilemap:getTilemap()
-
-    local posibleTiles = {}
-
-    for y = 1, #tilemap do
-        for x = 1, #tilemap[y] do
-            if tilemap[y][x] == 0 then
-                
-                local tilex, tiley = Tilemap:mapToWorld(x,y)
-                if distance({x=tilex, y=tiley}, Player) > 240 then
-                    table.insert(posibleTiles, {x=tilex, y=tiley})
-                end
-            end
-        end
-    end
-
-    local randomIndex = math.random(1, #posibleTiles)
-    local chosenTile = posibleTiles[randomIndex]
-
-    return chosenTile.x, chosenTile.y - 8
+    return Tilemap:getRandomSpawnPosition(Player)
 end
 
 function WaveManager:startNextWave()
@@ -129,6 +118,9 @@ end
 
 
 function WaveManager:draw()
+    if CURRENT_LEVEL and CURRENT_LEVEL.enableWaves == false then
+        return
+    end
 
     if not Player.isAlive or self.wave <= 0 then
         return
@@ -143,7 +135,7 @@ function WaveManager:draw()
     local text = "WAVE: " .. self.wave
     local textWidth = self.font:getWidth(text)
 
-    local x = love.graphics.getWidth() / scale - textWidth - 15
+    local x = baseWidth - textWidth - 15
     --love.graphics.setColor(0.70, 0.63, 0.52)
     --love.graphics.setColor(0.274, 0.4, 0.45, alpha)
     love.graphics.setColor(0.05, 0, 0.05)

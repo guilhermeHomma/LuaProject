@@ -27,7 +27,7 @@ function HeartSound:update(dt)
         self:stop()
     end
     
-    if Player.life == 1 then 
+    if Player.life == 1 then
         soundPlayer:setVolume(0.5)
     elseif Player.life == 2 then
         soundPlayer:setVolume(0.1)
@@ -35,7 +35,7 @@ function HeartSound:update(dt)
         self:stop()
     end
     
-    if not soundPlayer:isPlaying() and (Player.life == 1 or Player.life == 2) and state == STATES.game then
+    if not soundPlayer:isPlaying() and Player.life <= 2 and state == STATES.game then
         if Player.life == 1 then
             TransitionManager:setDistortion(0.4)
         else

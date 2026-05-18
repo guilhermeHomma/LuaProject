@@ -22,7 +22,7 @@ end
 function MainMenu:load()
     baseMenu.load(self)
     self.MenuTItle = "mobize"
-    self.menuOptions = {"start game", "exit",} -- "options"}
+    self.menuOptions = {"start game", "settings", "exit game"}
     self.fontTitle = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 48)
     self.fontTitle:setFilter("nearest", "nearest")
 
@@ -38,6 +38,8 @@ function MainMenu:update(dt)
         animationTimer = animationTimer - frameDuration
         currentFrame = currentFrame % #animationQuads + 1
     end
+
+    baseMenu.update(self, dt)
 end
 
 function MainMenu:draw()
@@ -58,9 +60,10 @@ end
 function MainMenu:onSelect()
     if self.selectedOption == 1 then
         loadGame()
-        --loadIntro()
-    elseif self.selectedOption == #self.menuOptions then
-        quitGame()
+    elseif self.selectedOption == 2 then
+        openSettings(STATES.mainMenu)
+    elseif self.selectedOption == 3 then
+        openQuitGameConfirm(STATES.mainMenu)
     end
 end
 

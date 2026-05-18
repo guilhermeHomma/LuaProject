@@ -3,18 +3,30 @@ Store.__index = Store
 
 local sheetImage = love.graphics.newImage("assets/sprites/objects/store.png")
 local sheetWidth, sheetHeight = sheetImage:getDimensions()
+local shopLetterImage = love.graphics.newImage("assets/sprites/objects/shop-letter.png")
 local sheetGun = love.graphics.newImage("assets/sprites/player/guns.png")
+local bulletsDropImage = love.graphics.newImage("assets/sprites/objects/bulletsDrop.png")
+local DropShine = require("scripts/drops/dropShine")
+local WeaponDefinitions = require("scripts/player/weapons/init")
+local FloorManager = require("scripts/managers/floorManager")
 local font = love.graphics.newFont("assets/fonts/pixelart.ttf", 8)
 
 local outlineShader = love.graphics.newShader("scripts/shaders/outline.glsl")
 outlineShader:send("u_threshold", 0.1)
 outlineShader:send("u_outlineColor", {1, 1, 1, 1})
+local shopSignShader = love.graphics.newShader("scripts/shaders/shopSign.glsl")
+shopSignShader:send("u_onColor", {0.8, 0.62, 0.14, 0.9})
+shopSignShader:send("u_offColor", {0.02, 0.01, 0.002, 0.45})
+shopSignShader:send("u_texel", {1 / shopLetterImage:getWidth(), 1 / shopLetterImage:getHeight()})
 sheetGun:setFilter("nearest", "nearest")
+bulletsDropImage:setFilter("nearest", "nearest")
 sheetImage:setFilter("nearest", "nearest")
+shopLetterImage:setFilter("nearest", "nearest")
 font:setFilter("nearest", "nearest")
 
 local sheetW, sheetH = sheetImage:getDimensions()
 local gunW, gunH = sheetGun:getDimensions()
+local bulletDropQuad = love.graphics.newQuad(0, 0, 8, 8, bulletsDropImage:getDimensions())
 
 PlayerCloseStore = false
 
@@ -23,13 +35,44 @@ local frameWidth = 32
 local frameHeight = sheetHeight
 local stretch = 1.5
 
-local gunDict  = {
-    {name = "pistol", price = 50, index = 1, bulletPrice = 35},
-    {name = "raygun", price = 600, index = 3, bulletPrice = 200},
-    {name = "squaregun", price = 220, index = 4, bulletPrice = 80},
-    {name = "shotgun", price = 450, index = 2, bulletPrice = 95},
-
+local shopProductOrder = {
+    "raygun",
+    "squaregun",
+    "longshot",
+    "cakegun",
+    "shotgun",
 }
+
+local weaponsByName = {}
+local weaponsById = {}
+for index, weapon in ipairs(WeaponDefinitions or {}) do
+    local weaponId = weapon.id or index
+    weapon.index = weapon.index or weaponId
+    weaponsByName[weapon.name] = weapon
+    weaponsById[weaponId] = weapon
+end
+
+local function getAmmoProduct()
+    local shopConfig = CURRENT_LEVEL and CURRENT_LEVEL.shopConfig or {}
+    return {
+        id = shopConfig.ammoProductId or "full_bullets",
+        name = "full bullets",
+        price = shopConfig.ammoPrice or 300,
+        kind = "ammo",
+    }
+end
+
+local function getProduct(productKey)
+    if type(productKey) == "string" then
+        if productKey == getAmmoProduct().id then
+            return getAmmoProduct()
+        end
+        return weaponsByName[productKey] or weaponsByName.raygun
+    end
+
+    local productName = shopProductOrder[productKey]
+    return productName and weaponsByName[productName] or weaponsById[productKey] or weaponsByName.raygun
+end
 
 for i = 0, (sheetWidth / frameWidth) - 1 do
     table.insert(quads, love.graphics.newQuad(i * frameWidth, 0, frameWidth, frameHeight, sheetWidth, sheetHeight))
@@ -41,16 +84,38 @@ function Store:new(x, y, quadIndex, collider, productIndex)
     setmetatable(tile, Store)
     tile.alpha = 1
     tile.targetAlpha = 1
-    tile.product = gunDict[productIndex]
+    tile.product = getProduct(productIndex)
     tile.playerIsClose = false
     return tile
+end
+
+function Store:getPurchaseKey()
+    return (self.product and (self.product.id or self.product.name) or "unknown") .. ":" .. self.x .. ":" .. self.y
+end
+
+function Store:isPurchased()
+    if self.product and self.product.kind == "ammo" then
+        local state = FloorManager:getCurrentRoomState()
+        return state
+            and state.shopPurchases
+            and state.shopPurchases[self:getPurchaseKey()] == true
+    end
+
+    local productName = self.product and self.product.name
+    local productIndex = self.product and self.product.index
+    local gamePurchased = Game and Game.hasPurchasedWeapon and Game:hasPurchasedWeapon(productName)
+    local playerHasWeapon = Player
+        and Player.gun
+        and Player.gun.secondary_weapon
+        and Player.gun.secondary_weapon.index == productIndex
+
+    return gamePurchased or playerHasWeapon
 end
 
 function Store:update(dt)
     addToDrawQueue(self.yWorld+0.1, self)
     self.playerIsClose = false
-    PlayerCloseStore = false
-    if Player.isAlive then
+    if Player.isAlive and not self:isPurchased() then
         if distance(Player, self) < 20 and Player.isAlive then
             self.targetAlpha = 1
             Game.textAlphaTarget = 1
@@ -61,23 +126,22 @@ function Store:update(dt)
             self.targetAlpha = 0
         end
         
+    else
+        self.targetAlpha = 0
     end
     self.alpha= self.alpha + (self.targetAlpha - self.alpha) * dt * 10
 end
 
 function Store:performBuy()
+    if self:isPurchased() then return end
     if distance(Player, self) > 20 then return end
 
-    if (Player.gun:isFullBullets() and Player.gun.gunIndex == self.product.index) then return end
-
     local currentPrice = self.product.price
-    if Player.gun.gunIndex == self.product.index then 
-        currentPrice = self.product.bulletPrice 
-    end
-
     local playerPoints = Game:getPlayerPoints()
 
     if playerPoints < currentPrice then return end
+    if self.product.kind == "ammo" and not (Player.gun and Player.gun.secondary_weapon) then return end
+    if self.product.index == 1 then return end
 
     local sound = love.audio.newSource("assets/sfx/store/buy-item.mp3", "static")
     sound:setVolume(1)
@@ -85,40 +149,108 @@ function Store:performBuy()
     sound:play()
 
     Game:decreasePlayerPoints(currentPrice)
-    Player.gun:changeGun(self.product.index)
+    if self.product.kind == "ammo" then
+        Player.gun:fillSecondaryWeaponToMax()
+        local state = FloorManager:getCurrentRoomState()
+        if state then
+            state.shopPurchases = state.shopPurchases or {}
+            state.shopPurchases[self:getPurchaseKey()] = true
+        end
+    else
+        Player.gun:changeGun(self.product.index)
+        if Game.markWeaponPurchased then
+            Game:markWeaponPurchased(self.product.name)
+        end
+    end
+    self.playerIsClose = false
+    PlayerCloseStore = false
 end
 
 
 function Store:drawGun()
-    --if Player.gun.gunIndex ~= self.product.index then 
-        local quadGun = love.graphics.newQuad(
-            (self.product.index - 1) * 16, 
-            16,
-            16, 16,
-            sheetGun:getDimensions()
-        )
+    if self:isPurchased() then
+        return
+    end
 
-        love.graphics.draw(
-            sheetGun,
-            quadGun,
-            self.xWorld - 4,
-            self.yWorld - 18,
-            0,
-            1, 1.5,
-            0,
-            self.size / 2
-        )
-    --end
+    local image = sheetGun
+    local quadGun = love.graphics.newQuad(
+        ((self.product.index or 1) - 1) * 16,
+        16,
+        16, 16,
+        sheetGun:getDimensions()
+    )
+
+    local originX = 0
+    local originY = self.size / 2
+    local drawX = self.xWorld - 4
+    local drawY = self.yWorld - 18
+    if self.product.kind == "ammo" then
+        image = bulletsDropImage
+        quadGun = bulletDropQuad
+        originX = 4
+        originY = 8
+        drawX = self.xWorld
+        drawY = self.yWorld - 16
+    end
+
+    local time = love.timer.getTime()
+    local floatY = math.sin(time * 2.8 + self.xWorld * 0.03) * 2.2
+    local scaleX = 1
+    local scaleY = 1.5
+
+    if self.playerIsClose then
+        local stretch = math.sin(time * 5.5) * 0.025 + 0.025
+        scaleX = 1 + stretch
+        scaleY = 1.5 * (1 - stretch * 0.5)
+    end
+
+    DropShine.draw(
+        image,
+        quadGun,
+        drawX,
+        drawY + floatY,
+        0,
+        scaleX,
+        scaleY,
+        originX,
+        originY
+    )
+end
+
+function Store:drawShopSign()
+    local purchased = self:isPurchased()
+    shopSignShader:send("u_active", purchased and 0 or 1)
+    shopSignShader:send("u_time", love.timer.getTime())
+
+    love.graphics.setShader(shopSignShader)
+    love.graphics.draw(
+        shopLetterImage,
+        self.xWorld,
+        self.yWorld,
+        0,
+        1,
+        1,
+        shopLetterImage:getWidth() / 2,
+        shopLetterImage:getHeight()
+    )
+    love.graphics.setShader()
+    love.graphics.setColor(1, 1, 1, 1)
 end
 
 function Store:draw()
     love.graphics.setFont(font)
-    if tutorialGunActive or self.playerIsClose then
+    local activeQuad = quads[2]
+    local quadX, quadY, quadW, quadH = activeQuad:getViewport()
+    outlineShader:send("u_texel", {1 / sheetW, 1 / sheetH})
+    outlineShader:send("u_uvMin", {quadX / sheetW, quadY / sheetH})
+    outlineShader:send("u_uvMax", {(quadX + quadW) / sheetW, (quadY + quadH) / sheetH})
+
+    if self.playerIsClose and not self:isPurchased() then
         love.graphics.setShader(outlineShader)
     end
-    outlineShader:send("u_texel", {1 / sheetW, 1 / sheetH})
-    love.graphics.draw(sheetImage, quads[2], self.xWorld - frameWidth/2, self.yWorld - frameHeight * stretch, 0, 1, stretch)
+    love.graphics.draw(sheetImage, activeQuad, self.xWorld - frameWidth/2, self.yWorld - frameHeight * stretch, 0, 1, stretch)
     love.graphics.setShader()
+    self:drawShopSign()
     self:drawGun()
     love.graphics.setColor(0, 0, 0, self.alpha)
     if Player.isAlive then 
@@ -142,23 +274,16 @@ function Store:getText()
 
     local name = self.product.name 
 
-    if Player.isAlive then 
-        if Player.gun.gunIndex == self.product.index then 
-            currentPrice = self.product.bulletPrice 
-            name = name .. " bullets"
-        end
-    end
-    
     local buyT = "click X to buy"
     local price = currentPrice .. " C"
 
-    if not Player.isAlive then 
+    if not Player.isAlive or self:isPurchased() then
         return ""
     end
 
     local text = name .. "\n" .. price
 
-    if Game:getPlayerPoints() > currentPrice and not (Player.gun:isFullBullets() and Player.gun.gunIndex == self.product.index) then 
+    if Game:getPlayerPoints() >= currentPrice then
         text = text .. "\n" .. buyT
     end
 

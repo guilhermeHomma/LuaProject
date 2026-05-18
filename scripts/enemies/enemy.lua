@@ -4,6 +4,7 @@ Enemy.states = { idle = 1, walk = 2, damage = 3 }
 
 local Particle = require("scripts/particles/particle")
 local Tilemap = require("scripts/tilemap")
+local DamageStretch = require("scripts/effects/damageStretch")
 
 require("scripts/utils")
 
@@ -17,6 +18,7 @@ function Enemy:new(x, y)
     enemy.life = enemy.totalLife
     enemy.dropPoints = 10
     enemy.isAlive = true
+    DamageStretch:init(enemy, 0.1, 0.1)
 
     return enemy
 end
@@ -55,6 +57,7 @@ end
 
 function Enemy:takeDamage(damage, dx, dy)
     self.life = self.life - damage
+    DamageStretch:start(self)
 end
 
 function Enemy:death()
@@ -90,11 +93,12 @@ function Enemy:draw()
     if self.flipH then
         scaleX = -1
     end
+    local damageScaleX, damageScaleY = DamageStretch:getScale(self)
 
     if self.state == Enemy.states.damage and Player.isAlive then
-        love.graphics.draw(self.spriteOutline, self.frames[self.currentFrame], self.x, self.y, 0, scaleX, 1, self.frameWidth / 2, self.frameHeight)
+        love.graphics.draw(self.spriteOutline, self.frames[self.currentFrame], self.x, self.y, 0, scaleX * damageScaleX, damageScaleY, self.frameWidth / 2, self.frameHeight)
     else 
-        love.graphics.draw(self.spriteSheet, self.frames[self.currentFrame], self.x, self.y, 0, scaleX, 1, self.frameWidth / 2, self.frameHeight)
+        love.graphics.draw(self.spriteSheet, self.frames[self.currentFrame], self.x, self.y, 0, scaleX * damageScaleX, damageScaleY, self.frameWidth / 2, self.frameHeight)
     end
 
     self.drawDebug(x, y)

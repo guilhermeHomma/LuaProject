@@ -1,87 +1,220 @@
+local Levels = require("scripts/config/levels")
+local GameConfig = require("scripts/config/gameConfig")
+GameConfig:applyLevel(Levels:getDefault())
 
 require "scripts/utils"
 
 Game = require("scripts.managers.gameManager")
 local GameIntro = require("scripts.managers.gameIntro")
 love.graphics.setDefaultFilter("nearest", "nearest")
+local presentationShader = love.graphics.newShader("scripts/shaders/presentation.glsl")
+local unpackValues = table.unpack or unpack
+local MAX_PRESENTATION_SHOCKWAVES = 8
 
 local AmbienceSound = require("scripts/managers/ambienceSound")
 local Music = require("scripts/managers/music")
+local Settings = require("scripts/managers/settings")
 local PauseMenu = require("scripts/managers/menu/pauseMenu")
 local GameoverMenu = require("scripts/managers/menu/gameoverMenu")
 local MainMenu = require("scripts/managers/menu/mainMenu")
+local SettingsMenu = require("scripts/managers/menu/settingsMenu")
+local ConfirmMenu = require("scripts/managers/menu/confirmMenu")
 local LogoIntro = require("scripts/managers/menu/logoIntro")
 local TransitionManager = require("scripts.managers.transitionManager")
 
-baseWidth = 960
-baseHeight = 540
-canvas = love.graphics.newCanvas(baseWidth, baseHeight)
-STATES = {mainMenu = 1, game = 2, gamePause = 3, gameDead = 4, gameIntro = 5, startLogo = 6}
+canvas = nil
+STATES = {mainMenu = 1, game = 2, gamePause = 3, gameDead = 4, gameIntro = 5, startLogo = 6, settings = 7, confirm = 8}
 state = STATES.startLogo
-YSCALE = 2.4
---baseWidth = 1120
---baseHeight = 630
-local shader = love.graphics.newShader("scripts/shaders/distortion.glsl")
-local paletteList = require("scripts/shaders/paletteList")
-
-local spotlightShader = love.graphics.newShader("scripts/shaders/spotlight.glsl")
-local sceneCanvas, postCanvas
 
 DEBUG = false
 FPS = false
 
-scale = 1
-
 MUSIC_VOLUME = 0.6
 GAME_VOLUME = 0.95
+SOUND_VOLUME = 1
 GAME_PITCH = 1
-SCAPE_INTRO = true
+SCAPE_INTRO = GAME_FLAGS and GAME_FLAGS.skipIntro or false
+local settingsReturnState = STATES.mainMenu
+local confirmReturnState = STATES.mainMenu
 
-
-
-local function createCanvases()
-  local w, h = love.graphics.getWidth(), love.graphics.getHeight()
-  sceneCanvas = love.graphics.newCanvas(w, h)
-  sceneCanvas:setFilter("nearest","nearest")
-  postCanvas  = love.graphics.newCanvas(w, h)
-  postCanvas:setFilter("nearest","nearest")
-  Game.spot.target = math.sqrt(w*w + h*h) * 0.7 -- cobre a diagonal
+local function rebuildCanvas()
+    canvas = love.graphics.newCanvas(baseWidth, baseHeight)
+    canvas:setFilter("nearest", "nearest")
 end
 
+local function refreshScreenScale()
+    GameConfig:updateWindowScale(love.graphics.getWidth(), love.graphics.getHeight())
+end
+
+function updateWindowLayout(width, height)
+    local windowWidth = width or love.graphics.getWidth()
+    local windowHeight = height or love.graphics.getHeight()
+
+    if camera then
+        camera:resize(windowWidth, windowHeight)
+    end
+
+    GameConfig:updateWindowScale(windowWidth, windowHeight)
+end
+
+local function setLevel(levelId)
+    local level = Levels:get(levelId)
+    GameConfig:applyLevel(level)
+    rebuildCanvas()
+    updateWindowLayout()
+end
+
+local function updateCurrentState(dt)
+    if state == STATES.game then
+        Game:update(dt)
+    elseif state == STATES.mainMenu then
+        MainMenu:update(dt)
+    elseif state == STATES.gameIntro then
+        GameIntro:update(dt)
+    elseif state == STATES.startLogo then
+        LogoIntro:update(dt)
+    elseif state == STATES.gamePause then
+        PauseMenu:update(dt)
+    elseif state == STATES.gameDead then
+        Game:update(dt)
+        GameoverMenu:update(dt)
+    elseif state == STATES.settings then
+        SettingsMenu:update(dt)
+    elseif state == STATES.confirm then
+        ConfirmMenu:update(dt)
+    end
+end
+
+local function drawCurrentState()
+    if state == STATES.game or state == STATES.gamePause or state == STATES.gameDead then
+        Game:draw()
+    end
+end
+
+local function isGameplayState()
+    return state == STATES.game or state == STATES.gamePause or state == STATES.gameDead
+end
+
+local function shouldDrawHUD()
+    return isGameplayState()
+        and CURRENT_LEVEL ~= nil
+        and CURRENT_LEVEL.id == "default"
+        and Player ~= nil
+        and Player.isAlive ~= nil
+end
+
+local function drawScaledState()
+    if state == STATES.startLogo then
+        LogoIntro:draw()
+    elseif state == STATES.mainMenu then
+        MainMenu:draw()
+    elseif state == STATES.gameIntro then
+        GameIntro:draw()
+    elseif state == STATES.settings then
+        SettingsMenu:draw()
+    elseif state == STATES.gamePause then
+        PauseMenu:draw()
+    elseif state == STATES.gameDead then
+        GameoverMenu:draw()
+    elseif state == STATES.confirm then
+        ConfirmMenu:draw()
+    end
+end
+
+local function presentCanvas()
+    presentationShader:send("u_sourceResolution", {baseWidth, baseHeight})
+    presentationShader:send("u_viewportOffset", {viewportOffsetX, viewportOffsetY})
+    presentationShader:send("u_scale", scale)
+
+    local spotlightEnabled = 0
+    if state == STATES.game and Game.spot and Game.spot.enabled and camera then
+        local px, py = camera:getTargetScreenPosition()
+        presentationShader:send("u_center", {px, py - 38 * scale})
+        presentationShader:send("u_radius", Game.spot.radius * scale)
+        presentationShader:send("u_feather", Game.spot.feather)
+        spotlightEnabled = 1
+    else
+        presentationShader:send("u_center", {0, 0})
+        presentationShader:send("u_radius", 0)
+        presentationShader:send("u_feather", 0)
+    end
+
+    presentationShader:send("u_spotlightEnabled", spotlightEnabled)
+
+    local shockwaveCenters = {}
+    local shockwaveParams = {}
+    local shockwaveCount = 0
+
+    if isGameplayState() and Game and Game.getWeaponShockwaves and camera then
+        for _, wave in ipairs(Game:getWeaponShockwaves()) do
+            if shockwaveCount >= MAX_PRESENTATION_SHOCKWAVES then
+                break
+            end
+
+            local duration = math.max(wave.duration or 0.28, 0.001)
+            local progress = math.min(math.max((wave.timer or 0) / duration, 0), 1)
+            local screenX, screenY = camera:worldToScreen(wave.x, wave.y)
+
+            shockwaveCount = shockwaveCount + 1
+            shockwaveCenters[shockwaveCount] = {
+                (screenX - viewportOffsetX) / scale,
+                (screenY - viewportOffsetY) / scale,
+            }
+            shockwaveParams[shockwaveCount] = {
+                progress,
+                wave.radius or 34,
+                wave.width or 7,
+                wave.intensity or 2.2,
+            }
+        end
+    end
+
+    for i = shockwaveCount + 1, MAX_PRESENTATION_SHOCKWAVES do
+        shockwaveCenters[i] = {0, 0}
+        shockwaveParams[i] = {1, 0, 1, 0}
+    end
+
+    presentationShader:send("u_shockwaveCount", shockwaveCount)
+    presentationShader:send("u_shockwaveCenters", unpackValues(shockwaveCenters, 1, MAX_PRESENTATION_SHOCKWAVES))
+    presentationShader:send("u_shockwaveParams", unpackValues(shockwaveParams, 1, MAX_PRESENTATION_SHOCKWAVES))
+
+    love.graphics.setShader(presentationShader)
+    love.graphics.draw(canvas, viewportOffsetX, viewportOffsetY, 0, scale, scale)
+    love.graphics.setShader()
+end
 
 function love.load()
-    
-    local scaleX = love.graphics.getWidth() / baseWidth
-    local scaleY = love.graphics.getHeight() / baseHeight
+    rebuildCanvas()
+    refreshScreenScale()
 
     local icon = love.image.newImageData("assets/sprites/icon.png")
-    --icon:setFilter("nearest", "nearest")
     love.window.setIcon(icon)
-    
-    scale = math.max(scaleX, scaleY)
-    love.audio.setVolume(GAME_VOLUME)
-
+    Settings:load()
     LogoIntro:load()
     MainMenu:load()
-    
 
     AmbienceSound:load()
     PauseMenu:load()
     Music:load()
     GameoverMenu:load()
+    SettingsMenu:load()
+    ConfirmMenu:load()
     AmbienceSound:startGame()
     TransitionManager:load()
     
     if SCAPE_INTRO then
-        state=STATES.game
+        setLevel("default")
+        state = STATES.game
         Game:load()
+        Music:startGame()
     end
     --loadIntro()
 end
 
-function loadIntro()
+function loadIntro(levelId)
     local function callback()
-        state=STATES.gameIntro
+        setLevel(levelId or "intro")
+        state = STATES.gameIntro
         GameIntro:load()
     end
 
@@ -89,9 +222,10 @@ function loadIntro()
 end
 
 
-function loadGame()
+function loadGame(levelId)
     local function callback()
-        state=STATES.game
+        setLevel(levelId or "default")
+        state = STATES.game
         Game:load()
         Music:startGame()
     end
@@ -99,16 +233,57 @@ function loadGame()
     TransitionManager:startTransition(function() callback() end)
 end
 
+function openSettings(returnState)
+    settingsReturnState = returnState or STATES.mainMenu
+    SettingsMenu.selectedOption = 1
+    SettingsMenu.mouseNeedsSync = true
+    state = STATES.settings
+end
+
+function closeSettings()
+    state = settingsReturnState or STATES.mainMenu
+end
+
+function openReturnToMenuConfirm(returnState)
+    confirmReturnState = returnState or STATES.gamePause
+    ConfirmMenu:open("MAIN MENU", "return to main menu?", function()
+        quitToMenu()
+    end)
+    state = STATES.confirm
+end
+
+function openQuitGameConfirm(returnState)
+    confirmReturnState = returnState or STATES.mainMenu
+    ConfirmMenu:open("EXIT GAME", "quit the game?", function()
+        quitGame()
+    end)
+    state = STATES.confirm
+end
+
+function closeConfirmMenu()
+    state = confirmReturnState or STATES.mainMenu
+end
+
 function playerDeath()
     Music:death()
     state=STATES.gameDead
 end
 
+local function pauseGameOnBackground()
+    if state ~= STATES.game then
+        return
+    end
+
+    state = STATES.gamePause
+    Music:changePause(true)
+end
+
 function quitToMenu()
     local function callback()
+        setLevel("menu")
         Music:closeGame()
         Game:close()
-        state=STATES.mainMenu
+        state = STATES.mainMenu
     end
     TransitionManager:startTransition(function() callback() end, 14, 3)
 end
@@ -123,12 +298,7 @@ function quitGame()
 end
 
 function fullscreen()
-    local isFullscreen = love.window.getFullscreen()
-    if isFullscreen then
-        love.window.setFullscreen(false)
-    else
-        love.window.setFullscreen(true)
-    end
+    Settings:toggleFullscreen()
 end
 
 function addToDrawQueue(priority, object, checkDistance)
@@ -136,13 +306,22 @@ function addToDrawQueue(priority, object, checkDistance)
         checkDistance = true
     end
 
-    local cameraDistance = distance(camera:objectPosition(), object)
-
-    if cameraDistance > 280 and checkDistance == true then
+    if checkDistance == false then
+        if STATES.gameIntro == state then
+            table.insert(GameIntro.drawQueue, {priority = priority, object = object})
+        else
+            table.insert(Game.drawQueue, {priority = priority, object = object})
+        end
         return
     end
 
-    if cameraDistance > 350 then
+    local cameraDistance = distance(camera:objectPosition(), object)
+
+    if cameraDistance > RENDER_DISTANCE then
+        return
+    end
+
+    if cameraDistance > HARD_RENDER_DISTANCE then
         return
     end
 
@@ -158,7 +337,6 @@ function changePause()
         state = (state == STATES.gamePause) and STATES.game or STATES.gamePause
 
         local isPaused = state == STATES.gamePause
-        TransitionManager:setDistortion(0.55)
         Music:changePause(isPaused)
 
     end
@@ -168,122 +346,93 @@ function love.keypressed(key)
     
     if TransitionManager.isTransiting then return end
 
-    if key == "escape" or key == "p" then
+    if (key == "escape" or key == "p") and (state == STATES.game or state == STATES.gamePause) then
         changePause()
+        return
     end 
 
     if key == "f11" then
-        fullscreen()
+        --fullscreen()
     end
 
     if state == STATES.mainMenu then
         MainMenu:keypressed(key)
     elseif state == STATES.game then
         Game:keypressed(key)
-
     elseif state == STATES.gamePause then
         PauseMenu:keypressed(key)
     elseif state == STATES.gameDead then
         GameoverMenu:keypressed(key)
+    elseif state == STATES.settings then
+        SettingsMenu:keypressed(key)
+    elseif state == STATES.confirm then
+        ConfirmMenu:keypressed(key)
     end
     if key == "f5" then
         FPS = not FPS
     end
 end
 
-function love.resize(w, h)
+function love.mousepressed(x, y, button)
+    if TransitionManager.isTransiting then return end
 
-    if camera then 
-        camera:resize(w, h)
+    local scaledX = (x - viewportOffsetX) / scale
+    local scaledY = (y - viewportOffsetY) / scale
+
+    if state == STATES.mainMenu then
+        MainMenu:mousepressed(scaledX, scaledY, button)
+    elseif state == STATES.gamePause then
+        PauseMenu:mousepressed(scaledX, scaledY, button)
+    elseif state == STATES.gameDead then
+        GameoverMenu:mousepressed(scaledX, scaledY, button)
+    elseif state == STATES.settings then
+        SettingsMenu:mousepressed(scaledX, scaledY, button)
+    elseif state == STATES.confirm then
+        ConfirmMenu:mousepressed(scaledX, scaledY, button)
     end
+end
 
-    local scaleX = w / baseWidth
-    local scaleY = h / baseHeight
+function love.resize(w, h)
+    updateWindowLayout(w, h)
+end
 
-    scale = math.max(scaleX, scaleY)
+function love.focus(focused)
+    if not focused then
+        pauseGameOnBackground()
+    end
+end
 
-
+function love.visible(visible)
+    if not visible then
+        pauseGameOnBackground()
+    end
 end
 
 function love.update(dt)
-    --if dt > 0.017 then print(dt) end
-    
-    if state == STATES.game then
-        Game:update(dt)
-    elseif state == STATES.mainMenu then
-        MainMenu:update(dt)
-
-    elseif state == STATES.gameIntro then
-        GameIntro:update(dt)
-    elseif state == STATES.startLogo then
-        
-        LogoIntro:update(dt)
-    
-    elseif state == STATES.gamePause then
-        PauseMenu:update(dt)
-    end
-
-    if state == STATES.gameDead then
-        Game:update(dt)
-        GameoverMenu:update(dt)
-
-    end
+    updateCurrentState(dt)
     TransitionManager:update(dt)
-
     AmbienceSound:update(dt)
     Music:update(dt)
 end 
 
 
 function love.draw()
-    
-    love.graphics.scale(1, 1)
     love.graphics.clear(0, 0, 0)
-    
+
     love.graphics.setCanvas(canvas)
-    
     love.graphics.clear(0.2, 0.3, 0.3)
-    
-
-    if state == STATES.game or state == STATES.gamePause or state == STATES.gameDead then
-        
-        Game:draw()
+    drawCurrentState()
+    if isGameplayState() then
+        Game:drawHUD()
     end
+    drawScaledState()
+    love.graphics.setCanvas()
 
-    if state == STATES.gamePause then
-        PauseMenu:draw()
-    elseif state == STATES.startLogo then
-        
-        LogoIntro:draw()
-    elseif state == STATES.mainMenu then
-        MainMenu:draw()
-    elseif state == STATES.gameIntro then
-        GameIntro:draw()
-    elseif state == STATES.gameDead then
-        GameoverMenu:draw()
-    end
+    presentCanvas()
 
-    TransitionManager:draw()
-
-    if (FPS or DEBUG) and state == STATES.game then 
+    if (FPS or DEBUG) and state == STATES.game then
         love.graphics.print("FPS: " .. love.timer.getFPS(), 10, 295)
     end
 
-    love.graphics.setCanvas()
-
-    shader:send("saturation", 0.8)
-    shader:send("brightness", 1)
-    shader:send("distortion", TransitionManager.distortion)
-    if state == STATES.game and Game.spot.enabled then
-        local px, py = camera:getTargetScreenPosition()
-        spotlightShader:send("u_center", {px, py - 28*scale})
-        spotlightShader:send("u_radius", Game.spot.radius * scale)
-        spotlightShader:send("u_feather", Game.spot.feather)
-        love.graphics.setShader(spotlightShader)
-    end
-    
-    love.graphics.draw(canvas, 0, 0, 0, scale, scale)
-    love.graphics.setShader()
+    TransitionManager:drawFullscreen()
 end
-
-

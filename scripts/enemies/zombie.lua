@@ -1,71 +1,220 @@
 local Zombie = {}
 Zombie.__index = Zombie
 Zombie.states = { idle = 1, walk = 2, damage = 3 }
+Zombie.enemyTypeId = "zombie"
 
 local ZParticle = require("scripts/particles/zombieDeadParticle")
 local Tilemap = require("scripts/tilemap")
 local whiteShader = love.graphics.newShader("scripts/shaders/whiteShader.glsl")
+local glitchShader = love.graphics.newShader("scripts/shaders/playerGlitch.glsl")
 local WalkParticle = require("scripts/particles/walkParticle")
 local FootStep = require("scripts/particles/footstep")
+local DamageStretch = require("scripts/effects/damageStretch")
+local ZombieMouthConfig = require("scripts/enemies/zombieMouthConfig")
 
-local coinDrop = require("scripts/drops/coin")
+local DropTemplates = require("scripts/drops/dropTemplates")
+local EnemyDeadDropParticle = require("scripts/particles/enemyDeadDropParticle")
 local stretch = 1.4
 require("scripts/utils")
+
+local spriteCache = {}
+local frameCache = {}
+local shadowSprite = love.graphics.newImage("assets/sprites/enemy/zombie/enemyShadow.png")
+local zombieNoiseBase = love.audio.newSource("assets/sfx/enemies/zombie.mp3", "static")
+local enemyDamageBase = love.audio.newSource("assets/sfx/enemyDamage.mp3", "static")
+local coinDropBase = love.audio.newSource("assets/sfx/drops/coin-drop.mp3", "static")
+local footstepBase = love.audio.newSource("assets/sfx/footsteps/foot-steps-0.mp3", "static")
+
+shadowSprite:setFilter("nearest", "nearest")
+
+local function getSharedSprite(path)
+    if not spriteCache[path] then
+        local image = love.graphics.newImage(path)
+        image:setFilter("nearest", "nearest")
+        spriteCache[path] = image
+    end
+
+    return spriteCache[path]
+end
+
+local mouthSprite = getSharedSprite(ZombieMouthConfig.spritePath)
+local mouthQuads = {}
+
+local function getMouthQuad(frameIndex)
+    if not mouthQuads[frameIndex] then
+        mouthQuads[frameIndex] = love.graphics.newQuad(
+            frameIndex * ZombieMouthConfig.frameWidth,
+            0,
+            ZombieMouthConfig.frameWidth,
+            ZombieMouthConfig.frameHeight,
+            mouthSprite:getWidth(),
+            mouthSprite:getHeight()
+        )
+    end
+
+    return mouthQuads[frameIndex]
+end
+
+local function getSharedFrames(key, spriteSheet, frameWidth, frameHeight)
+    local cachedFrames = frameCache[key]
+    if cachedFrames then
+        return cachedFrames
+    end
+
+    cachedFrames = {}
+    local sheetWidth = spriteSheet:getWidth()
+    local sheetHeight = spriteSheet:getHeight()
+    local cols = sheetWidth / frameWidth
+    local rows = sheetHeight / frameHeight
+
+    for i = 0, rows - 1 do
+        for j = 0, cols - 1 do
+            cachedFrames[#cachedFrames + 1] = love.graphics.newQuad(
+                j * frameWidth,
+                i * frameHeight,
+                frameWidth,
+                frameHeight,
+                sheetWidth,
+                sheetHeight
+            )
+        end
+    end
+
+    frameCache[key] = cachedFrames
+    return cachedFrames
+end
+
+local function copyTable(source)
+    if type(source) ~= "table" then
+        return source
+    end
+
+    local result = {}
+    for key, value in pairs(source) do
+        result[key] = copyTable(value)
+    end
+
+    return result
+end
+
+local function mergeTables(base, overrides)
+    local result = copyTable(base) or {}
+    if type(overrides) ~= "table" then
+        return result
+    end
+
+    for key, value in pairs(overrides) do
+        if type(value) == "table" and type(result[key]) == "table" then
+            result[key] = mergeTables(result[key], value)
+        else
+            result[key] = copyTable(value)
+        end
+    end
+
+    return result
+end
+
+local function getEnemyDropConfig(enemyTypeId)
+    local level = CURRENT_LEVEL
+    local overrides = level and level.enemyDropConfig and level.enemyDropConfig[enemyTypeId] or nil
+
+    if level then
+        local floorIndex = level.currentFloorIndex or 1
+        local floorConfigs = level.enemyDropConfigByFloor and level.enemyDropConfigByFloor[floorIndex] or nil
+        if floorConfigs and floorConfigs[enemyTypeId] then
+            overrides = mergeTables(overrides or {}, floorConfigs[enemyTypeId])
+        end
+    end
+
+    return DropTemplates.getEnemyConfig(enemyTypeId, overrides), 1
+end
+
+local function getEnemyDropMultiplier()
+    local level = CURRENT_LEVEL
+    if not level then
+        return 1
+    end
+
+    local floorIndex = level.currentFloorIndex or 1
+    local floorLevel = level.floorLevels and level.floorLevels[floorIndex] or nil
+    local floorConfigs = level.enemyDropConfigByFloor and level.enemyDropConfigByFloor[floorIndex] or nil
+    local multiplier = level.enemyDropMultiplier or 1
+    if floorLevel and floorLevel.enemyDropMultiplier then
+        multiplier = multiplier * floorLevel.enemyDropMultiplier
+    end
+    if floorConfigs and floorConfigs.multiplier then
+        multiplier = multiplier * floorConfigs.multiplier
+    end
+
+    return multiplier
+end
+
+function Zombie:applyDropConfig(enemyTypeId)
+    local config = getEnemyDropConfig(enemyTypeId or self.enemyTypeId or "zombie")
+    local multiplier = getEnemyDropMultiplier()
+    config = config or {}
+    multiplier = multiplier or 1
+
+    self.dropPoints = math.floor((config.points or self.dropPoints or 0) * multiplier + 0.5)
+    self.resolvedDrops = DropTemplates.resolve(config, { player = Player, source = self })
+end
+
+local function playClonedSound(baseSource, volume, pitch)
+    local sound = baseSource:clone()
+    sound:setVolume(volume)
+    sound:setPitch(pitch)
+    sound:play()
+    return sound
+end
 
 function Zombie:new(x, y, speed)
     local enemy = setmetatable({}, {__index = self})
 
     local speedTotal = speed
     if not speedTotal then
-        speedTotal = math.random(50, 64)
+        speedTotal = math.random(50, 68)
     end
 
     enemy.x = x
     enemy.y = y
     enemy.speed = speedTotal
-    enemy.totalLife = 40
+    enemy.totalLife = 30
     enemy.life = enemy.totalLife
-    enemy.damageTimer = 0.1
+    enemy.damageTimer = 0.14
     enemy.kbdx = 0
     enemy.kbdy = 0
     enemy.size = 7
     enemy.dropPoints = 5
     enemy.drawPriority = math.random()
     enemy.coinDropQty = 0
-    if math.random() > 0.4 then
-        enemy.coinDropQty = math.random(2, 3)
-    end
+    enemy.coinDropChance = 0.6
+    enemy.enemyTypeId = self.enemyTypeId or "zombie"
+    enemy:applyDropConfig(enemy.enemyTypeId)
 
     enemy.isAlive = true
 
+    enemy.spriteKey = self:getSpriteKey()
     enemy.spriteSheet = self:getSprite()
-    
-    enemy.spriteSheet:setFilter("nearest", "nearest")
-
-    enemy.spriteShadow = love.graphics.newImage("assets/sprites/enemy/enemyShadow.png")
-    enemy.spriteShadow:setFilter("nearest", "nearest")
+    enemy.spriteShadow = shadowSprite
+    enemy.mouthVariant = "zombie"
     
     enemy.frameWidth = 32
     enemy.frameHeight = 32
-    enemy.frames = {}
-    enemy.noise = love.audio.newSource("assets/sfx/enemies/zombie.mp3", "static")
-    enemy.pathUpdateInterval = 120
+    enemy.frames = getSharedFrames(enemy.spriteKey, enemy.spriteSheet, enemy.frameWidth, enemy.frameHeight)
+    enemy.noise = zombieNoiseBase:clone()
+    enemy.pathUpdateInterval = 3
     enemy.pathUpdateCounter = love.math.random(0, enemy.pathUpdateInterval)
 
     enemy.path = nil
     enemy.finder = "JPS"
     --if math.random(0, 2) >= 1 then enemy.finder = "JPS" end
-
-    local sheetWidth = enemy.spriteSheet:getWidth()
-    local sheetHeight = enemy.spriteSheet:getHeight()
-    local cols = sheetWidth / enemy.frameWidth
-    local rows = sheetHeight / enemy.frameHeight
-
-    for i = 0, rows - 1 do
-        for j = 0, cols - 1 do
-            table.insert(enemy.frames, love.graphics.newQuad(j * enemy.frameWidth, i * enemy.frameHeight, enemy.frameWidth, enemy.frameHeight, sheetWidth, sheetHeight))
-        end
-    end
+    enemy.roamAroundPlayer = true
+    enemy.roamTargetX = nil
+    enemy.roamTargetY = nil
+    enemy.roamTargetTimer = 0
+    enemy.roamTargetDuration = 1.2
+    enemy.roamRadiusMin = 34
+    enemy.roamRadiusMax = 82
 
     enemy.currentFrame = 1
     enemy.animationTimer = 0
@@ -80,26 +229,44 @@ function Zombie:new(x, y, speed)
     enemy.flipTimer = 0
     enemy.flipH = false
 
-    enemy.soundTimer = 0
+    enemy.soundTimer = math.random() * 8
+    enemy.spawnIntroDuration = 0.3
+    enemy.spawnIntroTimer = enemy.spawnIntroDuration
+    enemy.glitchDuration = 0.95
+    enemy.glitchTimer = 0
+    enemy.glitchDisplacementPixels = 0.25
+    enemy.whiteFlashDuration = 0.1
+    enemy.whiteFlashTimer = 0
+    enemy.damageAnimationInterval = 0.04
+    enemy.lastDamageAnimationTime = -math.huge
+    DamageStretch:init(enemy, 0.1, 0.1)
 
     enemy.state = (math.random(0, 1) == 0) and Zombie.states.idle or Zombie.states.walk
     return enemy
 end
 
-function Zombie:getSprite()
-    
-    if math.random(1, 100) < 2 then 
-        return love.graphics.newImage("assets/sprites/enemy/enemy-paulo.png") end
-    if math.random(1, 100) < 2 then 
-        return love.graphics.newImage("assets/sprites/enemy/enemy-ponei.png") end
-    if math.random(1, 100) < 2 then 
-        return love.graphics.newImage("assets/sprites/enemy/enemy-jhone.png") end
-    if math.random(1, 3) == 2 then 
-        return love.graphics.newImage("assets/sprites/enemy/enemy2.png") end
-    if math.random(1, 3) == 2 then 
-        return love.graphics.newImage("assets/sprites/enemy/enemy3.png") end  
-    return love.graphics.newImage("assets/sprites/enemy/enemy.png")
+function Zombie:getSpriteKey()
+    if math.random(1, 100) < 2 then
+        return "assets/sprites/enemy/zombie/enemy-paulo.png"
+    end
+    if math.random(1, 100) < 2 then
+        return "assets/sprites/enemy/zombie/enemy-ponei.png"
+    end
+    if math.random(1, 100) < 2 then
+        return "assets/sprites/enemy/zombie/enemy-jhone.png"
+    end
+    if math.random(1, 3) == 2 then
+        return "assets/sprites/enemy/zombie/enemy2.png"
+    end
+    if math.random(1, 3) == 2 then
+        return "assets/sprites/enemy/zombie/enemy3.png"
+    end
 
+    return "assets/sprites/enemy/zombie/enemy.png"
+end
+
+function Zombie:getSprite()
+    return getSharedSprite(self.spriteKey or self:getSpriteKey())
 end
 
 local function sign(n)
@@ -108,46 +275,79 @@ local function sign(n)
     else return 0 end
 end
 
+function Zombie:pickRoamTarget()
+    local angle = math.random() * math.pi * 2
+    local radius = self.roamRadiusMin + math.random() * (self.roamRadiusMax - self.roamRadiusMin)
+
+    self.roamTargetX = Player.x + math.cos(angle) * radius
+    self.roamTargetY = Player.y + math.sin(angle) * radius
+    self.roamTargetTimer = self.roamTargetDuration
+    self.path = nil
+    self.pathUpdateCounter = self.pathUpdateInterval
+end
+
+function Zombie:ensureRoamTarget(dt)
+    if not self.roamAroundPlayer then
+        self.roamTargetX = Player.x
+        self.roamTargetY = Player.y
+        return
+    end
+
+    self.roamTargetTimer = math.max(0, (self.roamTargetTimer or 0) - dt)
+
+    local needsTarget = not self.roamTargetX
+        or not self.roamTargetY
+        or self.roamTargetTimer <= 0
+        or distance({x = self.roamTargetX, y = self.roamTargetY}, self) < 8
+        or distance({x = self.roamTargetX, y = self.roamTargetY}, Player) > self.roamRadiusMax + 32
+
+    if needsTarget then
+        self:pickRoamTarget()
+    end
+end
+
+function Zombie:getMovementTarget(dt)
+    if not Player.isAlive then
+        return Player.x, Player.y
+    end
+
+    self:ensureRoamTarget(dt)
+    return self.roamTargetX or Player.x, self.roamTargetY or Player.y
+end
+
 function Zombie:update(dt)
 
     addToDrawQueue(self.y + 6 + self.drawPriority, self)
 
-    self.pathUpdateCounter = self.pathUpdateCounter + 1
+    if self.spawnIntroTimer and self.spawnIntroTimer > 0 then
+        self.spawnIntroTimer = math.max(0, self.spawnIntroTimer - dt)
+        self.state = Zombie.states.idle
+        self.velocityX = 0
+        self.velocityY = 0
+        self:animate(1, 2, dt)
+        return
+    end
+
+    self.glitchTimer = math.max(0, self.glitchTimer - dt)
+    self.whiteFlashTimer = math.max(0, self.whiteFlashTimer - dt)
+
+    self.pathUpdateCounter = self.pathUpdateCounter + dt
 
     local velocityX = 0
     local velocityY = 0
 
     self:noiseCheck(dt)
 
+    local targetX, targetY = self:getMovementTarget(dt)
     if (self.pathUpdateCounter >= self.pathUpdateInterval and Player.isAlive) or self.path == nil or #self.path < 2 then
     --if (self.pathUpdateCounter >= self.pathUpdateInterval and self.state == Zombie.states.idle and Player.isAlive) or self.path == nil or #self.path < 2 then
         self.pathUpdateCounter = 0
-        --print("generate")
-        local posMapX, posMapY = Tilemap:worldToMap(self.x, self.y)
-
-        if love.math.random() < 0.4 then
-            local offsetX = love.math.random(-1, 1)
-            local offsetY = love.math.random(-1, 1)
-            posMapX = posMapX + offsetX
-            posMapY = posMapY + offsetY
-        end      
-
-        local playerMapX, playerMapY = Tilemap:worldToMap(Player.x, Player.y)
-
-        if love.math.random() < 0.4 then
-            local offsetX = love.math.random(-1, 1)
-            local offsetY = love.math.random(-1, 1)
-            playerMapX = playerMapX + offsetX
-            playerMapY = playerMapY + offsetY
-        end        
-
-
-        self.path = Tilemap.finderAstar:getPath(posMapX, posMapY, playerMapX, playerMapY)
+        self.path = Tilemap:getPathBetweenWorldPoints(self.x, self.y, targetX, targetY)
     end
 
     local nextTileX, nextTileY = self.x, self.y
     
-    if self.path and #self.path > 1 then
+    if self.path and #self.path > 1 then --ok
 
         local nextNode = self.path[2]
 
@@ -158,6 +358,11 @@ function Zombie:update(dt)
         local distance = math.sqrt((self.x - nextTileX)^2 + (self.y - nextTileY)^2)
         if distance < 4 then
             table.remove(self.path, 1)
+            if #self.path > 1 then
+                nextNode = self.path[2]
+                nextTileX, nextTileY = Tilemap:mapToWorld(nextNode.x, nextNode.y)
+                nextTileY = nextTileY - 8
+            end
         end
         if math.abs(nextTileX - self.x) < 1.4 then self.x = nextTileX end
         if math.abs(nextTileY - self.y) < 1.4 then self.y = nextTileY end
@@ -165,10 +370,10 @@ function Zombie:update(dt)
         local moveX = sign(nextTileX - self.x)
         local moveY = sign(nextTileY - self.y)
 
-        local repulseX, repulseY = self:getRepulsionVector()
+        --local repulseX, repulseY = self:getRepulsionVector()
 
-        moveX = moveX + repulseX * 2
-        moveY = moveY + repulseY * 2
+        moveX = moveX + 0 * 2
+        moveY = moveY + 0 * 2
 
         velocityX = moveX
         velocityY = moveY
@@ -176,6 +381,7 @@ function Zombie:update(dt)
     end 
 
     local length = math.sqrt(velocityX * velocityX + velocityY * velocityY)
+    local isMoving = length > 0
     if length > 0 then
         velocityX = velocityX / length
         velocityY = velocityY / length
@@ -191,6 +397,16 @@ function Zombie:update(dt)
     self:stateManager(dt, animationDuration)
 
     self:death()
+
+    if self.state == Zombie.states.walk and not isMoving then
+        self.state = Zombie.states.idle
+        self.stateTimer = 0
+        self.path = nil
+        self.pathUpdateCounter = self.pathUpdateInterval
+        if self.roamAroundPlayer then
+            self.roamTargetTimer = 0
+        end
+    end
 
     if self.state == Zombie.states.idle or self.state == Zombie.states.damage then
         self:animate(1, 2, dt)
@@ -229,20 +445,33 @@ function Zombie:update(dt)
         local moveX = velocityX *negative * self.speed * dt
         local moveY = velocityY *negative * self.speed * dt
 
+        local previousX, previousY = self.x, self.y
         local collidedX, collidedY = self:isColliding(moveX,moveY)
         if not collidedX then self.x = self.x + moveX end
         if not collidedY then self.y = self.y + moveY end
+
+        if (collidedX or collidedY) and distance({x = previousX, y = previousY}, self) < 0.2 then
+            self.state = Zombie.states.idle
+            self.stateTimer = 0
+            self.path = nil
+            self.pathUpdateCounter = self.pathUpdateInterval
+            if self.roamAroundPlayer then
+                self.roamTargetTimer = 0
+            end
+        end
     end
 end
 
 
 function Zombie:noiseCheck(dt)
     self.soundTimer = self.soundTimer + dt
+
     if self.soundTimer >= 10 and Player.isAlive then
         self.soundTimer = 0
         local soundPositionX, soundPositionY = soundPosition(Player, self)
         local playerDistance = distance(Player, self) / 2
         local volume = getDistanceVolume(playerDistance, 0.1, 180)
+        self.noise:stop()
         self.noise:setPosition(soundPositionX, soundPositionY, 0)
         self.noise:setVolume(volume)
         self.noise:setPitch((1.2 + math.random() * 0.2) * GAME_PITCH)
@@ -327,23 +556,37 @@ function Zombie:isColliding(moveX, moveY)
     return collidedX, collidedY
 end
 
-function Zombie:takeDamage(damage, dx, dy)
-    self.animationTimer = 0.5
-    self.state = Zombie.states.damage
-    self.stateTimer = 0
-    self.kbdx = dx
-    self.kbdy = dy 
-    self.life = self.life - damage
-    self.noise:stop()
+function Zombie:canStartDamageAnimation()
+    local now = love.timer.getTime()
+    local interval = self.damageAnimationInterval or 0
 
-    if self.soundTimer <= 1 then
-        self.soundTimer = 1.1
+    if now - (self.lastDamageAnimationTime or -math.huge) < interval then
+        return false
     end
 
-    local bulletSound = love.audio.newSource("assets/sfx/enemyDamage.mp3", "static")
-    bulletSound:setVolume(1)
-    bulletSound:setPitch((0.8 + math.random() * 0.1) * GAME_PITCH)
-    bulletSound:play()
+    self.lastDamageAnimationTime = now
+    return true
+end
+
+function Zombie:takeDamage(damage, dx, dy)
+    self.life = self.life - damage
+
+    if self:canStartDamageAnimation() then
+        DamageStretch:start(self)
+        self.animationTimer = 0.5
+        self.state = Zombie.states.damage
+        self.stateTimer = 0
+        self.glitchTimer = self.glitchDuration
+        self.whiteFlashTimer = self.whiteFlashDuration
+        self.kbdx = dx
+        self.kbdy = dy 
+        self.noise:stop()
+
+        if self.soundTimer <= 1 then
+            self.soundTimer = 1.1
+        end
+        playClonedSound(enemyDamageBase, 1, (1 + math.random() * 0.1) * GAME_PITCH)
+    end
 end
 
 function Zombie:death()
@@ -355,21 +598,17 @@ function Zombie:death()
         return
     end
 
-    
-
-    local coinSound = love.audio.newSource("assets/sfx/drops/coin-drop.mp3", "static")
     local playerDistance = distance(Player, self)
     local volume = getDistanceVolume(playerDistance, 0.4, 200)
 
-    if self.coinDropQty > 0 then 
-        coinSound:setVolume(volume)
-        coinSound:setPitch((1 + math.random() * 0.1) * GAME_PITCH)
-        coinSound:play()
+    if self.resolvedDrops and #self.resolvedDrops > 0 then
+        playClonedSound(coinDropBase, volume, (1 + math.random() * 0.1) * GAME_PITCH)
     end
 
-    for i = 1, self.coinDropQty, 1 do
-        local drop = coinDrop:new(self.x, self.y)
-        table.insert(Game.objects, drop)
+    DropTemplates.spawnResolvedDrops(self.resolvedDrops, self.x, self.y, Game.objects)
+
+    for _ = 1, math.random(2, 4) do
+        table.insert(Game.particles, EnemyDeadDropParticle:new(self.x, self.y))
     end
 
     local particle = ZParticle:new(self.x, self.y, self.spriteSheet)
@@ -385,7 +624,7 @@ function Zombie:animate(startFrame, endFrame, dt)
     self.animationTimer = self.animationTimer + dt
 
     self.footStepTimer = self.footStepTimer + dt
-    if self.footStepTimer > 0.12 and (self.state == Zombie.states.damage or self.state == Zombie.states.walk) then
+    if self.footStepTimer > 0.12 and (self.state == Zombie.states.damage or self.state == Zombie.states.walk) and distance(self, Player) < 200 then
         self.footStepTimer = 0
         local randx = math.random(-2,2)
         local randy = math.random(-2,2)
@@ -401,20 +640,18 @@ function Zombie:animate(startFrame, endFrame, dt)
             self.currentFrame = startFrame
         end
 
-        if self.state == Zombie.states.walk and self.currentFrame % 2 == 0 then
+        if self.state == Zombie.states.walk and self.currentFrame % 2 == 0 then --ok
 
             local playerDistance = self:playerDistance()
             if playerDistance <= 150 then
-                local stepsound = love.audio.newSource("assets/sfx/footsteps/foot-steps-0.mp3", "static")
                 local soundPositionX, soundPositionY = soundPosition(Player, self)
 
                 self.noise:setPosition(soundPositionX, soundPositionY, 0)
-                stepsound:setVolume(0.4)
-
-                stepsound:setPitch((0.4 + math.random() * 0.4) * GAME_PITCH)
-                stepsound:play()
+                playClonedSound(footstepBase, 0.4, (0.4 + math.random() * 0.4) * GAME_PITCH)
 
                 if math.random() > 0.6 then
+                    local lifetime = math.random(45, 55) / 100
+                    local particle = WalkParticle:new(self.x, self.y, lifetime)
                     table.insert(Game.particles, particle)
                     if math.random() > 0.5 then
                         local particle = WalkParticle:new(self.x + 2, self.y + 1, lifetime)
@@ -444,15 +681,33 @@ function Zombie:drawShadow()
 end
 
 function Zombie:drawMouth()
-    if self.state ~= Zombie.states.damage then
-        love.graphics.setColor(hexToRGB("302c5e"))
-        if self.soundTimer >= 0 and self.soundTimer <= 1 then
-            love.graphics.circle("fill", self.x , self.y - 18, 1.5)
-        else
-            love.graphics.rectangle("fill", self.x -0.7 ,self.y - 19, 1.4, 0.6 )
-        end
-        love.graphics.setColor(1, 1, 1, 1)
+    if self.state == Zombie.states.damage then
+        return
     end
+
+    local mouthFrameIndex = ZombieMouthConfig.closedFrameIndex
+    if self.noise and self.noise:isPlaying() then
+        mouthFrameIndex = ZombieMouthConfig.openFrameIndex
+    end
+
+    local stateName = self.state == Zombie.states.walk and "walk" or "idle"
+    local variantOffset = ZombieMouthConfig.variants[self.mouthVariant or "zombie"] or ZombieMouthConfig.variants.zombie
+    local stateOffsets = ZombieMouthConfig.frameOffsets[stateName] or {}
+    local frameOffset = stateOffsets[self.currentFrame] or { x = 0, y = 0 }
+    local scaleX = self.flipH and -1 or 1
+
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.draw(
+        mouthSprite,
+        getMouthQuad(mouthFrameIndex),
+        self.x + ZombieMouthConfig.baseOffsetX + variantOffset.offsetX + frameOffset.x,
+        self.y + ZombieMouthConfig.baseOffsetY + variantOffset.offsetY + frameOffset.y,
+        0,
+        scaleX,
+        1,
+        ZombieMouthConfig.originX,
+        ZombieMouthConfig.originY
+    )
 end
 
 function Zombie:draw()
@@ -462,25 +717,98 @@ function Zombie:draw()
     end
     local xOffset = 0
     local scaleX = 1
+    local scaleY = stretch
+    local alpha = 1
+    local yOffset = 0
     if self.flipH then
         scaleX = -1
         xOffset = 1
     end
+    local damageScaleX, damageScaleY = DamageStretch:getScale(self)
+    local walkStretchX = 1
+    local walkStretchY = 1
 
-    if self.state == Zombie.states.damage then
-        if self.stateTimer < 0.015 then
-            
-            love.graphics.setColor(0, 0, 0, 1)
-        else
-            love.graphics.setShader(whiteShader)
-            
-        end
+    if self.state == Zombie.states.walk then
+        local walkPulse = math.sin((love.timer.getTime() + self.drawPriority) * 12)
+        walkStretchX = 1 + walkPulse * 0.035
+        walkStretchY = 1 - walkPulse * 0.025
     end
 
-    love.graphics.draw(self.spriteSheet, self.frames[self.currentFrame], xOffset +self.x, self.y, 0, scaleX, stretch, self.frameWidth / 2, self.frameHeight)
+    if self.spawnIntroTimer and self.spawnIntroTimer > 0 then
+        local progress = 1 - self.spawnIntroTimer / self.spawnIntroDuration
+        alpha = progress
+        scaleX = scaleX * 1.1
+        scaleY = stretch * 1.1
+        yOffset = 2 * (1 - progress)
+        love.graphics.setShader(whiteShader)
+    elseif self.state == Zombie.states.damage then
+        if self.stateTimer < 0.015 then
+            love.graphics.setColor(0, 0, 0, 1)
+        elseif self.glitchTimer > 0 or self.whiteFlashTimer > 0 then
+            local flash = 0
+            local intensity = 0
+            if self.glitchTimer > 0 then
+                intensity = self.glitchTimer / self.glitchDuration *4
+            end
+            if self.whiteFlashTimer > 0 then
+                flash = 1
+            end
+            glitchShader:send("texturePixelSize", {
+                1 / self.spriteSheet:getWidth(),
+                1 / self.spriteSheet:getHeight()
+            })
+            glitchShader:send("displacementPixels", self.glitchDisplacementPixels)
+            glitchShader:send("time", love.timer.getTime())
+            glitchShader:send("intensity", intensity)
+            glitchShader:send("flash", flash)
+            love.graphics.setShader(glitchShader)
+        else
+            love.graphics.setShader(whiteShader)
+        end
+    elseif self.glitchTimer > 0 or self.whiteFlashTimer > 0 then
+        local flash = 0
+        local intensity = 0
+        if self.glitchTimer > 0 then
+            intensity = self.glitchTimer / self.glitchDuration
+        end
+        if self.whiteFlashTimer > 0 then
+            flash = 1
+        end
+        glitchShader:send("texturePixelSize", {
+            1 / self.spriteSheet:getWidth(),
+            1 / self.spriteSheet:getHeight()
+        })
+        glitchShader:send("displacementPixels", self.glitchDisplacementPixels)
+        glitchShader:send("time", love.timer.getTime())
+        glitchShader:send("intensity", intensity)
+        glitchShader:send("flash", flash)
+        love.graphics.setShader(glitchShader)
+    end
+
+    love.graphics.setColor(1, 1, 1, alpha)
+    if self.drawBodySprite then
+        self:drawBodySprite(xOffset, yOffset, scaleX, scaleY, damageScaleX * walkStretchX, damageScaleY * walkStretchY, alpha)
+    else
+        love.graphics.draw(
+            self.spriteSheet,
+            self.frames[self.currentFrame],
+            xOffset + self.x,
+            self.y + yOffset,
+            0,
+            scaleX * damageScaleX * walkStretchX,
+            scaleY * damageScaleY * walkStretchY,
+            self.frameWidth / 2,
+            self.frameHeight
+        )
+    end
+    if self.drawBodyOverlay then
+        self:drawBodyOverlay(xOffset, yOffset, scaleX, scaleY, damageScaleX * walkStretchX, damageScaleY * walkStretchY, alpha)
+    end
     love.graphics.setShader()
     love.graphics.setColor(1, 1, 1, 1)
-    self:drawMouth()
+    if not (self.spawnIntroTimer and self.spawnIntroTimer > 0) then
+        self:drawMouth()
+    end
 
 
     if DEBUG then 

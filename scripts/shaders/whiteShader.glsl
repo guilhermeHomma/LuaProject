@@ -4,5 +4,5 @@
         float alpha = Texel(texture, texture_coords).a;
         
         // Retorna branco com o mesmo alpha
-        return vec4(0.95, 0.97, 0.96, alpha);
+        return vec4(1.0, 1.0, 1.0, alpha);
     }

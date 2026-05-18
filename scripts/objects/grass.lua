@@ -11,6 +11,15 @@ sprite3:setFilter("nearest", "nearest")
 sprite4:setFilter("nearest", "nearest")
 
 local stretch = 1.4
+local grassSoundBase = love.audio.newSource("assets/sfx/ambience/grass.mp3", "static")
+
+local function playClonedSound(baseSource, volume, pitch)
+    local sound = baseSource:clone()
+    sound:setVolume(volume)
+    sound:setPitch(pitch)
+    sound:play()
+    return sound
+end
 
 
 local grassShader = love.graphics.newShader([[
@@ -70,15 +79,9 @@ function Grass:getTarget()
     if Player.isAlive then
         if distance(self, Player) < 10 then
             if self.soundTimer >= 2 and self.changedTarget then
-
-                local sound = love.audio.newSource("assets/sfx/ambience/grass.mp3", "static")
-                
                 local volume = math.random() * 0.03
-                sound:setVolume(0.05 + volume)
-                sound:setPitch((1.2 + math.random() * 0.7) * GAME_PITCH)
-
                 if math.random() > 0.4 then
-                    sound:play()
+                    playClonedSound(grassSoundBase, 0.05 + volume, (1.2 + math.random() * 0.7) * GAME_PITCH)
                 end
                 self.changedTarget = false
                 self.soundTimer = 0
@@ -105,8 +108,9 @@ function Grass:getTarget()
         end
     end
 
-    if Game.enemies then
-        for _, enemy in ipairs(Game.enemies) do
+    local enemies = Game.nearbyEnemies or Game.enemies
+    if enemies then
+        for _, enemy in ipairs(enemies) do
             if distance(self, enemy) < 10 then
                 if enemy.x < self.x then
                     return -1
@@ -121,14 +125,12 @@ function Grass:getTarget()
     return 0
 end
 
-function Grass:update(dt)
-    if distance(self, camera:objectPosition()) > 230 then
-        return
-    end
-    
+function Grass:update(dt)    
     self.soundTimer = self.soundTimer + dt
-
-    local target = self:getTarget()
+    local target = 0
+    if distance(self, camera:objectPosition()) < 200 then
+        target = self:getTarget()
+    end
 
     local speed = 2
     if target ~= 0 then speed = 12 end

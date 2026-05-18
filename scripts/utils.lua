@@ -1,3 +1,4 @@
+local GameConfig = require("scripts/config/gameConfig")
 
 function checkCollision(a, b)
     if distance(a, b) >50 then return false end
@@ -72,11 +73,11 @@ end
 
 
 function getScreenHeight()
-    return love.graphics.getHeight()/ scale
+    return baseHeight
 end
 
 function getScreenWidth()
-    return love.graphics.getWidth() / scale
+    return baseWidth
 end
 
 function normalize(dx, dy)
@@ -100,8 +101,8 @@ function mousePosition()
 
     local mouseX, mouseY = love.mouse.getPosition()
 
-    mouseX = mouseX/3/camera.scale+ camera.x/3
-    mouseY = mouseY/YSCALE/camera.scale + camera.y/YSCALE
+    mouseX = (((mouseX - viewportOffsetX) / scale) / camera.zoomX + camera.x) / GameConfig.worldScaleX
+    mouseY = (((mouseY - viewportOffsetY) / scale) / camera.zoomY + camera.y) / GameConfig.yScale
     return mouseX, mouseY
 end
 
@@ -138,29 +139,32 @@ function deepcopy(orig, copies)
 end
 
 function distance(a, b)
+    local ax = a and (a.x or a.xWorld)
+    local ay = a and (a.y or a.yWorld)
+    local bx = b and (b.xWorld or b.x)
+    local by = b and (b.yWorld or b.y)
 
-    local dx = a.x - b.x
-    local dy = a.y - b.y
-
-    if b.yWorld then
-        dx = a.x - b.xWorld
-        dy = a.y - b.yWorld
+    if not (ax and ay and bx and by) then
+        return math.huge
     end
 
+    local dx = ax - bx
+    local dy = ay - by
     return math.sqrt(dx * dx + dy * dy)
 end
 
 
 function vectorDistance(a, b)
-    local dx = a.x - b.x
-    local dy = a.y - b.y
+    local ax = a and (a.x or a.xWorld)
+    local ay = a and (a.y or a.yWorld)
+    local bx = b and (b.xWorld or b.x)
+    local by = b and (b.yWorld or b.y)
 
-    if b.xWorld and b.yWorld then
-        dx = a.x - b.xWorld
-        dy = a.y - b.yWorld
+    if not (ax and ay and bx and by) then
+        return 0, 0
     end
 
-    return dx, dy
+    return ax - bx, ay - by
 end
 
 
@@ -169,12 +173,12 @@ function autoTile(x, y, tilemap) -- grass wall
 
     local function isNotSolid(y, x)
         local v = tilemap[y] and tilemap[y][x]
-        return v ~= 1 and v ~= 3 and v ~= 11 and v ~= 10 and v ~= 12
+        return v ~= 1 and v ~= 3 and v ~= 14 and v ~= 11 and v ~= 10 and v ~= 12
     end
 
     local function isSolid(y, x)
         local v = tilemap[y] and tilemap[y][x]
-        return v == 1 or v == 3 or v == 11 or v == 10 or v == 12
+        return v == 1 or v == 3 or v == 14 or v == 11 or v == 10 or v == 12
     end
 
     if x == 1 or y == 1 or x == #tilemap[y] or y == #tilemap then 
@@ -199,11 +203,8 @@ function autoTile(x, y, tilemap) -- grass wall
     if bottom and left then return 7 end
     if bottom and right then return 9 end
 
-
-
     if top then return 2 end
     if bottom then return 8 end
-
 
     if leftNoBottom then return 13 end
     if rightNoBottom then return 12 end

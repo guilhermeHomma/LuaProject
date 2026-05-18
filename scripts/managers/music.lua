@@ -43,6 +43,8 @@ function Music:startMusic()
     MusicPlayer:stop()
     MusicPlayer = MusicList[self.musicIndex]
     MusicPlayer:setLooping(false)
+    MusicPlayer:setVolume((self.volume or 1) * MUSIC_VOLUME)
+    MusicPlayer:setPitch((self.pitch or 1) * GAME_PITCH)
     MusicPlayer:play()
 end
 
@@ -68,8 +70,8 @@ function Music:update(dt)
 
     if state == STATES.game then
         if Player.isAlive then
-            if Player.life == 1 then
-                self.targetVolume = 0.0
+            if Player.life <= 2 then
+                self.targetVolume = 0.5
             else 
                 self.targetVolume = 1.0
 
@@ -84,7 +86,8 @@ function Music:update(dt)
     self.pitch = self.pitch + (self.targetPitch - self.pitch) * dt * speed
     self.volume = self.volume + (self.targetVolume - self.volume) * dt * speed
 
-    if self.volume <= 0.05 and MusicPlayer:isPlaying() then  
+    local keepGameMusicAlive = state == STATES.game and Player and Player.isAlive
+    if self.volume <= 0.05 and MusicPlayer:isPlaying() and not keepGameMusicAlive then
         MusicPlayer:stop()
     end
     
@@ -96,7 +99,7 @@ function Music:update(dt)
         if self.musicIndex > #MusicList-1 then
             self.musicIndex = 1
         end
-        if Player.isAlive and Player.life > 1 then
+        if Player.isAlive then
             self:startMusic()
         end
     end

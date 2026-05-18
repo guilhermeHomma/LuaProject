@@ -2,54 +2,68 @@ Zombie = require("scripts/enemies/zombie")
 
 babyZombie = setmetatable({}, {__index = Zombie})
 babyZombie.__index = babyZombie
+babyZombie.enemyTypeId = "babyZombie"
+
+local damageBase = love.audio.newSource("assets/sfx/enemyDamage.mp3", "static")
+local DamageStretch = require("scripts/effects/damageStretch")
+
+local function playClonedSound(baseSource, volume, pitch)
+    local sound = baseSource:clone()
+    sound:setVolume(volume)
+    sound:setPitch(pitch)
+    sound:play()
+    return sound
+end
 
 function babyZombie:new(x, y)
     local zombie = Zombie.new(self, x, y)
-    zombie.speed = math.random(58, 77)
-    zombie.damageTimer = 0.1
-    zombie.dropPoints = 15
-    zombie.totalLife = 35
-    zombie.coinDropQty = math.random(3, 4)
+    zombie.speed = math.random(62, 79)
+    zombie.damageTimer = 0.14
+    zombie.totalLife = 25
     zombie.footStepAlpha = 0.3
     zombie.life = zombie.totalLife
+    zombie.mouthVariant = "babyZombie"
+    zombie.roamAroundPlayer = false
     return zombie
 end
 
 function babyZombie:getSprite()
-    return love.graphics.newImage("assets/sprites/enemy/enemy-baby.png")
+    return Zombie.getSprite(self)
+end
+
+function babyZombie:getSpriteKey()
+    return "assets/sprites/enemy/zombie/enemy-baby.png"
 end
 
 
 function babyZombie:takeDamage(damage, dx, dy)
-    self.animationTimer = 0.2
-    self.state = babyZombie.states.damage
-    self.stateTimer = 0
-    self.kbdx = dx
-    self.kbdy = dy 
     self.life = self.life - damage
-    self.noise:stop()
 
-    if self.soundTimer <= 1 then
-        self.soundTimer = 1.1
+    if self:canStartDamageAnimation() then
+        DamageStretch:start(self)
+        self.animationTimer = 0.2
+        self.state = babyZombie.states.damage
+        self.stateTimer = 0
+        self.kbdx = dx
+        self.kbdy = dy 
+        self.noise:stop()
+
+        if self.soundTimer <= 1 then
+            self.soundTimer = 1.1
+        end
+        playClonedSound(damageBase, 1.2, (1 + math.random() * 0.1) * GAME_PITCH)
     end
-
-    local bulletSound = love.audio.newSource("assets/sfx/enemyDamage.mp3", "static")
-    bulletSound:setVolume(2)
-    bulletSound:setPitch((0.6 + math.random() * 0.1) * GAME_PITCH)
-    bulletSound:play()
-end
-
-function babyZombie:drawMouth()
-    
 end
 
 function babyZombie:noiseCheck(dt)
     self.soundTimer = self.soundTimer + dt
+
     if self.soundTimer >= 10 and Player.isAlive then
         self.soundTimer = 0
         local soundPositionX, soundPositionY = soundPosition(Player, self)
         local playerDistance = distance(Player, self) / 2
         local volume = getDistanceVolume(playerDistance, 0.1, 180)
+        self.noise:stop()
         self.noise:setPosition(soundPositionX, soundPositionY, 0)
         self.noise:setVolume(volume)
         self.noise:setPitch((2 + math.random() * 0.2) * GAME_PITCH)

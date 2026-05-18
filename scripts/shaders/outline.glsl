@@ -1,35 +1,33 @@
-// Outline branco de 1 texel em volta da parte opaca da textura/quad
-extern vec2 u_texel;           // 1.0 / (largura_textura, altura_textura)
-extern vec4 u_outlineColor;    // cor do contorno (ex.: branco)
-extern float u_threshold;      // limiar de alfa para considerar “opaco” (0.1 ~ 0.3)
+extern vec2 u_texel;
+extern vec4 u_outlineColor;
+extern float u_threshold;
+extern vec2 u_uvMin;
+extern vec2 u_uvMax;
 
-vec4 effect(vec4 color, Image tex, vec2 uv, vec2 sc) {
+vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screenCoord) {
     vec4 base = Texel(tex, uv) * color;
 
-    // Se o pixel já é opaco, mantém a arte original:
     if (base.a > u_threshold) {
         return base;
     }
 
-    // Offsets de 8 vizinhos (1 texel)
-    vec2 o[8];
-    o[0] = vec2(-u_texel.x,  0.0);
-    o[1] = vec2( u_texel.x,  0.0);
-    o[2] = vec2( 0.0,       -u_texel.y);
-    o[3] = vec2( 0.0,        u_texel.y);
-    o[4] = vec2(-u_texel.x, -u_texel.y);
-    o[5] = vec2( u_texel.x, -u_texel.y);
-    o[6] = vec2(-u_texel.x,  u_texel.y);
-    o[7] = vec2( u_texel.x,  u_texel.y);
+    vec2 offsets[8];
+    offsets[0] = vec2(-u_texel.x,  0.0);
+    offsets[1] = vec2( u_texel.x,  0.0);
+    offsets[2] = vec2( 0.0,       -u_texel.y);
+    offsets[3] = vec2( 0.0,        u_texel.y);
+    offsets[4] = vec2(-u_texel.x, -u_texel.y);
+    offsets[5] = vec2( u_texel.x, -u_texel.y);
+    offsets[6] = vec2(-u_texel.x,  u_texel.y);
+    offsets[7] = vec2( u_texel.x,  u_texel.y);
 
-    // Se qualquer vizinho for opaco, pinta contorno:
     for (int i = 0; i < 8; i++) {
-        float a = Texel(tex, uv + o[i]).a;
-        if (a > u_threshold) {
-            return vec4(u_outlineColor.rgb, 1.0);
+        vec2 sampleUv = clamp(uv + offsets[i], u_uvMin, u_uvMax);
+        float alpha = Texel(tex, sampleUv).a;
+        if (alpha > u_threshold) {
+            return vec4(u_outlineColor.rgb, u_outlineColor.a);
         }
     }
 
-    // Caso contrário, permanece transparente
     return base;
 }

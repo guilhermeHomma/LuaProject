@@ -2,14 +2,16 @@ Particle = require("scripts/particles/particle")
 WalkPSquare = setmetatable({}, {__index = Particle})
 WalkPSquare.__index = WalkPSquare
 
+local sprite = love.graphics.newImage("assets/sprites/particles/walkSquare.png")
+sprite:setFilter("nearest", "nearest")
+
 function WalkPSquare:new(x, y, lifetime)
     local size = 0.2
 
     if not lifetime  then lifetime = math.random(8, 10) / 10 end
 
     local particle = Particle.new(self, x, y, 1, size, lifetime)
-    particle.sprite = love.graphics.newImage("assets/sprites/particles/walkSquare.png")
-    particle.sprite:setFilter("nearest", "nearest")
+    particle.sprite = sprite
 
     particle.speedDown = math.random(5, 10)
     particle.alpha = 0.4

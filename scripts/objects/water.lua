@@ -1,14 +1,17 @@
 Water = setmetatable({}, {__index = Tile})
 Water.__index = Water
 
-
-local waterShader = love.graphics.newShader("scripts/shaders/waterShader.glsl")
 local sheetImage = love.graphics.newImage("assets/sprites/objects/water-tileset.png")
 local sheetWidth, sheetHeight = sheetImage:getDimensions()
 local frameQty = 3
+local quadLists = {}
 sheetImage:setFilter("nearest", "nearest")
 
 local function getQuadList(animIndex)
+    if quadLists[animIndex] then
+        return quadLists[animIndex]
+    end
+
     local quadList = {}
     local realWidth = sheetWidth/frameQty
 
@@ -29,6 +32,7 @@ local function getQuadList(animIndex)
     quadList[12] = love.graphics.newQuad(80 + IncrementX, 32, 16, 16, sheetWidth, sheetHeight)
     quadList[13] = love.graphics.newQuad(96 + IncrementX, 32, 16, 16, sheetWidth, sheetHeight)
 
+    quadLists[animIndex] = quadList
     return quadList
 end
 
@@ -72,9 +76,6 @@ end
 
 
 function Water:draw()
-    --love.graphics.setShader(waterShader)
-    waterShader:send("time", love.timer.getTime())
-
     local currentQuad = self.quad
     if self.currentFrame == 1 then
         currentQuad = self.quad2

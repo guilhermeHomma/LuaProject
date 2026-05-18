@@ -8,6 +8,22 @@ function Clouds:load(target)
     self.height = self.image:getHeight()
     self.movement = 0
     self.target = target
+    self.layers = {
+        {
+            alpha = 0.05,
+            height = 70,
+            parallax = 1.10,
+            scale = 1,
+            movementScale = 0.5,
+        },
+        {
+            alpha = 0.025,
+            height = 108,
+            parallax = 1.20,
+            scale = 2.2,
+            movementScale = 0.75,
+        },
+    }
 end
 
 function Clouds:update(dt)
@@ -16,37 +32,47 @@ function Clouds:update(dt)
 end
 
 function Clouds:drawShadow()
-    self:drawCloud(true)
+    --self:drawCloud(true)
 end
 
 
-function Clouds:drawCloud(shadow)
-    love.graphics.setColor(1, 1, 1, 0.14)
-    local cloudHeight = 50
+function Clouds:drawCloudLayer(layer, shadow)
+    local scale = layer.scale or 1
+    local width = self.width * scale
+    local height = self.height * scale
+    local cloudHeight = layer.height or 70
+    local alpha = layer.alpha or 0.08
+
+    love.graphics.setColor(1, 1, 1, alpha)
     if shadow == true then
-        love.graphics.setColor(0, 0, 0, 0.07)
+        love.graphics.setColor(0, 0, 0, 0.04)
         cloudHeight = 0
     end
 
-    local screenWidth = love.graphics.getWidth()
+    local parallax = layer.parallax or 1
+    local movement = self.movement * (layer.movementScale or 1)
+    local cameraX = camera and camera.x and camera.x / WORLD_SCALE_X or 0
+    local cameraY = camera and camera.y and camera.y / YSCALE or 0
+    local parallaxOffsetX = -cameraX * (parallax - 1) - movement
+    local parallaxOffsetY = -cameraY * (parallax - 1)
+    local startX = math.floor((cameraX - parallaxOffsetX) / width) * width + parallaxOffsetX
+    local startY = math.floor((cameraY - parallaxOffsetY) / height) * height + parallaxOffsetY
 
-    local screenHeight = love.graphics.getHeight()
-
-    --local startX = math.floor(Player.x / self.width) * self.width + self.movement
-    local startX = math.floor((self.target.x + self.movement) / self.width) * self.width
-    local startX = math.floor(self.target.x / self.width) * self.width - self.movement
-    local startY = math.floor(self.target.y / self.height) * self.height
-
-    local tilesX = 3
-    local tilesY = 3
+    local tilesX = math.ceil((baseWidth / math.max(WORLD_SCALE_X, 0.001)) / width) + 4
+    local tilesY = math.ceil((baseHeight / math.max(YSCALE, 0.001)) / height) + 4
 
     for i = -1, tilesX do
         for j = -1, tilesY do
-            love.graphics.draw(self.image, startX + i * self.width, startY - cloudHeight + j * self.height)
-            
+            love.graphics.draw(self.image, startX + i * width, startY - cloudHeight + j * height, 0, scale, scale)
         end
     end
     love.graphics.setColor(1, 1, 1)
+end
+
+function Clouds:drawCloud(shadow)
+    for _, layer in ipairs(self.layers or {}) do
+        self:drawCloudLayer(layer, shadow)
+    end
 end
 
 function Clouds:draw()

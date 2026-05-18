@@ -1,26 +1,35 @@
 local Particle = require("scripts/particles/particle")
 local Ball = setmetatable({}, {__index = Particle})
 Ball.__index = Ball
+local RgbShiftDraw = require("scripts/effects/rgbShiftDraw")
 
-function Ball:new(x, y, height, dx, dy, lifetime, size)
+local sprite = love.graphics.newImage("assets/sprites/particles/ball.png")
+sprite:setFilter("nearest", "nearest")
+local starSprite = love.graphics.newImage("assets/sprites/particles/star.png")
+starSprite:setFilter("nearest", "nearest")
+local starChance = 0.5
+
+function Ball:new(x, y, height, dx, dy, lifetime, size, options)
     if not size then size = 1 end
     if not dx then dx = 0 end
     if not dy then dy = 0 end
     if not lifetime  then lifetime = math.random(30, 45) / 100 end
+    options = options or {}
 
     local particle = Particle.new(self, x, y, height, size, lifetime)
-    particle.sprite = love.graphics.newImage("assets/sprites/particles/ball.png")
-    particle.sprite:setFilter("nearest", "nearest")
+    particle.sprite = math.random() < starChance and starSprite or sprite
     particle.speed = math.random(30, 35)
     particle.speedDown = math.random(45, 55)
-    
     particle.dx = dx
     particle.dy = dy
+    if options.rgbShift then
+        --particle.rgbShift = RgbShiftDraw.createConfig(options.rgbShift)
+    end
     return particle
 end
 
 function Ball:update(dt)
-    addToDrawQueue(self.y + 5, self)
+    addToDrawQueue(self.drawPriorityY or (self.y + (self.drawPriorityOffset or 5)), self)
     self.x = self.x + self.dx * self.speed * dt
     self.y = self.y + self.dy * self.speed * dt
     self.timer = self.timer + dt
@@ -43,16 +52,31 @@ function Ball:death()
 end
 
 function Ball:draw()
+    local drawX = self.x
+    local drawY = self.y - self.height
+    local scaleX = 1 * self.radius
+    local scaleY = 1.5 * self.radius
+    local originX = 16 / 2
+    local originY = 16 / 2 * 1.5
 
-    local sheetWidth = self.sprite:getWidth()
-    local sheetHeight = self.sprite:getHeight()
+    RgbShiftDraw.drawSprite(
+        self.sprite,
+        nil,
+        drawX,
+        drawY,
+        0,
+        scaleX,
+        scaleY,
+        originX,
+        originY,
+        self.timer,
+        self.rgbShift,
+        0.8
+    )
 
-    local currentSize = (16 * self.radius)
     love.graphics.setColor(1, 1, 1, 0.8)
-
-    love.graphics.draw(self.sprite ,self.x, self.y - self.height, 0 ,1 * self.radius, 1.5 * self.radius, 16/2,16/2*1.5 )
+    love.graphics.draw(self.sprite, drawX, drawY, 0, scaleX, scaleY, originX, originY)
     love.graphics.setColor(1, 1, 1, 1)
-
 end
 
 return Ball

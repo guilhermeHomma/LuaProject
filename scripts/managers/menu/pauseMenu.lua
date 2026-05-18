@@ -7,8 +7,7 @@ setmetatable(pauseMenu, { __index = baseMenu })
 function pauseMenu:load()
     baseMenu.load(self)
     self.MenuTItle = "PAUSED"
-    --self.menuOptions = {"Continue", "Restart", "Go to menu"}
-    self.menuOptions = {"Continue", "Restart", "Exit Game"}
+    self.menuOptions = {"Continue", "Settings", "Restart", "Main Menu"}
 end
 
 function pauseMenu:draw()
@@ -21,9 +20,11 @@ function pauseMenu:onSelect()
     if self.selectedOption == 1 then
         changePause()
     elseif self.selectedOption == 2 then
-        loadGame()
+        openSettings(STATES.gamePause)
     elseif self.selectedOption == 3 then
-        quitGame()
+        loadGame()
+    elseif self.selectedOption == 4 then
+        openReturnToMenuConfirm(STATES.gamePause)
     end
 end
 

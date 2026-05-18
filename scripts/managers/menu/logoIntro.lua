@@ -22,11 +22,11 @@ function logoIntro:load()
 end
 
 function logoIntro:getHeight()
-    return love.graphics.getHeight()/ scale 
+    return baseHeight
 end
 
 function logoIntro:getWidth()
-    return love.graphics.getWidth() / scale 
+    return baseWidth
 end
 
 

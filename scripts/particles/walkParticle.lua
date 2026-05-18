@@ -2,14 +2,18 @@ Particle = require("scripts/particles/particle")
 WalkP = setmetatable({}, {__index = Particle})
 WalkP.__index = WalkP
 
+local sprite = love.graphics.newImage("assets/sprites/particles/ball.png")
+local starSprite = love.graphics.newImage("assets/sprites/particles/star.png")
+
+sprite:setFilter("nearest", "nearest")
+
 function WalkP:new(x, y, lifetime)
     local size = 0.3
 
     if not lifetime  then lifetime = math.random(9, 11) / 10 end
 
     local particle = Particle.new(self, x, y, 1, size, lifetime)
-    particle.sprite = love.graphics.newImage("assets/sprites/particles/ball.png")
-    particle.sprite:setFilter("nearest", "nearest")
+    particle.sprite = math.random() < 0.3 and starSprite or sprite
 
     particle.speedDown = math.random(5, 10)
     particle.alpha = 0.7

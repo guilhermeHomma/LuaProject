@@ -1,26 +1,36 @@
 local Particle = require("scripts/particles/particle")
 local Ball = require("scripts/particles/ballParticle")
-local LifeDrop = require("scripts/drops/life")
+local DamageStretch = require("scripts/effects/damageStretch")
 
 local ZombieParticle = setmetatable({}, {__index = Particle})
 ZombieParticle.__index = ZombieParticle
 local whiteShader = love.graphics.newShader("scripts/shaders/whiteShader.glsl")
+local spriteShadow = love.graphics.newImage("assets/sprites/enemy/zombie/enemyShadow.png")
+local deathSound = love.audio.newSource("assets/sfx/particles/particle-end.mp3", "static")
+
+spriteShadow:setFilter("nearest", "nearest")
+
+local function playClonedSound(baseSource, volume, pitch)
+    local sound = baseSource:clone()
+    sound:setVolume(volume)
+    sound:setPitch(pitch)
+    sound:play()
+    return sound
+end
 
 
 function ZombieParticle:new(x, y, sprite)
 
     local particle = Particle.new(self, x, y, 10, 7, 0.9)
     particle.sprite = sprite
-    particle.spriteShadow = love.graphics.newImage("assets/sprites/enemy/enemyShadow.png")
-    particle.spriteShadow:setFilter("nearest", "nearest")
+    particle.spriteShadow = spriteShadow
+    DamageStretch:init(particle, 0.1, 0.1)
+    particle.deathStretchStarted = false
 
     local playerDistance = distance(Player, particle)
-    local bulletSound = love.audio.newSource("assets/sfx/particles/particle-end.mp3", "static")
 
     getDistanceVolume(playerDistance, 0.2, 200)
-    bulletSound:setVolume(0.07)
-    bulletSound:setPitch((1.2 + math.random() * 0.1) * GAME_PITCH)
-    bulletSound:play()
+    playClonedSound(deathSound, 0.07, (1.2 + math.random() * 0.1) * GAME_PITCH)
 
     return particle
 end
@@ -29,6 +39,11 @@ function ZombieParticle:update(dt)
     addToDrawQueue(self.y + 5, self)
 
     self.timer = self.timer + dt
+
+    if not self.deathStretchStarted and self.timer >= self.lifeTime - self.damageStretchDuration then
+        self.deathStretchStarted = true
+        DamageStretch:start(self)
+    end
 
     if self.timer >= self.lifeTime then
         self:death()
@@ -49,35 +64,9 @@ end
 function ZombieParticle:death()
     self.isAlive = false
     local playerDistance = distance(Player, self)
-    
-    local bulletSound = love.audio.newSource("assets/sfx/particles/particle-end.mp3", "static")
 
     getDistanceVolume(playerDistance, 0.2, 200)
-    bulletSound:setVolume(0.1)
-    bulletSound:setPitch((1 + math.random() * 0.1) * GAME_PITCH)
-    bulletSound:play()
-
-    local shouldDropLife = false
-
-    if math.random() > 0.94 and Player.life == 1 then
-        shouldDropLife = true
-    elseif Player.life < Player.totalLife and math.random() > 0.96 then
-        shouldDropLife = true
-        
-    end
-
-    if shouldDropLife then
-        local coinSound = love.audio.newSource("assets/sfx/drops/drop-life.mp3", "static")
-        local playerDistance = distance(Player, self)
-        local volume = getDistanceVolume(playerDistance, 0.6, 200)
-
-        coinSound:setVolume(volume)
-        coinSound:setPitch((1 + math.random() * 0.1) * GAME_PITCH)
-        coinSound:play()
-
-        local drop = LifeDrop:new(self.x, self.y)
-        table.insert(Game.objects, drop)
-    end
+    playClonedSound(deathSound, 0.1, (1 + math.random() * 0.1) * GAME_PITCH)
 
     for i = 1, 3 do
         local angle = math.random() * 2 * math.pi
@@ -96,19 +85,22 @@ end
 
 function ZombieParticle:draw()
 
+    local stretchScaleX, stretchScaleY = DamageStretch:getScale(self)
 
-    if self.timer < 0.05  then
+    if self.deathStretchStarted then
         love.graphics.setShader(whiteShader)   
     end
 
     love.graphics.setColor(1, 1, 1, 1)
     local sheetWidth = self.sprite:getWidth()
     local sheetHeight = self.sprite:getHeight()
-    local quad = love.graphics.newQuad(7 * 32, 0, 32, 32, sheetWidth, sheetHeight)
+    self.quadDead = self.quadDead or love.graphics.newQuad(7 * 32, 0, 32, 32, sheetWidth, sheetHeight)
+    self.quadHit = self.quadHit or love.graphics.newQuad(6 * 32, 0, 32, 32, sheetWidth, sheetHeight)
+    local quad = self.quadDead
     if self.timer < 0.2 then
-        quad = love.graphics.newQuad(6 * 32, 0, 32, 32, sheetWidth, sheetHeight)
+        quad = self.quadHit
     end
-    love.graphics.draw(self.sprite, quad, self.x, self.y + 3, 0, 1, 1.4, 32 / 2, 32)
+    love.graphics.draw(self.sprite, quad, self.x, self.y + 3, 0, stretchScaleX, 1.4 * stretchScaleY, 32 / 2, 32)
     love.graphics.setShader()   
 
     --love.graphics.circle("fill", self.x, self.y -self.height, self.radius)

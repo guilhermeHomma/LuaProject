@@ -3,6 +3,7 @@ local Drop = require("scripts/drops/drop")
 local Life = setmetatable({}, {__index = Drop})
 local Tilemap = require("scripts/tilemap")
 local Ball = require("scripts/particles/ballParticle")
+local DropShine = require("scripts/drops/dropShine")
 
 Life.__index = Life
 
@@ -36,25 +37,75 @@ function Life:new(x, y)
     life.spriteIndex = 1
     life.sprite = quads[life.spriteIndex]
     life.animationTimer = 0
-    life.height = 10
+    life.baseHeight = 10
+    life.hoverHeight = life.baseHeight
+    life.popHeight = math.random(7, 12)
+    life.popVelocity = 55 + math.random() * 25
+    life.popGravity = 260
+    life.popBounces = 0
+    life.popMaxBounces = 1
+    life.spawnStretchTimer = 0.22
+    life.spawnStretchDuration = 0.22
+    life.drawScaleX = 1
+    life.drawScaleY = 1.25
+    life.height = life.hoverHeight + life.popHeight
     return life
 end
 
 function Life:changeHeight(dt)
     self.oscillator = self.oscillator + dt * 4 
-    self.height = 10 + math.sin(self.oscillator) * 2.5
+    self.hoverHeight = (self.baseHeight or 10) + math.sin(self.oscillator) * 2.5
 end 
+
+function Life:updateSpawnMotion(dt)
+    if self.spawnStretchTimer and self.spawnStretchTimer > 0 then
+        self.spawnStretchTimer = math.max(0, self.spawnStretchTimer - dt)
+    end
+
+    if (self.popHeight or 0) > 0 or (self.popVelocity or 0) ~= 0 then
+        self.popHeight = (self.popHeight or 0) + (self.popVelocity or 0) * dt
+        self.popVelocity = (self.popVelocity or 0) - (self.popGravity or 260) * dt
+
+        if self.popHeight <= 0 then
+            self.popHeight = 0
+            if (self.popBounces or 0) < (self.popMaxBounces or 0) and math.abs(self.popVelocity or 0) > 45 then
+                self.popBounces = (self.popBounces or 0) + 1
+                self.popVelocity = math.abs(self.popVelocity or 0) * 0.34
+                self.spawnStretchTimer = math.max(self.spawnStretchTimer or 0, 0.12)
+            else
+                self.popVelocity = 0
+            end
+        end
+    end
+
+    self.height = (self.hoverHeight or self.baseHeight or 0) + (self.popHeight or 0)
+end
+
+function Life:getDrawScale()
+    local scaleX = self.drawScaleX or 1
+    local scaleY = self.drawScaleY or 1.25
+
+    if self.spawnStretchTimer and self.spawnStretchTimer > 0 then
+        local progress = 1 - self.spawnStretchTimer / (self.spawnStretchDuration or 0.22)
+        local wave = math.sin(progress * math.pi)
+        scaleX = scaleX * (1 + wave * 0.16)
+        scaleY = scaleY * (1 - wave * 0.12)
+    end
+
+    return scaleX, scaleY
+end
 
 function Life:update(dt)
     Drop.update(self, dt)
 
 
     self:changeHeight(dt)
+    self:updateSpawnMotion(dt)
 
 
     local playerDistance = distance(self, Player)
 
-    if playerDistance < maxAttractDistance then
+    if not self.requirePickupKey and playerDistance < maxAttractDistance then
         local dirX = Player.x - self.x
         local dirY = Player.y - self.y
         local len = math.sqrt(dirX * dirX + dirY * dirY)
@@ -160,13 +211,14 @@ function Life:draw()
     end
 
     local alpha = 1
-    if self.lifeTime - self.lifetimeTimer <= 4 then
+    if not self.neverExpires and self.lifeTime - self.lifetimeTimer <= 4 then
         local blink = math.floor(self.lifetimeTimer * 10) % 2
         alpha = blink == 0 and 0.2 or 1
     end
 
     love.graphics.setColor(1, 1, 1, alpha)
-    love.graphics.draw(sheetImage, self.sprite, self.x, self.y - self.height, 0, 1, 1.4, 4, 8)
+    local scaleX, scaleY = self:getDrawScale()
+    DropShine.draw(sheetImage, self.sprite, self.x, self.y - self.height, 0, scaleX, scaleY, 4, 8)
     love.graphics.setColor(1, 1, 1, 1)
 
 end

@@ -8,7 +8,7 @@ setmetatable(gameOverMenu, { __index = baseMenu })
 function gameOverMenu:load()
     baseMenu.load(self)
     self.MenuTItle = "GAME OVER"
-    self.menuOptions = {"Restart", "Exit Game"}
+    self.menuOptions = {"Restart", "Main Menu"}
 end
 
 function gameOverMenu:draw()
@@ -22,7 +22,7 @@ function gameOverMenu:onSelect()
     if self.selectedOption == 1 then
         loadGame()
     elseif self.selectedOption == 2 then
-        quitGame()
+        openReturnToMenuConfirm(STATES.gameDead)
     end
 end
 

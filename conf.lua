@@ -1,39 +1,18 @@
+GAME_FLAGS = GAME_FLAGS or {
+    skipIntro = true,
+    logFloorGeneration = false,
+    weaponTestLevel = true,
+}
+
 function love.conf(t)
+    local Levels = require("scripts/config/levels")
+    local defaultLevel = Levels:getDefault()
+
     t.window.title = "mobize"
-    t.window.resizable = true 
-    --t.window.borderless = true
-    
-    t.window.width = 1600
-    t.window.height = 900 
-
-    t.window.width = 800
-    t.window.height = 450
-
-    t.window.width = 960
-    t.window.height = 540
-
-    t.window.width = 1600
-    t.window.height = 900 
-
-    t.window.width = 960 * 1.5
-    t.window.height = 540 * 1.5
-
-    t.window.width = 1120
-    t.window.height = 630 
+    t.window.resizable = false
     t.window.vsync = 0
-    t.window.width = 1280
-    t.window.height = 720 
-
-
-
-
-    t.window.width = 960 * 1.5
-    t.window.height = 540 * 1.5
-
-    t.window.width = 1280
-    t.window.height = 720
-
-    --t.window.width = 1200
-    --t.window.height = 900
+    t.window.width = defaultLevel.window.width
+    t.window.height = defaultLevel.window.height
+    t.console = GAME_FLAGS.logFloorGeneration
 
 end
