@@ -1,7 +1,7 @@
 GAME_FLAGS = GAME_FLAGS or {
     skipIntro = true,
     logFloorGeneration = false,
-    weaponTestLevel = true,
+    weaponTestLevel = false,
 }
 
 function love.conf(t)

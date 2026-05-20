@@ -8,6 +8,7 @@ Game = require("scripts.managers.gameManager")
 local GameIntro = require("scripts.managers.gameIntro")
 love.graphics.setDefaultFilter("nearest", "nearest")
 local presentationShader = love.graphics.newShader("scripts/shaders/presentation.glsl")
+local menuDistortionShader = love.graphics.newShader("scripts/shaders/hudWater.glsl")
 local unpackValues = table.unpack or unpack
 local MAX_PRESENTATION_SHOCKWAVES = 8
 
@@ -23,6 +24,7 @@ local LogoIntro = require("scripts/managers/menu/logoIntro")
 local TransitionManager = require("scripts.managers.transitionManager")
 
 canvas = nil
+local menuCanvas = nil
 STATES = {mainMenu = 1, game = 2, gamePause = 3, gameDead = 4, gameIntro = 5, startLogo = 6, settings = 7, confirm = 8}
 state = STATES.startLogo
 
@@ -40,6 +42,8 @@ local confirmReturnState = STATES.mainMenu
 local function rebuildCanvas()
     canvas = love.graphics.newCanvas(baseWidth, baseHeight)
     canvas:setFilter("nearest", "nearest")
+    menuCanvas = love.graphics.newCanvas(baseWidth, baseHeight)
+    menuCanvas:setFilter("nearest", "nearest")
 end
 
 local function refreshScreenScale()
@@ -103,6 +107,14 @@ local function shouldDrawHUD()
         and Player.isAlive ~= nil
 end
 
+local function isMenuState()
+    return state == STATES.mainMenu
+        or state == STATES.gamePause
+        or state == STATES.gameDead
+        or state == STATES.settings
+        or state == STATES.confirm
+end
+
 local function drawScaledState()
     if state == STATES.startLogo then
         LogoIntro:draw()
@@ -119,6 +131,20 @@ local function drawScaledState()
     elseif state == STATES.confirm then
         ConfirmMenu:draw()
     end
+end
+
+local function drawMenuWithDistortion()
+    love.graphics.setCanvas(menuCanvas)
+    love.graphics.clear(0, 0, 0, 0)
+    drawScaledState()
+
+    love.graphics.setCanvas(canvas)
+    menuDistortionShader:send("u_time", love.timer.getTime())
+    menuDistortionShader:send("u_strength", 0.00055)
+    love.graphics.setShader(menuDistortionShader)
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.draw(menuCanvas, 0, 0)
+    love.graphics.setShader()
 end
 
 local function presentCanvas()
@@ -381,6 +407,8 @@ function love.mousepressed(x, y, button)
 
     if state == STATES.mainMenu then
         MainMenu:mousepressed(scaledX, scaledY, button)
+    elseif state == STATES.game then
+        Game:mousepressed(scaledX, scaledY, button)
     elseif state == STATES.gamePause then
         PauseMenu:mousepressed(scaledX, scaledY, button)
     elseif state == STATES.gameDead then
@@ -425,7 +453,11 @@ function love.draw()
     if isGameplayState() then
         Game:drawHUD()
     end
-    drawScaledState()
+    if isMenuState() then
+        drawMenuWithDistortion()
+    else
+        drawScaledState()
+    end
     love.graphics.setCanvas()
 
     presentCanvas()

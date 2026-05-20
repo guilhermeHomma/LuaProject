@@ -6,9 +6,11 @@ local sheetWidth, sheetHeight = sheetImage:getDimensions()
 local shopLetterImage = love.graphics.newImage("assets/sprites/objects/shop-letter.png")
 local sheetGun = love.graphics.newImage("assets/sprites/player/guns.png")
 local bulletsDropImage = love.graphics.newImage("assets/sprites/objects/bulletsDrop.png")
+local cardDropImage = love.graphics.newImage("assets/sprites/objects/card-drop.png")
 local DropShine = require("scripts/drops/dropShine")
 local WeaponDefinitions = require("scripts/player/weapons/init")
 local FloorManager = require("scripts/managers/floorManager")
+local BulletColorParticle = require("scripts/particles/bulletColorParticle")
 local font = love.graphics.newFont("assets/fonts/pixelart.ttf", 8)
 
 local outlineShader = love.graphics.newShader("scripts/shaders/outline.glsl")
@@ -18,8 +20,11 @@ local shopSignShader = love.graphics.newShader("scripts/shaders/shopSign.glsl")
 shopSignShader:send("u_onColor", {0.8, 0.62, 0.14, 0.9})
 shopSignShader:send("u_offColor", {0.02, 0.01, 0.002, 0.45})
 shopSignShader:send("u_texel", {1 / shopLetterImage:getWidth(), 1 / shopLetterImage:getHeight()})
+shopSignShader:send("u_rainbow", 0)
+local greenRainbowShader = love.graphics.newShader("scripts/shaders/greenRainbow.glsl")
 sheetGun:setFilter("nearest", "nearest")
 bulletsDropImage:setFilter("nearest", "nearest")
+cardDropImage:setFilter("nearest", "nearest")
 sheetImage:setFilter("nearest", "nearest")
 shopLetterImage:setFilter("nearest", "nearest")
 font:setFilter("nearest", "nearest")
@@ -27,6 +32,20 @@ font:setFilter("nearest", "nearest")
 local sheetW, sheetH = sheetImage:getDimensions()
 local gunW, gunH = sheetGun:getDimensions()
 local bulletDropQuad = love.graphics.newQuad(0, 0, 8, 8, bulletsDropImage:getDimensions())
+local cardDropQuad = love.graphics.newQuad(0, 0, 16, 16, cardDropImage:getDimensions())
+local cardParticlePalette = {
+    {0.52, 0.16, 0.68, 1},
+    {0.18, 0.56, 0.60, 1},
+    {0.70, 0.22, 0.46, 1},
+    {0.62, 0.52, 0.18, 1},
+    {0.24, 0.62, 0.34, 1},
+}
+local cardParticleOptions = {
+    speedMin = 4,
+    speedMax = 14,
+    lifeTime = 0.68,
+    size = 1,
+}
 
 PlayerCloseStore = false
 
@@ -62,10 +81,23 @@ local function getAmmoProduct()
     }
 end
 
+local function getCardProduct()
+    local shopConfig = CURRENT_LEVEL and CURRENT_LEVEL.shopConfig or {}
+    return {
+        id = shopConfig.cardProductId or "card_upgrade",
+        name = "card",
+        price = shopConfig.cardPrice or 200,
+        kind = "card",
+    }
+end
+
 local function getProduct(productKey)
     if type(productKey) == "string" then
         if productKey == getAmmoProduct().id then
             return getAmmoProduct()
+        end
+        if productKey == getCardProduct().id then
+            return getCardProduct()
         end
         return weaponsByName[productKey] or weaponsByName.raygun
     end
@@ -86,6 +118,8 @@ function Store:new(x, y, quadIndex, collider, productIndex)
     tile.targetAlpha = 1
     tile.product = getProduct(productIndex)
     tile.playerIsClose = false
+    tile.renderCullMargin = 360
+    tile.cardParticleTimer = math.random() * 0.2
     return tile
 end
 
@@ -94,7 +128,7 @@ function Store:getPurchaseKey()
 end
 
 function Store:isPurchased()
-    if self.product and self.product.kind == "ammo" then
+    if self.product and (self.product.kind == "ammo" or self.product.kind == "card") then
         local state = FloorManager:getCurrentRoomState()
         return state
             and state.shopPurchases
@@ -114,6 +148,25 @@ end
 
 function Store:update(dt)
     addToDrawQueue(self.yWorld+0.1, self)
+    if self.product and self.product.kind == "card" and not self:isPurchased() then
+        self.cardParticleTimer = (self.cardParticleTimer or 0) + dt
+        if self.cardParticleTimer >= 0.13 then
+            self.cardParticleTimer = self.cardParticleTimer - 0.13
+            BulletColorParticle.spawnBurst(
+                self.xWorld + math.random(-7, 7),
+                self.yWorld - 18 + math.random(-4, 4),
+                2,
+                cardParticlePalette,
+                1,
+                cardParticleOptions
+            )
+            local particle = Game and Game.particles and Game.particles[#Game.particles]
+            if particle then
+                particle.drawPriorityY = self.yWorld + 18
+            end
+        end
+    end
+
     self.playerIsClose = false
     if Player.isAlive and not self:isPurchased() then
         if distance(Player, self) < 20 and Player.isAlive then
@@ -141,7 +194,7 @@ function Store:performBuy()
 
     if playerPoints < currentPrice then return end
     if self.product.kind == "ammo" and not (Player.gun and Player.gun.secondary_weapon) then return end
-    if self.product.index == 1 then return end
+    if self.product.kind ~= "card" and self.product.index == 1 then return end
 
     local sound = love.audio.newSource("assets/sfx/store/buy-item.mp3", "static")
     sound:setVolume(1)
@@ -155,6 +208,15 @@ function Store:performBuy()
         if state then
             state.shopPurchases = state.shopPurchases or {}
             state.shopPurchases[self:getPurchaseKey()] = true
+        end
+    elseif self.product.kind == "card" then
+        local state = FloorManager:getCurrentRoomState()
+        if state then
+            state.shopPurchases = state.shopPurchases or {}
+            state.shopPurchases[self:getPurchaseKey()] = true
+        end
+        if Game and Game.startCardChoice then
+            Game:startCardChoice(self.xWorld, self.yWorld - 16)
         end
     else
         Player.gun:changeGun(self.product.index)
@@ -191,6 +253,13 @@ function Store:drawGun()
         originY = 8
         drawX = self.xWorld
         drawY = self.yWorld - 16
+    elseif self.product.kind == "card" then
+        image = cardDropImage
+        quadGun = cardDropQuad
+        originX = 8
+        originY = 16
+        drawX = self.xWorld
+        drawY = self.yWorld - 16
     end
 
     local time = love.timer.getTime()
@@ -204,23 +273,23 @@ function Store:drawGun()
         scaleY = 1.5 * (1 - stretch * 0.5)
     end
 
-    DropShine.draw(
-        image,
-        quadGun,
-        drawX,
-        drawY + floatY,
-        0,
-        scaleX,
-        scaleY,
-        originX,
-        originY
-    )
+    if self.product.kind == "card" then
+        greenRainbowShader:send("u_time", love.timer.getTime())
+        love.graphics.setShader(greenRainbowShader)
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.draw(image, quadGun, drawX, drawY + floatY, 0, scaleX, scaleY, originX, originY)
+        love.graphics.setShader()
+        return
+    end
+
+    DropShine.draw(image, quadGun, drawX, drawY + floatY, 0, scaleX, scaleY, originX, originY)
 end
 
 function Store:drawShopSign()
     local purchased = self:isPurchased()
     shopSignShader:send("u_active", purchased and 0 or 1)
     shopSignShader:send("u_time", love.timer.getTime())
+    shopSignShader:send("u_rainbow", self.product and self.product.kind == "card" and not purchased and 1 or 0)
 
     love.graphics.setShader(shopSignShader)
     love.graphics.draw(

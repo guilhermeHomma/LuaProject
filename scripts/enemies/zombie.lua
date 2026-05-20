@@ -11,6 +11,7 @@ local WalkParticle = require("scripts/particles/walkParticle")
 local FootStep = require("scripts/particles/footstep")
 local DamageStretch = require("scripts/effects/damageStretch")
 local ZombieMouthConfig = require("scripts/enemies/zombieMouthConfig")
+local BloodPixel = require("scripts/particles/bloodPixel")
 
 local DropTemplates = require("scripts/drops/dropTemplates")
 local EnemyDeadDropParticle = require("scripts/particles/enemyDeadDropParticle")
@@ -570,6 +571,7 @@ end
 
 function Zombie:takeDamage(damage, dx, dy)
     self.life = self.life - damage
+    BloodPixel.spawnBurst(self.x, self.y - 2, dx, dy, 4, 6)
 
     if self:canStartDamageAnimation() then
         DamageStretch:start(self)
@@ -613,6 +615,7 @@ function Zombie:death()
 
     local particle = ZParticle:new(self.x, self.y, self.spriteSheet)
     table.insert(Game.particles, particle)
+    BloodPixel.spawnBurst(self.x, self.y - 2, 0, -1, 9, 12)
 
     Game:increasePlayerPoints(self.dropPoints)
     self.noise:stop()

@@ -5,21 +5,41 @@ local DamageStretch = require("scripts/effects/damageStretch")
 local DropTemplates = require("scripts/drops/dropTemplates")
 local Ball = require("scripts/particles/ballParticle")
 local TileSet = require("scripts.objects.tileset")
+local BulletColorParticle = require("scripts/particles/bulletColorParticle")
 
 require("scripts/utils")
 
 local sprite = love.graphics.newImage("assets/sprites/chest/woodchest.png")
+local cardSprite = love.graphics.newImage("assets/sprites/chest/simplecardchest.png")
 local whiteShader = love.graphics.newShader("scripts/shaders/whiteShader.glsl")
 local openSoundBase = love.audio.newSource("assets/sfx/particles/break-box.mp3", "static")
 local shadowQuad = nil
 local frameWidth = 16
 local frameHeight = 32
+local cardParticlePalette = {
+    {0.52, 0.16, 0.68, 1},
+    {0.18, 0.56, 0.60, 1},
+    {0.70, 0.22, 0.46, 1},
+    {0.62, 0.52, 0.18, 1},
+    {0.24, 0.62, 0.34, 1},
+}
+local cardParticleOptions = {
+    speedMin = 4,
+    speedMax = 15,
+    lifeTime = 0.68,
+    size = 1,
+}
 local quads = {
     closed = love.graphics.newQuad(0, 0, frameWidth, frameHeight, sprite:getDimensions()),
     open = love.graphics.newQuad(frameWidth, 0, frameWidth, frameHeight, sprite:getDimensions()),
 }
+local cardQuads = {
+    closed = love.graphics.newQuad(0, 0, frameWidth, frameHeight, cardSprite:getDimensions()),
+    open = love.graphics.newQuad(frameWidth, 0, frameWidth, frameHeight, cardSprite:getDimensions()),
+}
 
 sprite:setFilter("nearest", "nearest")
+cardSprite:setFilter("nearest", "nearest")
 
 local function playClonedSound(baseSource, volume, pitch)
     local sound = baseSource:clone()
@@ -89,10 +109,13 @@ local function rememberChestDrop(key, kind, x, y, chest)
     }
 end
 
-function Chest:new(x, y)
+function Chest:new(x, y, chestType)
     local chest = setmetatable({}, Chest)
     chest.x = x
     chest.y = y
+    chest.chestType = chestType or "wood"
+    chest.sprite = chest.chestType == "card" and cardSprite or sprite
+    chest.quads = chest.chestType == "card" and cardQuads or quads
     chest.size = TileSet.tileSize
     chest.xWorld, chest.yWorld = Tile.tilemap:mapToWorld(x, y)
     chest.isAlive = true
@@ -109,6 +132,7 @@ function Chest:new(x, y)
     chest.beamDuration = 0.75
     chest.particleTimer = 0
     chest.particleInterval = 0.025
+    chest.cardParticleTimer = math.random() * 0.2
     DamageStretch:init(chest, 0.18, 0.12)
     return chest
 end
@@ -121,7 +145,7 @@ function Chest:spawnDrop()
     local spawnX = self.xWorld
     local spawnY = self.yWorld - 10
     local baseKey = getChestKey(self) .. ":drop:"
-    local config = DropTemplates.getObjectConfig("chest")
+    local config = DropTemplates.getObjectConfig(self.chestType == "card" and "cardChest" or "chest")
     local resolvedDrops = DropTemplates.resolve(config, { player = Player, source = self })
     local dropIndex = 0
 
@@ -149,6 +173,28 @@ function Chest:spawnBeamParticle()
     table.insert(Game.particles, particle)
 end
 
+function Chest:spawnCardParticle(count)
+    if self.chestType ~= "card" then
+        return
+    end
+
+    local firstParticleIndex = Game and Game.particles and (#Game.particles + 1) or nil
+    BulletColorParticle.spawnBurst(
+        self.xWorld + math.random(-6, 6),
+        self.yWorld - 14 + math.random(-4, 4),
+        1,
+        cardParticlePalette,
+        count or 1,
+        cardParticleOptions
+    )
+
+    if firstParticleIndex and Game and Game.particles then
+        for index = firstParticleIndex, #Game.particles do
+            Game.particles[index].drawPriorityY = self.yWorld + 18
+        end
+    end
+end
+
 function Chest:open()
     if self.isOpen or self.isOpening then
         return
@@ -161,6 +207,7 @@ function Chest:open()
     self.particleTimer = 0
     DamageStretch:start(self)
     markPersistedOpen(self)
+    self:spawnCardParticle(34)
 
     local playerDistance = distance(Player, self)
     local volume = getDistanceVolume(playerDistance, 0.35, 220)
@@ -175,6 +222,15 @@ end
 
 function Chest:update(dt)
     addToDrawQueue(self.yWorld, self)
+
+    if self.chestType == "card" and not self.isOpen then
+        self.cardParticleTimer = (self.cardParticleTimer or 0) + dt
+        local interval = self.isOpening and 0.028 or 0.12
+        while self.cardParticleTimer >= interval do
+            self.cardParticleTimer = self.cardParticleTimer - interval
+            self:spawnCardParticle(self.isOpening and 3 or 1)
+        end
+    end
 
     if self.flashTimer > 0 then
         self.flashTimer = math.max(0, self.flashTimer - dt)
@@ -220,7 +276,8 @@ end
 
 function Chest:draw()
     local scaleX, scaleY = DamageStretch:getScale(self)
-    local quad = (self.isOpen and not self.isOpening) and quads.open or quads.closed
+    local activeQuads = self.quads or quads
+    local quad = (self.isOpen and not self.isOpening) and activeQuads.open or activeQuads.closed
 
     if self:isPlayerNear() and not self.isOpen then
         local pulse = math.sin(love.timer.getTime() * 10) * 0.035
@@ -237,7 +294,7 @@ function Chest:draw()
         love.graphics.setColor(1, 1, 1, 1)
     end
 
-    love.graphics.draw(sprite, quad, self.xWorld, self.yWorld, 0, scaleX, scaleY, frameWidth / 2, frameHeight)
+    love.graphics.draw(self.sprite or sprite, quad, self.xWorld, self.yWorld, 0, scaleX, scaleY, frameWidth / 2, frameHeight)
     love.graphics.setShader()
     love.graphics.setColor(1, 1, 1, 1)
 end

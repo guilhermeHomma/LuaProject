@@ -127,6 +127,7 @@ local function createRoom(roomConfig, level)
         spawnPoints = copyTable(roomConfig.spawnPoints or (template and template.spawnPoints)) or {},
         tilemapConfig = copyTable(roomConfig.tilemapConfig or chooseTemplateTilemapConfig(template) or level.tilemapConfig),
         isShopRoom = roomConfig.isShopRoom == true or templateId == "store_32x32",
+        isCardRoom = roomConfig.isCardRoom == true or templateId == "cards_32x32",
         state = roomConfig.state or {
             visited = false,
             discovered = false,
@@ -434,49 +435,372 @@ end
 
 local appendGeneratedRoom
 
-local function createShopRoomNearStart(startRoom, generateConfig, generatedRooms, roomIds, occupiedCells)
-    local shopTemplateId = generateConfig and generateConfig.shopRoomTemplateId
-    if not shopTemplateId then
-        return nil
-    end
+local function getRoomDistanceFromStart(room)
+    return room and room.distanceFromStart or 0
+end
 
+local function shuffledDirectionsList()
     local shuffledDirections = copyTable(directionOrder)
     for i = #shuffledDirections, 2, -1 do
         local j = math.random(1, i)
         shuffledDirections[i], shuffledDirections[j] = shuffledDirections[j], shuffledDirections[i]
     end
+    return shuffledDirections
+end
 
-    for _, direction in ipairs(shuffledDirections) do
-        local directionConfig = directions[direction]
-        local x = startRoom.gridX + directionConfig.dx
-        local y = startRoom.gridY + directionConfig.dy
-        if not occupiedCells[getRoomId(x, y)] then
-            local placement = chooseTemplatePlacement(
-                {[directionConfig.opposite] = true},
-                {templateIds = {shopTemplateId}},
-                x,
-                y,
-                occupiedCells
-            )
+local function createShopRoomFromAnchor(anchorRoom, generateConfig, generatedRooms, roomIds, occupiedCells)
+    local shopTemplateId = generateConfig and generateConfig.shopRoomTemplateId
+    if not (shopTemplateId and anchorRoom) then
+        return nil
+    end
 
-            if placement then
-                local room = createGeneratedRoom(x, y, placement)
-                room.isShopRoom = true
-                room.doors[directionConfig.opposite] = true
-                room.doorSlotIds[directionConfig.opposite] = getDoorSlotIdForCell(room, {x = x, y = y}, directionConfig.opposite)
-                room.neighbors[directionConfig.opposite] = startRoom.id
+    local anchorCells = getOccupiedCells(anchorRoom)
+    for i = #anchorCells, 2, -1 do
+        local j = math.random(1, i)
+        anchorCells[i], anchorCells[j] = anchorCells[j], anchorCells[i]
+    end
 
-                startRoom.doors[direction] = true
-                startRoom.doorSlotIds[direction] = getDoorSlotIdForCell(startRoom, {x = startRoom.gridX, y = startRoom.gridY}, direction)
-                startRoom.neighbors[direction] = room.id
+    for _, anchorCell in ipairs(anchorCells) do
+        for _, direction in ipairs(shuffledDirectionsList()) do
+            local directionConfig = directions[direction]
+            local x = anchorCell.x + directionConfig.dx
+            local y = anchorCell.y + directionConfig.dy
+            if not anchorRoom.neighbors[direction] and not occupiedCells[getRoomId(x, y)] then
+                local placement = chooseTemplatePlacement(
+                    {[directionConfig.opposite] = true},
+                    {templateIds = {shopTemplateId}},
+                    x,
+                    y,
+                    occupiedCells
+                )
 
-                appendGeneratedRoom(generatedRooms, roomIds, occupiedCells, room)
-                return room
+                if placement then
+                    local room = createGeneratedRoom(x, y, placement)
+                    room.isShopRoom = true
+                    room.distanceFromStart = getRoomDistanceFromStart(anchorRoom) + 1
+                    room.doors[directionConfig.opposite] = true
+                    room.doorSlotIds[directionConfig.opposite] = getDoorSlotIdForCell(room, {x = x, y = y}, directionConfig.opposite)
+                    room.neighbors[directionConfig.opposite] = anchorRoom.id
+
+                    anchorRoom.doors[direction] = true
+                    anchorRoom.doorSlotIds[direction] = getDoorSlotIdForCell(anchorRoom, anchorCell, direction)
+                    anchorRoom.neighbors[direction] = room.id
+
+                    appendGeneratedRoom(generatedRooms, roomIds, occupiedCells, room)
+                    return room
+                end
             end
         end
     end
 
     return nil
+end
+
+local function createCardRoomFromAnchor(anchorRoom, generateConfig, generatedRooms, roomIds, occupiedCells)
+    local cardTemplateId = generateConfig and generateConfig.cardRoomTemplateId
+    if not (cardTemplateId and anchorRoom) then
+        return nil
+    end
+
+    local anchorCells = getOccupiedCells(anchorRoom)
+    for i = #anchorCells, 2, -1 do
+        local j = math.random(1, i)
+        anchorCells[i], anchorCells[j] = anchorCells[j], anchorCells[i]
+    end
+
+    for _, anchorCell in ipairs(anchorCells) do
+        for _, direction in ipairs(shuffledDirectionsList()) do
+            local directionConfig = directions[direction]
+            local x = anchorCell.x + directionConfig.dx
+            local y = anchorCell.y + directionConfig.dy
+            if not anchorRoom.neighbors[direction] and not occupiedCells[getRoomId(x, y)] then
+                local placement = chooseTemplatePlacement(
+                    {[directionConfig.opposite] = true},
+                    {templateIds = {cardTemplateId}},
+                    x,
+                    y,
+                    occupiedCells
+                )
+
+                if placement then
+                    local room = createGeneratedRoom(x, y, placement)
+                    room.isCardRoom = true
+                    room.pathEnd = true
+                    room.distanceFromStart = getRoomDistanceFromStart(anchorRoom) + 1
+                    room.doors[directionConfig.opposite] = true
+                    room.doorSlotIds[directionConfig.opposite] = getDoorSlotIdForCell(room, {x = x, y = y}, directionConfig.opposite)
+                    room.neighbors[directionConfig.opposite] = anchorRoom.id
+
+                    anchorRoom.doors[direction] = true
+                    anchorRoom.doorSlotIds[direction] = getDoorSlotIdForCell(anchorRoom, anchorCell, direction)
+                    anchorRoom.neighbors[direction] = room.id
+
+                    appendGeneratedRoom(generatedRooms, roomIds, occupiedCells, room)
+                    return room
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+local function createShopRoomAtDistance(startRoom, generateConfig, generatedRooms, roomIds, occupiedCells)
+    local minDistance = (generateConfig and generateConfig.shopDistanceMin) or 2
+    local maxDistance = (generateConfig and generateConfig.shopDistanceMax) or 4
+    local anchorMin = math.max(1, minDistance - 1)
+    local anchorMax = math.max(anchorMin, maxDistance - 1)
+    local candidates = {}
+    local fallback = {}
+
+    for _, room in ipairs(generatedRooms) do
+        if room ~= startRoom and not room.isShopRoom then
+            local distance = getRoomDistanceFromStart(room)
+            if distance >= anchorMin and distance <= anchorMax then
+                candidates[#candidates + 1] = room
+            elseif distance >= 1 then
+                fallback[#fallback + 1] = room
+            end
+        end
+    end
+
+    for i = #candidates, 2, -1 do
+        local j = math.random(1, i)
+        candidates[i], candidates[j] = candidates[j], candidates[i]
+    end
+
+    for _, room in ipairs(candidates) do
+        local shopRoom = createShopRoomFromAnchor(room, generateConfig, generatedRooms, roomIds, occupiedCells)
+        if shopRoom then
+            return shopRoom
+        end
+    end
+
+    table.sort(fallback, function(a, b)
+        return getRoomDistanceFromStart(a) > getRoomDistanceFromStart(b)
+    end)
+
+    for _, room in ipairs(fallback) do
+        local shopRoom = createShopRoomFromAnchor(room, generateConfig, generatedRooms, roomIds, occupiedCells)
+        if shopRoom then
+            return shopRoom
+        end
+    end
+
+    return nil
+end
+
+local function createCardRooms(generateConfig, generatedRooms, roomIds, occupiedCells)
+    if not (generateConfig and generateConfig.cardRoomTemplateId) then
+        return
+    end
+
+    local cardRoomChance = generateConfig.cardRoomChance
+    if cardRoomChance ~= nil and math.random() > cardRoomChance then
+        return
+    end
+
+    local countConfig = generateConfig.cardRoomCount or {min = 2, max = 3}
+    local minCount = countConfig.min or countConfig[1] or countConfig or 2
+    local maxCount = countConfig.max or countConfig[2] or minCount
+    local targetCount = math.random(math.floor(minCount), math.floor(maxCount))
+    local created = 0
+    local attempts = 0
+    local placedCardRooms = {}
+
+    local function gridDistance(a, b)
+        return math.abs((a.gridX or 0) - (b.gridX or 0)) + math.abs((a.gridY or 0) - (b.gridY or 0))
+    end
+
+    local function getSpreadScore(room)
+        local distanceScore = getRoomDistanceFromStart(room)
+        local nearestCardDistance = 12
+
+        for _, cardRoom in ipairs(placedCardRooms) do
+            nearestCardDistance = math.min(nearestCardDistance, gridDistance(room, cardRoom))
+        end
+
+        return distanceScore * 2 + nearestCardDistance * 4 + math.random()
+    end
+
+    local function getSortedCardAnchors()
+        local candidates = {}
+        for _, room in ipairs(generatedRooms) do
+            if not room.isShopRoom and not room.isCardRoom then
+                candidates[#candidates + 1] = {
+                    room = room,
+                    score = getSpreadScore(room),
+                }
+            end
+        end
+
+        table.sort(candidates, function(a, b)
+            return a.score > b.score
+        end)
+
+        return candidates
+    end
+
+    while created < targetCount and attempts < targetCount * 40 do
+        attempts = attempts + 1
+        local candidates = getSortedCardAnchors()
+
+        if #candidates == 0 then
+            return
+        end
+
+        local placedRoom = nil
+        for _, candidate in ipairs(candidates) do
+            placedRoom = createCardRoomFromAnchor(candidate.room, generateConfig, generatedRooms, roomIds, occupiedCells)
+            if placedRoom then
+                break
+            end
+        end
+
+        if placedRoom then
+            placedCardRooms[#placedCardRooms + 1] = placedRoom
+            created = created + 1
+        else
+            return
+        end
+    end
+end
+
+local function isLargeGeneratedRoom(room)
+    return room
+        and not room.isShopRoom
+        and not room.isCardRoom
+        and ((room.gridWidth or 1) > 1 or (room.gridHeight or 1) > 1)
+end
+
+local function getOnlyConnectionDirection(room)
+    local result = nil
+    local count = 0
+
+    for _, direction in ipairs(directionOrder) do
+        if room.neighbors and room.neighbors[direction] then
+            result = direction
+            count = count + 1
+        end
+    end
+
+    if count == 1 then
+        return result
+    end
+
+    return nil
+end
+
+local function getEdgeCellForExit(room, exitDirection, entryDirection)
+    local cells = getOccupiedCells(room)
+    local selected = cells[1]
+    local entrySlotId = room.doorSlotIds and room.doorSlotIds[entryDirection]
+
+    for _, cell in ipairs(cells) do
+        if exitDirection == "east" then
+            local betterEdge = cell.x > selected.x
+            local betterSlot = cell.x == selected.x
+                and ((entrySlotId == "bottom" and cell.y > selected.y) or (entrySlotId ~= "bottom" and cell.y < selected.y))
+            if betterEdge or betterSlot then
+                selected = cell
+            end
+        elseif exitDirection == "west" then
+            local betterEdge = cell.x < selected.x
+            local betterSlot = cell.x == selected.x
+                and ((entrySlotId == "bottom" and cell.y > selected.y) or (entrySlotId ~= "bottom" and cell.y < selected.y))
+            if betterEdge or betterSlot then
+                selected = cell
+            end
+        elseif exitDirection == "south" then
+            local betterEdge = cell.y > selected.y
+            local betterSlot = cell.y == selected.y
+                and ((entrySlotId == "right" and cell.x > selected.x) or (entrySlotId ~= "right" and cell.x < selected.x))
+            if betterEdge or betterSlot then
+                selected = cell
+            end
+        elseif exitDirection == "north" then
+            local betterEdge = cell.y < selected.y
+            local betterSlot = cell.y == selected.y
+                and ((entrySlotId == "right" and cell.x > selected.x) or (entrySlotId ~= "right" and cell.x < selected.x))
+            if betterEdge or betterSlot then
+                selected = cell
+            end
+        end
+    end
+
+    return selected
+end
+
+local function addOppositeExitFromLargeRoom(room, generateConfig, generatedRooms, roomIds, occupiedCells)
+    local entryDirection = getOnlyConnectionDirection(room)
+    if not entryDirection then
+        return false
+    end
+
+    local exitDirection = directions[entryDirection].opposite
+    if room.neighbors[exitDirection] then
+        return false
+    end
+
+    local exitCell = getEdgeCellForExit(room, exitDirection, entryDirection)
+    local directionConfig = directions[exitDirection]
+    local x = exitCell.x + directionConfig.dx
+    local y = exitCell.y + directionConfig.dy
+    local targetRoom = occupiedCells[getRoomId(x, y)]
+
+    if targetRoom and targetRoom ~= room and canAddConnectionToRoom(targetRoom) then
+        return tryConnectRooms(room, targetRoom, exitDirection, exitCell, {x = x, y = y})
+    end
+
+    if targetRoom then
+        return false
+    end
+
+    local placement = chooseTemplatePlacement(
+        {[directionConfig.opposite] = true},
+        generateConfig,
+        x,
+        y,
+        occupiedCells
+    )
+
+    if not placement then
+        return false
+    end
+
+    local newRoom = createGeneratedRoom(x, y, placement)
+    newRoom.doors[directionConfig.opposite] = true
+    newRoom.doorSlotIds[directionConfig.opposite] = getDoorSlotIdForCell(newRoom, {x = x, y = y}, directionConfig.opposite)
+    newRoom.neighbors[directionConfig.opposite] = room.id
+
+    room.doors[exitDirection] = true
+    room.doorSlotIds[exitDirection] = getDoorSlotIdForCell(room, exitCell, exitDirection)
+    if isRoomStillCompatible(room) then
+        room.neighbors[exitDirection] = newRoom.id
+        newRoom.distanceFromStart = getRoomDistanceFromStart(room) + 1
+        appendGeneratedRoom(generatedRooms, roomIds, occupiedCells, newRoom)
+        return true
+    end
+
+    room.doors[exitDirection] = nil
+    room.doorSlotIds[exitDirection] = nil
+    return false
+end
+
+local function addOppositeExitsForLargeRooms(generateConfig, generatedRooms, roomIds, occupiedCells)
+    if generateConfig.largeRoomOppositeExit == false then
+        return
+    end
+
+    local snapshot = {}
+    for _, room in ipairs(generatedRooms) do
+        snapshot[#snapshot + 1] = room
+    end
+    for _, room in ipairs(snapshot) do
+        if isLargeGeneratedRoom(room) and getOnlyConnectionDirection(room) then
+            addOppositeExitFromLargeRoom(room, generateConfig, generatedRooms, roomIds, occupiedCells)
+        end
+    end
 end
 
 appendGeneratedRoom = function(generatedRooms, roomIds, occupiedCells, roomConfig)
@@ -492,6 +816,8 @@ end
 local function createGraphRooms(generateConfig)
     local roomCount = generateConfig.roomCount or 8
     local extraConnectionChance = generateConfig.extraConnectionChance or 0
+    local hasMandatoryShop = generateConfig.shopRoomTemplateId ~= nil
+    local normalRoomCount = hasMandatoryShop and math.max(1, roomCount - 1) or roomCount
     local generatedRooms = {}
     local roomIds = {}
     local occupiedCells = {}
@@ -499,11 +825,11 @@ local function createGraphRooms(generateConfig)
     local startPlacement = chooseTemplatePlacement({}, getStartGenerateConfig(generateConfig), 0, 0, occupiedCells)
     assert(startPlacement, "No room template can be placed at the start room")
     local startRoom = createGeneratedRoom(0, 0, startPlacement)
+    startRoom.distanceFromStart = 0
     appendGeneratedRoom(generatedRooms, roomIds, occupiedCells, startRoom)
-    createShopRoomNearStart(startRoom, generateConfig, generatedRooms, roomIds, occupiedCells)
 
     local attempts = 0
-    while #generatedRooms < roomCount and attempts < roomCount * 80 do
+    while #generatedRooms < normalRoomCount and attempts < roomCount * 80 do
         attempts = attempts + 1
 
         local expandableRooms = getExpandableRooms(generatedRooms)
@@ -543,6 +869,7 @@ local function createGraphRooms(generateConfig)
                     sourceRoom.doorSlotIds[direction] = getDoorSlotIdForCell(sourceRoom, sourceCell, direction)
                     if isRoomStillCompatible(sourceRoom) then
                         sourceRoom.neighbors[direction] = room.id
+                        room.distanceFromStart = getRoomDistanceFromStart(sourceRoom) + 1
                         appendGeneratedRoom(generatedRooms, roomIds, occupiedCells, room)
                     else
                         sourceRoom.doors[direction] = nil
@@ -559,8 +886,21 @@ local function createGraphRooms(generateConfig)
         end
     end
 
+    if hasMandatoryShop then
+        addOppositeExitsForLargeRooms(generateConfig, generatedRooms, roomIds, occupiedCells)
+        createShopRoomAtDistance(startRoom, generateConfig, generatedRooms, roomIds, occupiedCells)
+    end
+
+    if not hasMandatoryShop then
+        addOppositeExitsForLargeRooms(generateConfig, generatedRooms, roomIds, occupiedCells)
+    end
+
+    createCardRooms(generateConfig, generatedRooms, roomIds, occupiedCells)
+
     for _, room in ipairs(generatedRooms) do
-        local canAddExtraConnections = not (room.pathEnd and getRoomConnectionCount(room) <= 1)
+        local canAddExtraConnections = not room.isShopRoom
+            and not room.isCardRoom
+            and not (room.pathEnd and getRoomConnectionCount(room) <= 1)
 
         if canAddExtraConnections then
             for _, direction in ipairs(directionOrder) do
@@ -767,6 +1107,17 @@ function FloorManager:resolveCurrentRoomShopProducts()
     state.shopResolved = true
     state.shopProduct = nil
     state.shopProducts = {}
+
+    if room and room.isCardRoom then
+        local cardProductId = shopConfig and shopConfig.cardProductId or "card_upgrade"
+        local doubleChance = shopConfig and shopConfig.cardRoomDoubleShopChance or 0.10
+        local count = math.random() < doubleChance and 2 or 1
+        for _ = 1, count do
+            state.shopProducts[#state.shopProducts + 1] = cardProductId
+        end
+        state.shopProduct = cardProductId
+        return state.shopProducts
+    end
 
     if not (shopConfig and shopConfig.enabled and room and room.isShopRoom) then
         return state.shopProducts

@@ -35,6 +35,33 @@ function TileSet:createTileSet()
     self.tileSet[15] = love.graphics.newQuad(64, 32, self.tileSize, self.tileSize, self.sheetWidth, self.sheetHeight) --variacao grama
 
     self.tileSet[18] = love.graphics.newQuad(48, 64, self.tileSize, self.tileSize*2, self.sheetWidth, self.sheetHeight) --varia caixa
+    self.tileSet[19] = love.graphics.newQuad(144, 0, self.tileSize, self.tileSize, self.sheetWidth, self.sheetHeight) --caminho chao
+    self.tileSet[20] = love.graphics.newQuad(160, 0, self.tileSize, self.tileSize, self.sheetWidth, self.sheetHeight) --caminho chao
+    self.tileSet[21] = love.graphics.newQuad(144, 16, self.tileSize, self.tileSize, self.sheetWidth, self.sheetHeight) --caminho chao
+    self.tileSet[22] = love.graphics.newQuad(160, 16, self.tileSize, self.tileSize, self.sheetWidth, self.sheetHeight) --caminho chao
+
+    for x = 0, 2 do
+        self.tileSet[31 + x] = love.graphics.newQuad(80 + x * self.tileSize, 64, self.tileSize, self.tileSize, self.sheetWidth, self.sheetHeight)
+        self.tileSet[34 + x] = love.graphics.newQuad(80 + x * self.tileSize, 96, self.tileSize, self.tileSize, self.sheetWidth, self.sheetHeight)
+        self.tileSet[37 + x] = love.graphics.newQuad(80 + x * self.tileSize, 112, self.tileSize, self.tileSize, self.sheetWidth, self.sheetHeight)
+    end
+
+    self.tileSet[40] = love.graphics.newQuad(144, 64, self.tileSize, self.tileSize, self.sheetWidth, self.sheetHeight) --quina interna parede
+    self.tileSet[41] = love.graphics.newQuad(160, 64, self.tileSize, self.tileSize, self.sheetWidth, self.sheetHeight) --quina interna parede
+    self.tileSet[42] = love.graphics.newQuad(144, 80, self.tileSize, self.tileSize, self.sheetWidth, self.sheetHeight) --quina interna parede
+    self.tileSet[43] = love.graphics.newQuad(160, 80, self.tileSize, self.tileSize, self.sheetWidth, self.sheetHeight) --quina interna parede
+
+    for x = 0, 2 do
+        self.tileSet[44 + x] = love.graphics.newQuad(208 + x * self.tileSize, 0, self.tileSize, self.tileSize, self.sheetWidth, self.sheetHeight)
+        self.tileSet[47 + x] = love.graphics.newQuad(208 + x * self.tileSize, 32, self.tileSize, self.tileSize, self.sheetWidth, self.sheetHeight)
+        self.tileSet[50 + x] = love.graphics.newQuad(208 + x * self.tileSize, 48, self.tileSize, self.tileSize, self.sheetWidth, self.sheetHeight)
+    end
+
+    self.tileSet[53] = love.graphics.newQuad(256, 0, self.tileSize, self.tileSize, self.sheetWidth, self.sheetHeight) --quina interna parede pedra
+    self.tileSet[54] = love.graphics.newQuad(272, 0, self.tileSize, self.tileSize, self.sheetWidth, self.sheetHeight) --quina interna parede pedra
+    self.tileSet[55] = love.graphics.newQuad(256, 16, self.tileSize, self.tileSize, self.sheetWidth, self.sheetHeight) --quina interna parede pedra
+    self.tileSet[56] = love.graphics.newQuad(272, 16, self.tileSize, self.tileSize, self.sheetWidth, self.sheetHeight) --quina interna parede pedra
+
 end
 
 function TileSet:getTileSet()

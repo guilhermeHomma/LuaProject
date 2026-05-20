@@ -2,9 +2,10 @@ local Life = require("scripts/drops/life")
 local Coin = setmetatable({}, {__index = Life})
 
 Coin.__index = Coin
+Coin.disableSpawnCollisionPush = true
 
-local Ball = require("scripts/particles/ballParticle")
 local DropShine = require("scripts/drops/dropShine")
+local PickupNumber = require("scripts/effects/damageNumber")
 
 
 local sheetImage = love.graphics.newImage("assets/sprites/objects/coin.png")
@@ -50,19 +51,7 @@ function Coin:onCatch()
     coinSound:play()
 
 
-    for i = 1, 2 do
-        local angle = math.random() * 2 * math.pi
-
-        local dx = math.cos(angle) / 2
-        local dy = math.sin(angle) / 2
-        
-        local lifetime = math.random(20, 30) / 100
-        local size = math.random(5, 6) / 10
-        local particle = Ball:new(self.x, self.y, self.height,dx, dy, lifetime, size )
-        table.insert(Game.particles, particle)
-        local particle = Ball:new(self.x, self.y, self.height,-dx, -dy, lifetime, size )
-        table.insert(Game.particles, particle)
-    end
+    PickupNumber.spawnPickup(self.x, self.y, self.height, "+5", "coin")
 end
 
 
@@ -91,7 +80,12 @@ function Coin:draw()
 
     love.graphics.setColor(1, 1, 1, alpha)
     local scaleX, scaleY = self:getDrawScale()
-    DropShine.draw(sheetImage, self.sprite, self.x, self.y - self.height, 0, scaleX, scaleY, 4, 8)
+    local drawY = self.y - self.height
+    if self.isCollecting then
+        local baseScaleY = self.drawScaleY or 1.25
+        drawY = drawY + 4 * (baseScaleY - scaleY)
+    end
+    DropShine.draw(sheetImage, self.sprite, self.x, drawY, 0, scaleX, scaleY, 4, 8)
     love.graphics.setColor(1, 1, 1, 1)
 
 end

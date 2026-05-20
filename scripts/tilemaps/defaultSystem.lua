@@ -13,6 +13,7 @@ local tileSize = 16
 local tilemap = nil
 local tilemapWorldX = -40 * tileSize
 local tilemapWorldY = -40 * tileSize
+local wallVariantLookup = {}
 
 require "scripts.utils"
 require "scripts.objects.tile"
@@ -27,6 +28,7 @@ require "scripts.objects.pole"
 require "scripts.objects.counter"
 require "scripts.objects.container"
 local Chest = require("scripts.objects.chest")
+local FloorPath = require("scripts.objects.floorPath")
 
 tileSet = require("scripts.objects.tileset")
 
@@ -57,6 +59,10 @@ local TILE_CHEST_MARKER = 6
 
 local function isWalkableTile(tile)
     return tile == TILE_FLOOR or tile == TILE_DOOR_BACK
+end
+
+local function canDrawFloorPathOnTile(tile)
+    return isWalkableTile(tile) or tile == TILE_DOOR
 end
 
 local function isWalkableMapPosition(x, y)
@@ -215,11 +221,12 @@ local function applyRoomShopState()
 
     if isWeaponTestLevel() and isStartRoom(room) then
         local testStores = {
-            {x = 12, y = 14, product = "shotgun"},
+            {x = 12, y = 13, product = "shotgun"},
             {x = 14, y = 13, product = "raygun"},
-            {x = 18, y = 13, product = "squaregun"},
-            {x = 22, y = 14, product = "longshot"},
-            {x = 20, y = 13, product = "cakegun"},
+            {x = 19, y = 13, product = "squaregun"},
+            {x = 23, y = 13, product = "longshot"},
+            {x = 21, y = 13, product = "cakegun"},
+            {x = 15, y = 15, product = "card_upgrade"},
         }
 
         if state then
@@ -227,7 +234,7 @@ local function applyRoomShopState()
         end
 
         for _, store in ipairs(testStores) do
-            if tilemap[store.y] and tilemap[store.y][store.x] == TILE_FLOOR then
+            if tilemap[store.y] and (tilemap[store.y][store.x] == TILE_FLOOR or tilemap[store.y][store.x] == 2) then
                 tilemap[store.y][store.x] = TILE_STORE
                 if state then
                     state.weaponTestShopProducts[getTileKey(store.x, store.y)] = store.product
@@ -547,6 +554,37 @@ local function shouldKeepOptionalObject(objectId, x, y)
 end
 
 local function chooseChestType(x, y)
+    local room = FloorManager:getCurrentRoom()
+    if room and room.isCardRoom then
+        local state = FloorManager:getCurrentRoomState()
+        if not state then
+            return "card"
+        end
+
+        state.cardChestTiles = state.cardChestTiles or {}
+        if not state.cardChestResolved then
+            state.cardChestResolved = true
+            local chestMarkers = {}
+            for markerY = 1, #tilemap do
+                for markerX = 1, #tilemap[markerY] do
+                    if tilemap[markerY][markerX] == TILE_CHEST_MARKER then
+                        chestMarkers[#chestMarkers + 1] = {x = markerX, y = markerY}
+                    end
+                end
+            end
+
+            local shopConfig = CURRENT_LEVEL and CURRENT_LEVEL.shopConfig or {}
+            local chestCount = math.random() < (shopConfig.cardChestSecondChance or 0.10) and 2 or 1
+            for _ = 1, math.min(chestCount, #chestMarkers) do
+                local selectedIndex = math.random(1, #chestMarkers)
+                local selected = table.remove(chestMarkers, selectedIndex)
+                state.cardChestTiles[getTileKey(selected.x, selected.y)] = true
+            end
+        end
+
+        return state.cardChestTiles[getTileKey(x, y)] and "card" or nil
+    end
+
     if not shouldKeepOptionalObject("chest", x, y) then
         return nil
     end
@@ -565,6 +603,11 @@ local function applyOptionalObjectSpawnChances()
                 local chestType = chooseChestType(x, y)
                 if chestType then
                     tilemap[y][x] = TILE_CHEST
+                    local state = FloorManager:getCurrentRoomState()
+                    if state then
+                        state.chestTypes = state.chestTypes or {}
+                        state.chestTypes[getTileKey(x, y)] = chestType
+                    end
                 else
                     tilemap[y][x] = TILE_FLOOR
                 end
@@ -613,13 +656,6 @@ local function shouldCreateDecorativeBigGrass(tile, collider, x, y, occupied)
     return tile == 1 and not collider and hasTreeNearby(x, y) and not occupied[getTileKey(x, y)] and math.random() < 0.05
 end
 
-local function appendGrassVariants(grassList, worldX, worldY, tile)
-    grassList[#grassList + 1] = Grass:new(worldX, worldY - 5, tile)
-    if math.random() > 0.3 then
-        grassList[#grassList + 1] = Grass:new(worldX + 1, worldY + 2, tile)
-    end
-end
-
 local function canCreateBigGrassAt(x, y, occupied)
     if not tilemap[y] or not tilemap[y][x] or occupied[getTileKey(x, y)] then
         return false
@@ -643,6 +679,76 @@ local function canCreateDecorativeBigGrassAt(x, y, occupied)
         DefaultTilemap:hasTileClose(x, y, 2) or
         DefaultTilemap:hasTileClose(x, y, 11)
     )
+end
+
+local function randomGrassIndex(tile)
+    if tile == 1 then
+        if math.random() < 0.1 then return 1 end
+        if math.random() < 0.6 then return 3 end
+        if math.random() < 0.04 then return 2 end
+        return 4
+    end
+
+    if math.random() < 0.8 then return 1 end
+    if math.random() < 0.4 then return 3 end
+    if math.random() < 0.05 then return 2 end
+    return 4
+end
+
+local function appendGrassState(entries, x, y, worldX, worldY, tile)
+    entries[#entries + 1] = {
+        x = x,
+        y = y,
+        offsetX = 0,
+        offsetY = -5,
+        tile = tile,
+        index = randomGrassIndex(tile),
+    }
+    if math.random() > 0.3 then
+        entries[#entries + 1] = {
+            x = x,
+            y = y,
+            offsetX = 1,
+            offsetY = 2,
+            tile = tile,
+            index = randomGrassIndex(tile),
+        }
+    end
+end
+
+local function randomBigGrassBlades()
+    local blades = {}
+    local bladeCount = math.random(1, 3)
+    local ySlots = {0}
+    if bladeCount == 2 then
+        ySlots = {-2, 2}
+    elseif bladeCount == 3 then
+        ySlots = {-4, 0, 4}
+    end
+
+    for i = 1, bladeCount do
+        local direction = math.random() > 0.5 and 1 or -1
+        blades[i] = {
+            x = direction * math.random(0, 2),
+            y = ySlots[i],
+            flipH = math.random() > 0.5,
+            directionOffset = (math.random() - 0.5) * 0.25,
+        }
+    end
+
+    return blades
+end
+
+local function appendBigGrassState(entries, x, y, options)
+    entries[#entries + 1] = {
+        x = x,
+        y = y,
+        options = mergeTables(options or {}, {
+            phase = math.random() * math.pi * 2,
+            drawPriority = math.random() * 0.1,
+            blades = randomBigGrassBlades(),
+        }),
+    }
 end
 
 local function appendBigGrassCluster(bigGrassList, startX, startY, occupied, canCreate, options, minCount, maxCount)
@@ -670,10 +776,358 @@ local function appendBigGrassCluster(bigGrassList, startX, startY, occupied, can
             occupied[getTileKey(x, y)] = true
             created = created + 1
 
-            local worldX, worldY = DefaultTilemap:mapToWorld(x, y)
-            bigGrassList[#bigGrassList + 1] = BigGrass:new(worldX, worldY, options)
+            appendBigGrassState(bigGrassList, x, y, options)
         end
     end
+end
+
+local function buildFloorPathState()
+    local room = FloorManager:getCurrentRoom()
+    local state = room and room.state
+    local floorPathVersion = 4
+    if not state then
+        return {}
+    end
+
+    if state.floorPathTiles and state.floorPathVersion == floorPathVersion then
+        return state.floorPathTiles
+    end
+
+    state.floorPathTiles = {}
+    state.floorPathVersion = floorPathVersion
+    local config = (CURRENT_LEVEL and CURRENT_LEVEL.floorPathTiles) or {}
+    local pathChance = config.pathChance or 0.78
+    local bendChance = config.bendChance or 0.32
+    local sideTileChance = config.sideTileChance or 0.28
+    local branchChance = config.branchChance or 0.18
+    local branchMin = config.branchMin or 2
+    local branchMax = config.branchMax or 5
+    local looseChance = config.looseChance or 0.006
+    local used = {}
+
+    local function addPathTile(x, y)
+        local key = getTileKey(x, y)
+        if used[key] or not (tilemap[y] and canDrawFloorPathOnTile(tilemap[y][x])) then
+            return false
+        end
+
+        used[key] = true
+        state.floorPathTiles[#state.floorPathTiles + 1] = {
+            x = x,
+            y = y,
+            quadIndex = math.random(19, 22),
+        }
+        return true
+    end
+
+    local function getRoomCenterTile()
+        local totalX, totalY, count = 0, 0, 0
+
+        for y = 1, #tilemap do
+            for x = 1, #tilemap[y] do
+                if tilemap[y][x] == TILE_FLOOR then
+                    totalX = totalX + x
+                    totalY = totalY + y
+                    count = count + 1
+                end
+            end
+        end
+
+        if count == 0 then
+            return math.floor(#tilemap[1] / 2), math.floor(#tilemap / 2)
+        end
+
+        return math.floor(totalX / count + 0.5), math.floor(totalY / count + 0.5)
+    end
+
+    local function getDoorPathPoints()
+        local points = {}
+
+        for direction, enabled in pairs(room.doors or {}) do
+            if enabled then
+                local slot = RoomBuilder:getDoorSlot(room, direction)
+                local spawn = slot and slot.playerSpawn
+                if spawn then
+                    local x, y = RoomBuilder:toMapPosition(spawn)
+                    points[#points + 1] = {
+                        x = math.floor(x + 0.5),
+                        y = math.floor(y + 0.5),
+                        direction = direction,
+                    }
+                end
+
+                for _, position in ipairs(slot.backTiles or {}) do
+                    local backX, backY = RoomBuilder:toMapPosition(position)
+                    addPathTile(backX, backY)
+                end
+            end
+        end
+
+        return points
+    end
+
+    local function addLooseSideTile(x, y, previousX, previousY)
+        if math.random() >= sideTileChance then
+            return
+        end
+
+        local dx = x - previousX
+        local dy = y - previousY
+        local sideX, sideY
+
+        if math.abs(dx) > math.abs(dy) then
+            sideX = x
+            sideY = y + (math.random(0, 1) == 0 and -1 or 1)
+        else
+            sideX = x + (math.random(0, 1) == 0 and -1 or 1)
+            sideY = y
+        end
+
+        addPathTile(sideX, sideY)
+    end
+
+    local function addBranch(x, y, previousX, previousY)
+        if math.random() >= branchChance then
+            return
+        end
+
+        local dx = x - previousX
+        local dy = y - previousY
+        local branchX = x
+        local branchY = y
+        local branchDx, branchDy
+
+        if math.abs(dx) > math.abs(dy) then
+            branchDx = 0
+            branchDy = math.random(0, 1) == 0 and -1 or 1
+        else
+            branchDx = math.random(0, 1) == 0 and -1 or 1
+            branchDy = 0
+        end
+
+        for _ = 1, math.random(branchMin, branchMax) do
+            branchX = branchX + branchDx
+            branchY = branchY + branchDy
+            if math.random() < pathChance then
+                addPathTile(branchX, branchY)
+            end
+        end
+    end
+
+    local function carvePath(startX, startY, targetX, targetY)
+        local x = startX
+        local y = startY
+        local safety = (#tilemap + #(tilemap[1] or {})) * 3
+
+        if math.random() < pathChance then
+            addPathTile(x, y)
+        end
+
+        while (x ~= targetX or y ~= targetY) and safety > 0 do
+            safety = safety - 1
+            local previousX = x
+            local previousY = y
+            local moveX = x ~= targetX
+            local moveY = y ~= targetY
+
+            if moveX and moveY then
+                moveX = math.random() < 0.5
+                moveY = not moveX
+            end
+
+            if math.random() < bendChance then
+                if not moveX and x ~= targetX then
+                    moveX = true
+                    moveY = false
+                elseif not moveY and y ~= targetY then
+                    moveX = false
+                    moveY = true
+                end
+            end
+
+            if moveX then
+                x = x + (targetX > x and 1 or -1)
+            elseif moveY then
+                y = y + (targetY > y and 1 or -1)
+            end
+
+            if math.random() < pathChance then
+                addPathTile(x, y)
+            end
+
+            addLooseSideTile(x, y, previousX, previousY)
+            addBranch(x, y, previousX, previousY)
+        end
+    end
+
+    local centerX, centerY = getRoomCenterTile()
+    local doorPoints = getDoorPathPoints()
+
+    if #doorPoints > 0 then
+        for _, point in ipairs(doorPoints) do
+            carvePath(point.x, point.y, centerX, centerY)
+        end
+    end
+
+    for y = 1, #tilemap do
+        for x = 1, #tilemap[y] do
+            if isWalkableTile(tilemap[y][x]) and math.random() < looseChance then
+                addPathTile(x, y)
+            end
+        end
+    end
+
+    return state.floorPathTiles
+end
+
+local wallVariantByBaseIndex = {
+    [1] = 31,
+    [2] = 32,
+    [3] = 33,
+    [4] = 34,
+    [5] = 35,
+    [6] = 36,
+    [7] = 37,
+    [8] = 38,
+    [9] = 39,
+    [10] = 40,
+    [11] = 41,
+    [12] = 42,
+    [13] = 43,
+}
+
+local specialWallByBaseIndex = {
+    [1] = 44,
+    [2] = 45,
+    [3] = 46,
+    [4] = 47,
+    [5] = 48,
+    [6] = 49,
+    [7] = 50,
+    [8] = 51,
+    [9] = 52,
+    [10] = 53,
+    [11] = 54,
+    [12] = 55,
+    [13] = 56,
+}
+
+local function isSpecialWallNeighborTile(x, y)
+    local tile = tilemap[y] and tilemap[y][x]
+    if tile == TILE_FLOOR
+        or tile == TILE_DOOR_BACK
+        or tile == TILE_DOOR
+        or tile == 2 then
+        return true
+    end
+
+    local state = FloorManager:getCurrentRoomState()
+    for _, pathTile in ipairs((state and state.floorPathTiles) or {}) do
+        if pathTile.x == x and pathTile.y == y then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function shouldUseSpecialWallTile(x, y)
+    for offsetY = -1, 1 do
+        for offsetX = -1, 1 do
+            if (offsetX ~= 0 or offsetY ~= 0)
+                and isSpecialWallNeighborTile(x + offsetX, y + offsetY) then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+local function buildWallVariantState()
+    local room = FloorManager:getCurrentRoom()
+    local state = room and room.state
+    local wallVariantVersion = 2
+    if not state then
+        return {}
+    end
+
+    if state.wallVariantTiles and state.wallVariantVersion == wallVariantVersion then
+        return state.wallVariantTiles
+    end
+
+    state.wallVariantTiles = {}
+    state.wallVariantVersion = wallVariantVersion
+
+    local config = (CURRENT_LEVEL and CURRENT_LEVEL.wallVariantTiles) or {}
+    local coverage = config.coverage or config.chance or 0.18
+    local noise = config.noise or 0.12
+    local patchMin = config.patchMin or 8
+    local patchMax = config.patchMax or 22
+    local branchChance = config.branchChance or 0.72
+    local maxAttempts = config.maxAttempts or 80
+    local used = {}
+    local wallTiles = {}
+
+    local function isWallTile(x, y)
+        return tilemap[y] and tilemap[y][x] == 1
+    end
+
+    for y = 1, #tilemap do
+        for x = 1, #tilemap[y] do
+            if tilemap[y][x] == 1 then
+                wallTiles[#wallTiles + 1] = {x = x, y = y}
+            end
+        end
+    end
+
+    local targetCount = math.floor(#wallTiles * coverage + 0.5)
+    local created = 0
+    local attempts = 0
+
+    while created < targetCount and attempts < maxAttempts and #wallTiles > 0 do
+        attempts = attempts + 1
+        local start = wallTiles[math.random(1, #wallTiles)]
+        local queue = {{x = start.x, y = start.y}}
+        local patchTarget = math.random(patchMin, patchMax)
+        local patchCreated = 0
+
+        while #queue > 0 and patchCreated < patchTarget and created < targetCount do
+            local current = table.remove(queue, math.random(1, #queue))
+            local key = getTileKey(current.x, current.y)
+
+            if isWallTile(current.x, current.y) and not used[key] then
+                used[key] = true
+                state.wallVariantTiles[key] = true
+                patchCreated = patchCreated + 1
+                created = created + 1
+
+                local neighbors = {
+                    {x = current.x + 1, y = current.y},
+                    {x = current.x - 1, y = current.y},
+                    {x = current.x, y = current.y + 1},
+                    {x = current.x, y = current.y - 1},
+                }
+
+                for _, neighbor in ipairs(neighbors) do
+                    if math.random() < branchChance
+                        and isWallTile(neighbor.x, neighbor.y)
+                        and not used[getTileKey(neighbor.x, neighbor.y)] then
+                        queue[#queue + 1] = neighbor
+                    end
+                end
+            end
+        end
+    end
+
+    for _, wall in ipairs(wallTiles) do
+        local key = getTileKey(wall.x, wall.y)
+        if not used[key] and math.random() < noise then
+            state.wallVariantTiles[key] = true
+        end
+    end
+
+    return state.wallVariantTiles
 end
 
 function DefaultTilemap:getTilemap()
@@ -795,15 +1249,20 @@ function DefaultTilemap:getNearbyTiles(worldX, worldY)
             for x = mapX - 1, mapX + 1 do
                 if tilemap[y][x] then
                     local xWorld, yWorld = self:mapToWorld(x, y)
-                    tiles[#tiles + 1] = {
-                        mapX = x,
-                        mapY = y,
-                        collider = not isWalkableMapPosition(x, y),
-                        tileIndex = tilemap[y][x],
-                        xWorld = xWorld,
-                        yWorld = yWorld,
-                        size = tileSize,
-                    }
+                    local tile = self.tileLookup and self.tileLookup[getTileKey(x, y)]
+                    if tile then
+                        tiles[#tiles + 1] = tile
+                    else
+                        tiles[#tiles + 1] = {
+                            mapX = x,
+                            mapY = y,
+                            collider = not isWalkableMapPosition(x, y),
+                            tileIndex = tilemap[y][x],
+                            xWorld = xWorld,
+                            yWorld = yWorld,
+                            size = tileSize,
+                        }
+                    end
                 end
             end
         end
@@ -873,9 +1332,18 @@ function DefaultTilemap:loadfinders()
     self.finderAstar:setMode("ORTHOGONAL")
 end
 
+local function isSpecialStoneWallRoom(room)
+    return room and (room.isShopRoom or room.isCardRoom or room.templateId == "store_32x32" or room.templateId == "cards_32x32")
+end
+
 function DefaultTilemap:createTile(x, y, tile, collider)
     if tile == TILE_CHEST then
-        return Chest:new(x, y)
+        local state = FloorManager:getCurrentRoomState()
+        local chestType = state and state.chestTypes and state.chestTypes[getTileKey(x, y)]
+        if not chestType and FloorManager:getCurrentRoom() and FloorManager:getCurrentRoom().isCardRoom then
+            chestType = "card"
+        end
+        return Chest:new(x, y, chestType)
     end
 
     if tile == TILE_DOOR then
@@ -935,8 +1403,15 @@ function DefaultTilemap:createTile(x, y, tile, collider)
         local index = 5
         if tile == 1 then
             index = autoTile(x, y, tilemap)
+            if isSpecialStoneWallRoom(FloorManager:getCurrentRoom()) and shouldUseSpecialWallTile(x, y) then
+                index = specialWallByBaseIndex[index] or index
+            end
         elseif tile == 2 then
             index = 14
+        end
+
+        if tile == 1 and not isSpecialStoneWallRoom(FloorManager:getCurrentRoom()) and wallVariantLookup[getTileKey(x, y)] then
+            index = wallVariantByBaseIndex[index] or index
         end
 
         if index == 5 and math.random(10) == 1 then
@@ -1072,7 +1547,11 @@ function DefaultTilemap:load()
 
     self.grass = {}
     self.bigGrass = {}
+    self.floorPaths = {}
     self.tiles = {}
+    self.tileLookup = {}
+    self.doorTiles = {}
+    self.groundOccluderTiles = {}
     self.spawnPositions = {}
     self.moonbeams = {}
     self.ambientDust = nil
@@ -1080,6 +1559,26 @@ function DefaultTilemap:load()
     local trees = {}
     local specialMoonbeamTargets = {}
     local walkablePositions = {}
+    local floorPathEntries = buildFloorPathState()
+    wallVariantLookup = buildWallVariantState()
+    local roomState = FloorManager:getCurrentRoomState()
+    local generatingGrassState = roomState and roomState.grassTiles == nil
+    local grassState = roomState and roomState.grassTiles or {}
+    local bigGrassState = roomState and roomState.bigGrassTiles or {}
+
+    if generatingGrassState then
+        grassState = {}
+        bigGrassState = {}
+        roomState.grassTiles = grassState
+        roomState.bigGrassTiles = bigGrassState
+    end
+
+    for _, entry in ipairs(floorPathEntries) do
+        if tilemap[entry.y] and canDrawFloorPathOnTile(tilemap[entry.y][entry.x]) then
+            local worldX, worldY = self:mapToWorld(entry.x, entry.y)
+            self.floorPaths[#self.floorPaths + 1] = FloorPath:new(worldX, worldY, entry.quadIndex)
+        end
+    end
 
     for y = 1, #tilemap do
         for x = 1, #tilemap[y] do
@@ -1110,25 +1609,53 @@ function DefaultTilemap:load()
                 walkablePositions[#walkablePositions + 1] = walkablePosition
             end
 
-            if shouldCreateGrass(tile, collider) then
-                appendGrassVariants(self.grass, worldX, worldY, tile)
-            end
+            if generatingGrassState then
+                if shouldCreateGrass(tile, collider) then
+                    appendGrassState(grassState, x, y, worldX, worldY, tile)
+                end
 
-            if shouldCreateBigGrass(tile, collider, x, y, bigGrassOccupied) then
-                appendBigGrassCluster(self.bigGrass, x, y, bigGrassOccupied, canCreateBigGrassAt, {yOffset = 0, ySortOffset = 2, interactive = true}, 2, 4)
-            end
+                if shouldCreateBigGrass(tile, collider, x, y, bigGrassOccupied) then
+                    appendBigGrassCluster(bigGrassState, x, y, bigGrassOccupied, canCreateBigGrassAt, {yOffset = 0, ySortOffset = 2, interactive = true}, 2, 4)
+                end
 
-            if shouldCreateDecorativeBigGrass(tile, collider, x, y, bigGrassOccupied) then
-                appendBigGrassCluster(self.bigGrass, x, y, bigGrassOccupied, canCreateDecorativeBigGrassAt, {yOffset = 16, interactive = false})
+                if shouldCreateDecorativeBigGrass(tile, collider, x, y, bigGrassOccupied) then
+                    appendBigGrassCluster(bigGrassState, x, y, bigGrassOccupied, canCreateDecorativeBigGrassAt, {yOffset = 16, interactive = false})
+                end
             end
 
             local createdTile = self:createTile(x, y, tile, collider)
             if createdTile then
                 self.tiles[#self.tiles + 1] = createdTile
+                self.tileLookup[getTileKey(x, y)] = createdTile
+                if createdTile.collider and not createdTile.isWater then
+                    self.groundOccluderTiles[#self.groundOccluderTiles + 1] = createdTile
+                end
+                if createdTile.openDoor and createdTile.closeDoor then
+                    self.doorTiles[#self.doorTiles + 1] = createdTile
+                end
                 if createdTile.treeIndex then
                     trees[#trees + 1] = createdTile
                 end
             end
+        end
+    end
+
+    for _, entry in ipairs(grassState) do
+        if tilemap[entry.y] and tilemap[entry.y][entry.x] then
+            local worldX, worldY = self:mapToWorld(entry.x, entry.y)
+            self.grass[#self.grass + 1] = Grass:new(
+                worldX + (entry.offsetX or 0),
+                worldY + (entry.offsetY or 0),
+                entry.tile,
+                {index = entry.index}
+            )
+        end
+    end
+
+    for _, entry in ipairs(bigGrassState) do
+        if tilemap[entry.y] and tilemap[entry.y][entry.x] then
+            local worldX, worldY = self:mapToWorld(entry.x, entry.y)
+            self.bigGrass[#self.bigGrass + 1] = BigGrass:new(worldX, worldY, entry.options)
         end
     end
 
@@ -1205,26 +1732,62 @@ function DefaultTilemap:getRandomReachableSpawnPosition(reference, minDistance)
     return nil, nil
 end
 
+local function isObjectNearCamera(object, margin)
+    if not camera then
+        return true
+    end
+
+    local x = object and (object.xWorld or object.x)
+    local y = object and (object.yWorld or object.y)
+    if not (x and y) then
+        return true
+    end
+
+    margin = margin or 160
+    local screenX = (x * WORLD_SCALE_X - camera.x) * camera.zoomX
+    local screenY = (y * YSCALE - camera.y) * camera.zoomY
+
+    return screenX >= -margin
+        and screenX <= baseWidth + margin
+        and screenY >= -margin
+        and screenY <= baseHeight + margin
+end
+
 function DefaultTilemap:update(dt)
     if self.ambientDust then
         self.ambientDust:update(dt)
     end
 
     for _, beam in ipairs(self.moonbeams or {}) do
-        beam:update(dt)
+        if isObjectNearCamera(beam, 240) then
+            beam:update(dt)
+        end
     end
 
     for _, g in ipairs(self.bigGrass) do
-        g:update(dt)
+        if isObjectNearCamera(g, 220) then
+            g:update(dt)
+        end
     end
 
     for _, g in ipairs(self.grass) do
-        g:update(dt)
+        if isObjectNearCamera(g, 170) then
+            g:update(dt)
+        end
+    end
+
+    for _, path in ipairs(self.floorPaths or {}) do
+        if isObjectNearCamera(path) then
+            path:update(dt)
+        end
     end
 
     for _, tile in ipairs(self.tiles) do
         if tile.isAlive then
-            tile:update(dt)
+            local forceUpdate = tile.isBreaking or (tile.hitFlashTimer and tile.hitFlashTimer > 0)
+            if forceUpdate or isObjectNearCamera(tile, tile.renderCullMargin or 260) then
+                tile:update(dt)
+            end
         end
     end
 end

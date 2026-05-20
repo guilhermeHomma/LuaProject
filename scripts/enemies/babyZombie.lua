@@ -6,6 +6,7 @@ babyZombie.enemyTypeId = "babyZombie"
 
 local damageBase = love.audio.newSource("assets/sfx/enemyDamage.mp3", "static")
 local DamageStretch = require("scripts/effects/damageStretch")
+local BloodPixel = require("scripts/particles/bloodPixel")
 
 local function playClonedSound(baseSource, volume, pitch)
     local sound = baseSource:clone()
@@ -38,6 +39,7 @@ end
 
 function babyZombie:takeDamage(damage, dx, dy)
     self.life = self.life - damage
+    BloodPixel.spawnBurst(self.x, self.y - 2, dx, dy, 4, 6)
 
     if self:canStartDamageAnimation() then
         DamageStretch:start(self)

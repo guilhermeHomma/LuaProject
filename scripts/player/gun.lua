@@ -140,6 +140,8 @@ local function createWeaponSlot(index, weaponConfig, infiniteAmmo)
         infiniteAmmo = infiniteAmmo == true,
         currentMagCapacity = weaponConfig.magCapacity or 0,
         currentMagCount = weaponConfig.magCount or 0,
+        damageBonus = 0,
+        rangeMultiplier = 1,
     }
 end
 
@@ -190,6 +192,8 @@ function Gun:load()
     self.squareAngle = 0
     self.primary_weapon = createWeaponSlot(1, self:getWeaponConfig(1), true)
     self.secondary_weapon = nil
+    self.primaryUpgradeState = { damageBonus = 0, rangeMultiplier = 1 }
+    self.secondaryUpgradeState = { damageBonus = 0, rangeMultiplier = 1 }
     self.selected_slot = 1
     self.current_weapon = self.primary_weapon
     self.gunIndex = self.current_weapon and self.current_weapon.index or 0
@@ -232,13 +236,34 @@ function Gun:load()
     self:emitWeaponEvent("secondary_empty", { slot = 2 })
 end
 
+function Gun:applyUpgradeStateToSlot(slot, state)
+    if not slot or not state then
+        return
+    end
+
+    slot.damageBonus = state.damageBonus or 0
+    slot.rangeMultiplier = state.rangeMultiplier or 1
+end
+
+function Gun:getEffectiveWeaponConfig(slot)
+    slot = slot or self:getSelectedWeaponSlot()
+    if not slot then
+        return nil
+    end
+
+    local config = copyTable(slot.config)
+    config.damage = (config.damage or 0) + (slot.damageBonus or 0)
+    config.rangeMultiplier = slot.rangeMultiplier or 1
+    return config
+end
+
 function Gun:getWeaponConfig(index)
     return self.weaponDefinitions[index or self.gunIndex]
 end
 
 function Gun:getCurrentWeapon()
     self.current_weapon = self:getSelectedWeaponSlot()
-    return self.current_weapon and self.current_weapon.config or nil
+    return self:getEffectiveWeaponConfig(self.current_weapon)
 end
 
 function Gun:getSelectedWeaponSlot()
@@ -511,6 +536,7 @@ function Gun:equipSecondaryWeapon(index)
 
     self:cancelReload()
     self.secondary_weapon = createWeaponSlot(index, weaponConfig, false)
+    self:applyUpgradeStateToSlot(self.secondary_weapon, self.secondaryUpgradeState)
     self.selected_slot = 2
     self.showGun = true
     self.shootTimer = 0.2 - math.random() * 0.1
@@ -525,6 +551,24 @@ function Gun:equipSecondaryWeapon(index)
         currentMagCount = self.currentMagCount,
     })
     return true
+end
+
+function Gun:applyCardUpgrade(upgradeId)
+    if upgradeId == "primary_damage" then
+        self.primaryUpgradeState.damageBonus = (self.primaryUpgradeState.damageBonus or 0) + 2
+        self:applyUpgradeStateToSlot(self.primary_weapon, self.primaryUpgradeState)
+        self:syncCurrentWeaponState()
+        return true
+    elseif upgradeId == "primary_range" then
+        self.primaryUpgradeState.rangeMultiplier = (self.primaryUpgradeState.rangeMultiplier or 1) * 1.1
+        self:applyUpgradeStateToSlot(self.primary_weapon, self.primaryUpgradeState)
+        self:syncCurrentWeaponState()
+        return true
+    elseif upgradeId == "secondary_fill" then
+        return self:fillSecondaryWeaponToMax()
+    end
+
+    return false
 end
 
 function Gun:getSecondaryWeapon()
@@ -625,6 +669,11 @@ end
 
 function Gun:createBullet(spawnX, spawnY, angle, height, weaponConfig, bulletOverrides)
     local bulletConfig = resolveBulletConfig(weaponConfig, bulletOverrides)
+    local rangeMultiplier = weaponConfig.rangeMultiplier or 1
+    local lifeTime = bulletConfig.lifeTime
+    if lifeTime then
+        lifeTime = lifeTime * rangeMultiplier
+    end
     local bulletModule = bulletModules[bulletConfig.module or weaponConfig.bulletModule or "particle"]
     local bullet = bulletModule:new(
         spawnX,
@@ -636,7 +685,7 @@ function Gun:createBullet(spawnX, spawnY, angle, height, weaponConfig, bulletOve
         {
             level = bulletConfig.level,
             radius = bulletConfig.radius or weaponConfig.bulletRadius,
-            lifeTime = bulletConfig.lifeTime,
+            lifeTime = lifeTime,
             trail = bulletConfig.trail or weaponConfig.bulletTrail,
             glow = bulletConfig.glow or weaponConfig.bulletGlow,
             projectileSprite = bulletConfig.projectileSprite or bulletConfig.sprite or weaponConfig.projectileSprite,
@@ -645,7 +694,9 @@ function Gun:createBullet(spawnX, spawnY, angle, height, weaponConfig, bulletOve
             spriteTrailScale = bulletConfig.spriteTrailScale or weaponConfig.spriteTrailScale,
             spriteTrailMaxPerUpdate = bulletConfig.spriteTrailMaxPerUpdate or weaponConfig.spriteTrailMaxPerUpdate,
             impactFlashSprite = bulletConfig.impactFlashSprite or weaponConfig.impactFlashSprite,
-            impactShockwave = bulletConfig.impactShockwave or weaponConfig.impactShockwave
+            impactShockwave = bulletConfig.impactShockwave or weaponConfig.impactShockwave,
+            colorParticles = bulletConfig.colorParticles or weaponConfig.bulletColorParticles,
+            colorParticleCount = bulletConfig.colorParticleCount or weaponConfig.bulletColorParticleCount
         }
     )
 

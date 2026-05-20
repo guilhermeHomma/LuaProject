@@ -2,6 +2,19 @@ local DefaultLevel = {}
 
 local tilemapSystem = require("scripts/tilemaps/defaultSystem")
 local FloorManager = require("scripts/managers/floorManager")
+local RoomConfig = require("scripts/config/defaultRoomConfig")
+
+local function copyTable(source)
+    if type(source) ~= "table" then
+        return source
+    end
+
+    local result = {}
+    for key, value in pairs(source) do
+        result[key] = copyTable(value)
+    end
+    return result
+end
 
 DefaultLevel.id = "default"
 DefaultLevel.name = "map test"
@@ -24,100 +37,9 @@ DefaultLevel.renderDistances = {
     footstepCleanup = 250,
 }
 DefaultLevel.spawnMinDistance = 240
-DefaultLevel.currentFloorIndex = 1
-DefaultLevel.floorLevels = {
-    {
-        id = 1,
-        name = "Floor 1",
-        difficulty = 1,
-        roomCount = {min = 10, max = 14},
-        enemyDropMultiplier = 1,
-        shopProducts = {
-            { id = "squaregun", weight = 5 },
-            { id = "longshot", weight = 4 },
-        },
-    },
-    {
-        id = 2,
-        name = "Floor 2",
-        difficulty = 2,
-        roomCount = {min = 10, max = 14},
-        enemyDropMultiplier = 1.2,
-        shopProducts = {
-            { id = "squaregun", weight = 10 },
-            { id = "longshot", weight = 15 },
-            { id = "cakegun", weight = 35 },
-            { id = "shotgun", weight = 25 },
-            { id = "raygun", weight = 3 },
-        },
-    },
-}
-DefaultLevel.roomEncounterConfig = {
-    enabled = true,
-    startRoom = false,
-    difficulty = 1,
-    spawnMinDistanceTiles = 4,
-    templateOverrides = {
-        basic_32x32 = {
-            emptyChance = 0.20,
-            countMultiplier = 0.75,
-            enemyTypeWeights = {
-                zombie = 8,
-                babyZombie = 3,
-                noHead = 1,
-                bigZombie = 1,
-            },
-            maxPerWave = {
-                noHead = 1,
-            },
-        },
-        wide_48x32 = {
-            countMultiplier = 1.25,
-            countAdd = 1,
-        },
-        tall_32x48 = {
-            countMultiplier = 1.25,
-            countAdd = 1,
-        },
-        large_48x48 = {
-            countMultiplier = 1.75,
-            countAdd = 2,
-            enemyTypeWeights = {
-                zombie = 6,
-                babyZombie = 4,
-                noHead = 5,
-                bigZombie = 3,
-            },
-        },
-    },
-    waves = {
-        {
-            count = {
-                min = 2,
-                max = 5,
-                perDifficulty = 1,
-            },
-            enemyTypes = {
-                { id = "zombie", weight = 7 },
-                { id = "babyZombie", weight = 2 },
-                { id = "noHead", weight = 5 },
-            },
-        },
-        {
-            count = {
-                min = 2,
-                max = 5,
-                perDifficulty = 1,
-            },
-            enemyTypes = {
-                { id = "zombie", weight = 5 },
-                { id = "babyZombie", weight = 3 },
-                { id = "noHead", weight = 4 },
-                { id = "bigZombie", weight = 2, minDifficulty = 2 },
-            },
-        },
-    },
-}
+DefaultLevel.currentFloorIndex = RoomConfig.currentFloorIndex
+DefaultLevel.floorLevels = copyTable(RoomConfig.floorLevels)
+DefaultLevel.roomEncounterConfig = copyTable(RoomConfig.roomEncounterConfig)
 DefaultLevel.window = {
     width = 1280,
     height = 720,
@@ -126,66 +48,12 @@ DefaultLevel.tilemapConfig = {
     mapImage = "assets/sprites/maps/maptest.png",
     centerOrigin = true,
 }
-DefaultLevel.objectSpawnChances = {
-    box = 0.70,
-    chest = 0.50,
-}
-DefaultLevel.objectSpawnChancesByTemplate = {
-    basic_32x32 = {
-        chest = 0.50,
-    },
-    wide_48x32 = {
-        chest = 0.50,
-    },
-    tall_32x48 = {
-        chest = 0.50,
-    },
-    large_48x48 = {
-        chest = 0.60,
-    },
-}
-DefaultLevel.floorConfig = {
-    startRoomId = "0:0",
-    generate = {
-        enabled = true,
-        roomCount = 8,
-        startTemplateId = "start_32x32",
-        shopRoomTemplateId = "store_32x32",
-        templateIds = {
-            "basic_32x32",
-            "wide_48x32",
-            "tall_32x48",
-            "large_48x48",
-        },
-        templateWeights = {
-            basic_32x32 = 1,
-            wide_48x32 = 3,
-            tall_32x48 = 3,
-            large_48x48 = 3,
-        },
-        endRoomChance = 0.35,
-        endTemplateWeights = {
-            basic_32x32 = 5,
-            wide_48x32 = 1,
-            tall_32x48 = 1,
-            large_48x48 = 1,
-        },
-        extraConnectionChance = 0.12,
-    },
-}
-DefaultLevel.shopConfig = {
-    enabled = true,
-    ammoProductId = "full_bullets",
-    ammoChance = 0.40,
-    ammoPrice = 300,
-    products = {
-        { id = "squaregun", weight = 40 },
-        { id = "longshot", weight = 25 },
-        { id = "cakegun", weight = 20 },
-        { id = "shotgun", weight = 15 },
-        { id = "raygun", weight = 5 },
-    },
-}
+DefaultLevel.objectSpawnChances = copyTable(RoomConfig.objectSpawnChances)
+DefaultLevel.floorPathTiles = copyTable(RoomConfig.floorPathTiles)
+DefaultLevel.wallVariantTiles = copyTable(RoomConfig.wallVariantTiles)
+DefaultLevel.objectSpawnChancesByTemplate = copyTable(RoomConfig.objectSpawnChancesByTemplate)
+DefaultLevel.floorConfig = copyTable(RoomConfig.floorConfig)
+DefaultLevel.shopConfig = copyTable(RoomConfig.shopConfig)
 
 DefaultLevel.cameraBounds = {
 }
@@ -235,18 +103,6 @@ local function resolveRangeValue(value)
     return math.random(minValue, maxValue)
 end
 
-local function copyTable(source)
-    if type(source) ~= "table" then
-        return source
-    end
-
-    local result = {}
-    for key, value in pairs(source) do
-        result[key] = copyTable(value)
-    end
-    return result
-end
-
 function DefaultLevel:applyFloorLevel(floorIndex)
     local floorLevel = getFloorLevel(self, floorIndex)
     if not floorLevel then
@@ -262,6 +118,14 @@ function DefaultLevel:applyFloorLevel(floorIndex)
     local roomCount = resolveRangeValue(floorLevel.roomCount)
     if roomCount then
         self.floorConfig.generate.roomCount = roomCount
+    end
+
+    if floorLevel.cardRoomChance ~= nil then
+        self.floorConfig.generate.cardRoomChance = floorLevel.cardRoomChance
+    end
+
+    if floorLevel.cardRoomCount then
+        self.floorConfig.generate.cardRoomCount = copyTable(floorLevel.cardRoomCount)
     end
 
     if floorLevel.shopProducts then

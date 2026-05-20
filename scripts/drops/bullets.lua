@@ -61,6 +61,11 @@ function Bullets:keypressed(key)
     Life.keypressed(self, key)
 end
 
+function Bullets:startCollectAnimation()
+    self.isAlive = false
+    self:onCatch()
+end
+
 function Bullets:onCatch()
     if Player and Player.gun and Player.gun.fillCurrentMagazine then
         Player.gun:fillCurrentMagazine()

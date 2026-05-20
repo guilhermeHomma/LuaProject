@@ -61,6 +61,11 @@ DropTemplates.objects = {
             { id = "bullets", amount = 1, weight = 7 },
         },
     },
+    cardChest = {
+        drops = {
+            { id = "card", amount = 1, weight = 1 },
+        },
+    },
     box = {
         drops = {
             { id = "coins", amount = 1, weight = 1 },
@@ -260,6 +265,9 @@ function DropTemplates.createDrop(dropId, x, y)
     elseif dropId == "bullets" then
         local Bullets = require("scripts/drops/bullets")
         return Bullets:new(x, y)
+    elseif dropId == "card" then
+        local CardDrop = require("scripts/drops/card")
+        return CardDrop:new(x, y)
     end
     return nil
 end

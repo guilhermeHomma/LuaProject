@@ -8,6 +8,7 @@ TreeConfig.fadeArea = {
     playerCalculationPadding = 160,
     playerAreaPadding = 0,
     enemyAreaPadding = 0,
+    doorAreaPadding = 2,
 }
 
 TreeConfig.debug = {

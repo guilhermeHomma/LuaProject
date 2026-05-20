@@ -73,16 +73,19 @@ local function collectGroundLightOccluders(maxOccluders, lightCenters)
         return emptyRects, 0
     end
 
-    local candidates = {}
     local margin = occlusionConfig.margin or 64
     local minX, minY, maxX, maxY = getOccluderSearchBounds(lightCenters, margin)
+    local candidates = {}
+    local rects = {}
+    local occluderCount = 0
 
-    for _, tile in ipairs(Tilemap.tiles or {}) do
+    local occluderTiles = Tilemap.groundOccluderTiles or Tilemap.tiles or {}
+    for _, tile in ipairs(occluderTiles) do
         local isFlashingBox = (tile.quadIndex == 14 or tile.quadIndex == 18)
-            and tile.hitFlashTimer
-            and tile.hitFlashTimer > 0
+            and tile.hitFlashTimer and tile.hitFlashTimer > 0
 
-        if tile.isAlive and tile.collider and not isFlashingBox and tile.size and tile.xWorld and tile.yWorld then
+        if tile.isAlive and tile.collider and not tile.isWater and not isFlashingBox
+            and tile.size and tile.xWorld and tile.yWorld then
             local rect = getScreenTileRect(tile)
             if rect[3] >= minX and rect[1] <= maxX
                 and rect[4] >= minY and rect[2] <= maxY then
@@ -98,10 +101,9 @@ local function collectGroundLightOccluders(maxOccluders, lightCenters)
         return a.sortDistance < b.sortDistance
     end)
 
-    local rects = {}
-    local occluderCount = math.min(#candidates, maxOccluders)
-    for i = 1, occluderCount do
-        rects[i] = candidates[i].rect
+    for i = 1, math.min(#candidates, maxOccluders) do
+        occluderCount = occluderCount + 1
+        rects[occluderCount] = candidates[i].rect
     end
 
     for i = occluderCount + 1, maxOccluders do
@@ -151,6 +153,7 @@ function Ground:draw(player)
                 groundLightSources[#groundLightSources + 1] = {
                     center = center,
                     groundLight = groundLight,
+                    type = source.type,
                     sortDistance = getDistanceToScreenCenter(center),
                 }
             end
@@ -189,7 +192,9 @@ function Ground:draw(player)
         self.lightShader:send("u_generalShadowColor", generalShadow.color or {0, 0, 0})
         local lightCenters = {}
         for i = 1, lightCount do
-            lightCenters[i] = centers[i]
+            if groundLightSources[i] and groundLightSources[i].type == "player" then
+                lightCenters[#lightCenters + 1] = centers[i]
+            end
         end
 
         local occluders, occluderCount = collectGroundLightOccluders(maxOccluders, lightCenters)

@@ -4,10 +4,12 @@ NoHeadBullet.__index = NoHeadBullet
 local Tilemap = require("scripts/tilemap")
 local GunStarParticle = require("scripts/particles/gunStarParticle")
 local BallParticle = require("scripts/particles/ballParticle")
+local BulletColorParticle = require("scripts/particles/bulletColorParticle")
 
 require("scripts/utils")
 
 local bulletSprite = love.graphics.newImage("assets/sprites/enemy/nohead/bullet.png")
+local bulletSpritePath = "assets/sprites/enemy/nohead/bullet.png"
 local bulletFrameSize = 16
 local bulletFrameCount = 4
 local bulletFrameDuration = 0.035
@@ -19,6 +21,14 @@ local defaultImpactShockwave = {
     radius = 42,
     width = 10,
     intensity = 2.6,
+}
+local defaultColorParticles = {
+    enabled = true,
+    count = 2,
+    trailCount = 1,
+    spawnInterval = 0.08,
+    lifeTime = 0.5,
+    size = 1,
 }
 
 bulletSprite:setFilter("nearest", "nearest")
@@ -59,9 +69,28 @@ function NoHeadBullet:new(x, y, angle, speed, damage, tileDamage)
     bullet.impactTimer = 0
     bullet.impactDuration = bulletAnimationDuration
     bullet.impactShockwave = defaultImpactShockwave
+    bullet.colorParticles = defaultColorParticles
+    bullet.colorParticleTimer = 0
+    bullet.colorParticlePalette = BulletColorParticle.getPalette(bulletSpritePath)
     bullet.isDying = false
     bullet.isAlive = true
+    bullet:spawnColorParticles(bullet.colorParticles.count)
     return bullet
+end
+
+function NoHeadBullet:spawnColorParticles(count)
+    if not (self.colorParticles and self.colorParticles.enabled ~= false) then
+        return
+    end
+
+    BulletColorParticle.spawnBurst(
+        self.x,
+        self.y,
+        self.height,
+        self.colorParticlePalette,
+        count or self.colorParticles.count,
+        self.colorParticles
+    )
 end
 
 function NoHeadBullet:spawnSpriteTrailPoint(x, y)
@@ -133,7 +162,8 @@ end
 function NoHeadBullet:collidingTile()
     local box = self:getBox()
 
-    for _, tile in ipairs(Tilemap.tiles or {}) do
+    local nearbyTiles = Tilemap.getNearbyTiles and Tilemap:getNearbyTiles(self.x, self.y) or Tilemap.tiles
+    for _, tile in ipairs(nearbyTiles or {}) do
         if tile.collider and not tile.isWater then
             local tileBox = {
                 x = tile.xWorld - tile.size / 2,
@@ -180,6 +210,7 @@ function NoHeadBullet:death()
     end
 
     table.insert(Game.particles, GunStarParticle:new(self.x, self.y, self.height, 1))
+    self:spawnColorParticles(math.max(self.colorParticles.count, 1))
 
     for _ = 1, 5 do
         local angle = math.random() * math.pi * 2
@@ -228,6 +259,11 @@ function NoHeadBullet:update(dt)
     self.x = self.x + self.dx * dt
     self.y = self.y + self.dy * dt
     self:spawnSpriteTrail(previousX, previousY)
+    self.colorParticleTimer = self.colorParticleTimer + dt
+    if self.colorParticleTimer >= self.colorParticles.spawnInterval then
+        self.colorParticleTimer = 0
+        self:spawnColorParticles(self.colorParticles.trailCount)
+    end
 
     addToDrawQueue(self.y, self)
     if Game and Game.addLightSource then

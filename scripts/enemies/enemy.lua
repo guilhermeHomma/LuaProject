@@ -5,6 +5,7 @@ Enemy.states = { idle = 1, walk = 2, damage = 3 }
 local Particle = require("scripts/particles/particle")
 local Tilemap = require("scripts/tilemap")
 local DamageStretch = require("scripts/effects/damageStretch")
+local BloodPixel = require("scripts/particles/bloodPixel")
 
 require("scripts/utils")
 
@@ -57,6 +58,7 @@ end
 
 function Enemy:takeDamage(damage, dx, dy)
     self.life = self.life - damage
+    BloodPixel.spawnBurst(self.x, self.y - 2, dx, dy, 4, 6)
     DamageStretch:start(self)
 end
 
@@ -66,6 +68,7 @@ function Enemy:death()
     end
 
     Game:increasePlayerPoints(self.dropPoints)
+    BloodPixel.spawnBurst(self.x, self.y - 2, 0, -1, 9, 12)
     self.isAlive = false
 end
 

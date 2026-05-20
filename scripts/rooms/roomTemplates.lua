@@ -3,52 +3,52 @@ local RoomTemplates = {}
 local basicDoorSlots = {
     north = {
         doorTiles = {
-            {x = 15, y = 11},
-            {x = 16, y = 11},
-        },
-        backTiles = {
             {x = 15, y = 10},
             {x = 16, y = 10},
+        },
+        backTiles = {
+            {x = 15, y = 9},
+            {x = 16, y = 9},
         },
         playerSpawn = {x = 15.5, y = 11},
     },
     south = {
         doorTiles = {
-            {x = 15, y = 21},
-            {x = 16, y = 21},
-        },
-        backTiles = {
             {x = 15, y = 22},
             {x = 16, y = 22},
+        },
+        backTiles = {
+            {x = 15, y = 23},
+            {x = 16, y = 23},
         },
         playerSpawn = {x = 15.5, y = 21},
     },
     west = {
         doorTiles = {
-            {x = 8, y = 15},
-            {x = 8, y = 16},
-        },
-        backTiles = {
             {x = 7, y = 15},
             {x = 7, y = 16},
+        },
+        backTiles = {
+            {x = 6, y = 15},
+            {x = 6, y = 16},
         },
         playerSpawn = {x = 8, y = 15.5},
     },
     east = {
         doorTiles = {
-            {x = 23, y = 15},
-            {x = 23, y = 16},
-        },
-        backTiles = {
             {x = 24, y = 15},
             {x = 24, y = 16},
+        },
+        backTiles = {
+            {x = 25, y = 15},
+            {x = 25, y = 16},
         },
         playerSpawn = {x = 24, y = 15.5},
     },
 }
 
 local basicSpawnPoints = {
-    player = {x = 16, y = 16},
+    player = {x = 16.1, y = 16.1},
 }
 
 local basicTags = {
@@ -476,6 +476,24 @@ local templates = {
         spawnPoints = basicSpawnPoints,
         tags = {
             "shop",
+            "small",
+        },
+        moonbeams = basicMoonbeamConfig,
+        ambientDust = basicAmbientDustConfig,
+    },
+    cards_32x32 = {
+        id = "cards_32x32",
+        name = "Cards 32x32",
+        width = 32,
+        height = 32,
+        gridWidth = 1,
+        gridHeight = 1,
+        shape = "rect",
+        tilemapConfigs = buildTilemapConfigsFromFolder("assets/maps/cards", {"map.png"}),
+        doorSlots = basicDoorSlots,
+        spawnPoints = basicSpawnPoints,
+        tags = {
+            "cards",
             "small",
         },
         moonbeams = basicMoonbeamConfig,

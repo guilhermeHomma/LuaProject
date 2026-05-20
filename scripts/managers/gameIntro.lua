@@ -10,15 +10,27 @@ local font = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 80)
 font:setFilter("nearest", "nearest")
 local playerLightImage = love.graphics.newImage("assets/sprites/effects/light.png")
 playerLightImage:setFilter("nearest", "nearest")
+local logoDistortionShader = love.graphics.newShader("scripts/shaders/hudWater.glsl")
 
 
 camera = nil
 local target = {x = -330, y = 330}
+local introStartTarget = {x = -330, y = 330}
+local introEndTarget = {x = -325, y = 323}
+
+local function smoothstep(t)
+    t = math.min(math.max(t or 0, 0), 1)
+    return t * t * (3 - 2 * t)
+end
+
 function GameIntro:load()
     
     math.randomseed(os.time())
     love.graphics.setDefaultFilter("nearest", "nearest")
+    target.x = introStartTarget.x
+    target.y = introStartTarget.y
     camera = Camera:new(target.x, target.y-10, target)
+    camera.smoothSpeed = 1.45
 
     Ground:load()
     Clouds:load(target)
@@ -40,6 +52,20 @@ function GameIntro:close()
     self = {}
 end
 
+function GameIntro:drawIntroLogoText(text, x, y)
+    love.graphics.setFont(font)
+
+    local time = love.timer.getTime()
+    local bob = math.sin((self.timer or 0) * 1.1) * 0.55
+    logoDistortionShader:send("u_time", time * 0.55)
+    logoDistortionShader:send("u_strength", 0.00022)
+    love.graphics.setShader(logoDistortionShader)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.print(text, math.floor(x + 0.5), math.floor(y + bob + 0.5))
+    love.graphics.setShader()
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
 function GameIntro:update(dt)
     ACTIVE_LIGHT_MANAGER = self
     self.drawQueue = {}
@@ -47,8 +73,9 @@ function GameIntro:update(dt)
     self.timer = self.timer + dt
     local targetPitch = 1
 
-    target.x = target.x + 0.7 * dt
-    target.y = target.y - 1 * dt
+    local moveProgress = smoothstep(self.timer / 6.5)
+    target.x = introStartTarget.x + (introEndTarget.x - introStartTarget.x) * moveProgress
+    target.y = introStartTarget.y + (introEndTarget.y - introStartTarget.y) * moveProgress
 
     Clouds:update(dt)
 
@@ -211,7 +238,7 @@ function GameIntro:draw()
 
     love.graphics.setFont(font)
     local textWidth = font:getWidth(text)
-    love.graphics.print(text, target.x - textWidth/2, target.y -50)
+    self:drawIntroLogoText(text, target.x - textWidth/2, target.y -50)
     Clouds:draw()
     
     love.graphics.scale(1, 1)

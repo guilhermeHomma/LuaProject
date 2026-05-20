@@ -10,6 +10,8 @@ local threeImage3 = love.graphics.newImage("assets/sprites/objects/three3.png")
 local threeImage4 = love.graphics.newImage("assets/sprites/objects/three4.png")
 local threeImage5 = love.graphics.newImage("assets/sprites/objects/three5.png")
 local bigThreeImage = love.graphics.newImage("assets/sprites/objects/bigthree.png")
+local TilemapModule = nil
+local triedLoadingTilemapModule = false
 
 threeImage1:setFilter("nearest", "nearest")
 threeImage2:setFilter("nearest", "nearest")
@@ -63,6 +65,51 @@ end
 
 local function isObjectInsideBox(object, box, padding)
     return isObjectNearBox(object, box, padding or 0)
+end
+
+local function doBoxesOverlap(a, b, padding)
+    padding = padding or 0
+    return a.x < b.x + b.width + padding
+        and a.x + a.width > b.x - padding
+        and a.y < b.y + b.height + padding
+        and a.y + a.height > b.y - padding
+end
+
+local function getDoorTiles()
+    if not triedLoadingTilemapModule then
+        local ok, Tilemap = pcall(require, "scripts/tilemap")
+        if ok then
+            TilemapModule = Tilemap
+        end
+        triedLoadingTilemapModule = true
+    end
+
+    if not TilemapModule then
+        return nil
+    end
+
+    return TilemapModule.doorTiles
+end
+
+local function hasDoorInsideBox(box, padding)
+    local doors = getDoorTiles()
+    if not doors then
+        return false
+    end
+
+    for _, door in ipairs(doors) do
+        local doorBox = {
+            x = door.xWorld - 8,
+            y = door.yWorld - 48,
+            width = 16,
+            height = 48,
+        }
+        if doBoxesOverlap(box, doorBox, padding) then
+            return true
+        end
+    end
+
+    return false
 end
 
 local function getFadeAreaConfig()
@@ -125,6 +172,7 @@ function TreeTile:new(x, y, quadIndex, collider)
         tile.stretch = 1.3
     end
     tile.leafTimer = math.random() * 2
+    tile.renderCullMargin = 420
 
     setmetatable(tile, TreeTile)
     return tile
@@ -139,6 +187,7 @@ function TreeTile:newBig(x, y, quadIndex, collider)
     tile.stretch = 1.4
     tile.alpha = 1
     tile.leafTimer = math.random() * 2
+    tile.renderCullMargin = 640
 
     setmetatable(tile, TreeTile)
     return tile
@@ -195,6 +244,11 @@ end
 
 function TreeTile:getTargetAlpha(box)
     local fadeArea = getFadeAreaConfig()
+    local hiddenAlpha = fadeArea.hiddenAlpha or 0
+
+    if hasDoorInsideBox(box, fadeArea.doorAreaPadding or 0) then
+        return hiddenAlpha
+    end
 
     if self.treeIndex == 6 then
         return 1
@@ -207,8 +261,6 @@ function TreeTile:getTargetAlpha(box)
     if not isObjectNearBox(Player, box, fadeArea.playerCalculationPadding or 160) then
         return 1
     end
-
-    local hiddenAlpha = fadeArea.hiddenAlpha or 0
 
     if Player.isAlive then
         local playerPadding = fadeArea.playerAreaPadding or 0

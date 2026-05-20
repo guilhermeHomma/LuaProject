@@ -57,12 +57,13 @@ local function getGrassIndex(tile)
     return 4
 end
 
-function Grass:new(x, y, tile)
+function Grass:new(x, y, tile, state)
     local grass = setmetatable({}, Grass)
+    state = state or {}
 
     grass.x = x 
     grass.y = y 
-    grass.index = getGrassIndex(tile)
+    grass.index = state.index or getGrassIndex(tile)
     grass.shaderDirection = 1
     grass.collisionDirection = 0
     grass.tile = tile

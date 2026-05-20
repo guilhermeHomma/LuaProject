@@ -20,12 +20,16 @@ function Drop:checkCatch()
     end
 
     if distance(self, Player) < 10 then
-        if not self.isAlive then
+        if not self.isAlive or self.isCollecting then
             return
         end
         self:markPersistentCollected()
-        self.isAlive = false
-        self:onCatch()
+        if type(self.startCollectAnimation) == "function" then
+            self:startCollectAnimation()
+        else
+            self.isAlive = false
+            self:onCatch()
+        end
     end
 end
 
@@ -60,6 +64,13 @@ function Drop:update(dt)
     addToDrawQueue((self.drawBaseY or self.y) + (self.drawPriorityOffset or 10), self)
 
     self:checkCatch()
+    if self.isCollecting then
+        if type(self.updateCollectAnimation) == "function" then
+            self:updateCollectAnimation(dt)
+        end
+        return true
+    end
+
     self:updatePersistentPosition()
     self.lifetimeTimer = self.lifetimeTimer + dt
     self.timer = self.timer + dt
@@ -84,12 +95,16 @@ end
 
 function Drop:keypressed(key)
     if key == "x" and self.requirePickupKey and self:isPlayerInPickupRange() then
-        if not self.isAlive then
+        if not self.isAlive or self.isCollecting then
             return
         end
         self:markPersistentCollected()
-        self.isAlive = false
-        self:onCatch()
+        if type(self.startCollectAnimation) == "function" then
+            self:startCollectAnimation()
+        else
+            self.isAlive = false
+            self:onCatch()
+        end
     end
 end
 

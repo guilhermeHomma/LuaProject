@@ -81,7 +81,9 @@ function Tile:new(x, y, quadIndex, collider)
     tile.quad = tileSet[quadIndex]
     tile.quad2 = tileSet[quadIndex]
     tile.quadIndex = quadIndex
-    if tile.quadIndex == 1 or tile.quadIndex == 2 or tile.quadIndex == 3 then
+    if tile.quadIndex == 1 or tile.quadIndex == 2 or tile.quadIndex == 3
+        or tile.quadIndex == 31 or tile.quadIndex == 32 or tile.quadIndex == 33
+        or tile.quadIndex == 44 or tile.quadIndex == 45 or tile.quadIndex == 46 then
         tile.quad2 = tileSet[quadIndex + 3]
     end
 
@@ -110,7 +112,7 @@ end
 
 function Tile:update(dt)
     if self.isAlive then
-        addToDrawQueue(self.yWorld, self)
+        addToDrawQueue(self:getDrawPriority(), self)
     end
 
     if self.isBreaking then
@@ -125,14 +127,22 @@ function Tile:update(dt)
     end
 end
 
+function Tile:getDrawPriority()
+    if self.quadIndex == 14 or self.quadIndex == 18 then
+        return self.yWorld - 0.1
+    end
+
+    return self.yWorld
+end
+
 function Tile:onshoot(damage)
-    if not self.isAlive or self.isBreaking then return end
+    if not self.isAlive or self.isBreaking then return false end
     if self.quadIndex == 14 or self.quadIndex == 18 then --box
         self.hitFlashTimer = self.hitFlashDuration or 0.08
         DamageStretch:start(self)
         self.life = (self.life or 30) - (damage or 10)
         if self.life > 0 then
-            return
+            return true
         end
 
         self.collider = false
@@ -142,9 +152,24 @@ function Tile:onshoot(damage)
         Tile.tilemap:loadfinders()
         self.isBreaking = true
         self.breakTimer = 0
+        return true
     end
+    return false
 end
 
+local function isBoxNearWall(tile)
+    if not (Tile.tilemap and Tile.tilemap.getNearbyTiles) then
+        return false
+    end
+
+    for _, nearbyTile in ipairs(Tile.tilemap:getNearbyTiles(tile.xWorld, tile.yWorld)) do
+        if nearbyTile.collider then
+            return true
+        end
+    end
+
+    return false
+end
 
 function Tile:explodeBox()
     if not self.isAlive or self.hasExploded then return end
@@ -194,8 +219,14 @@ function Tile:explodeBox()
     )
 
     if #resolvedDrops > 0 then
+        local shouldPushCoinsAwayFromWall = isBoxNearWall(self)
         playClonedSound(coinDropBase, volume, (1 + math.random() * 0.1) * GAME_PITCH)
-        DropTemplates.spawnResolvedDrops(resolvedDrops, self.xWorld, self.yWorld, Game.objects)
+        DropTemplates.spawnResolvedDrops(resolvedDrops, self.xWorld, self.yWorld, Game.objects, function(drop, kind)
+            if kind == "coins" and shouldPushCoinsAwayFromWall and drop.pushAwayFromSpawnCollisions then
+                drop:pushAwayFromSpawnCollisions(82)
+            end
+            return drop
+        end)
     end
 end
 
@@ -238,7 +269,9 @@ function Tile:draw()
         love.graphics.setShader()
         love.graphics.setColor(1, 1, 1, 1)
 
-    elseif self.quadIndex == 1 or self.quadIndex == 2 or self.quadIndex == 3  then
+    elseif self.quadIndex == 1 or self.quadIndex == 2 or self.quadIndex == 3
+        or self.quadIndex == 31 or self.quadIndex == 32 or self.quadIndex == 33
+        or self.quadIndex == 44 or self.quadIndex == 45 or self.quadIndex == 46 then
         love.graphics.draw(tilesetImage, self.quad, self.xWorld, self.yWorld - 16, 0, 1, 1, tileSize/2, tileSize)
         love.graphics.draw(tilesetImage, self.quad2, self.xWorld, self.yWorld, 0, 1, 1, tileSize/2, tileSize)
     else
@@ -260,7 +293,7 @@ function Tile:drawDebug()
 end
 
 function Tile:drawShadow()
-    if self.quadIndex == 5 or self.quadIndex == 15 then 
+    if self.quadIndex == 5 or self.quadIndex == 15 or self.quadIndex == 35 then
         return
     end
 

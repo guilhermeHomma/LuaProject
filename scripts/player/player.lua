@@ -7,6 +7,7 @@ local BallParticle = require("scripts/particles/ballParticle")
 local WalkParticle = require("scripts/particles/walkParticle")
 local WalkParticleSquare = require("scripts/particles/walkParticleSquare")
 local FootStep = require("scripts/particles/footstep")
+local BloodPixel = require("scripts/particles/bloodPixel")
 local Tilemap = require("scripts/tilemap")
 local TransitionManager = require("scripts.managers.transitionManager")
 local playerGlitchShader = love.graphics.newShader("scripts/shaders/playerGlitch.glsl")
@@ -264,15 +265,21 @@ function Player:update(dt)
     local sumMoveX = self.velocityX * dt
     local sumMoveY = self.velocityY * dt
 
-    local collidedX, collidedY = self:isColliding(sumMoveX, sumMoveY)
+    self:resolveStuckCollision()
 
-    if collidedX then
-        sumMoveX = 0
-        self.velocityX = 0
+    local resolvedMoveX, resolvedMoveY = self:resolveCollisionMove(sumMoveX, sumMoveY)
+
+    if resolvedMoveX ~= sumMoveX then
+        sumMoveX = resolvedMoveX
+        if sumMoveX == 0 then
+            self.velocityX = 0
+        end
     end
-    if collidedY then
-        sumMoveY = 0
-        self.velocityY = 0
+    if resolvedMoveY ~= sumMoveY then
+        sumMoveY = resolvedMoveY
+        if sumMoveY == 0 then
+            self.velocityY = 0
+        end
     end
 
     self.x = self.x + sumMoveX
@@ -344,6 +351,7 @@ end
 function Player:takeDamage(amount)
     if self.damageTimer < 1.2 then return false end
 
+    BloodPixel.spawnBurst(self.x, self.y - 2, self.velocityX or 0, self.velocityY or 0, 5, 7)
     camera:shake(10, 0.97)
     camera:damageZoom(0.85, 16, 8, 0.06)
     self.life = math.max(0, self.life - (amount or 1))
@@ -394,6 +402,250 @@ function Player:getCollisionBox()
     return { x = self.x - size/2, y = self.y - size/2, width = size, height = size, size = size }
 end
 
+local function getPlayerTileCollisionBox(tile)
+    local box = {
+        x = tile.xWorld - tile.size / 2,
+        y = tile.yWorld - tile.size,
+        width = tile.size,
+        height = tile.size,
+    }
+
+    return box
+end
+
+local function getPlayerOctagonPoints(box)
+    local bevel = 3
+    local left = box.x
+    local right = box.x + box.width
+    local top = box.y
+    local bottom = box.y + box.height
+
+    return {
+        {x = left + bevel, y = top},
+        {x = right - bevel, y = top},
+        {x = right, y = top + bevel},
+        {x = right, y = bottom - bevel},
+        {x = right - bevel, y = bottom},
+        {x = left + bevel, y = bottom},
+        {x = left, y = bottom - bevel},
+        {x = left, y = top + bevel},
+    }
+end
+
+local function getRectPoints(box)
+    return {
+        {x = box.x, y = box.y},
+        {x = box.x + box.width, y = box.y},
+        {x = box.x + box.width, y = box.y + box.height},
+        {x = box.x, y = box.y + box.height},
+    }
+end
+
+local function projectPolygon(points, axisX, axisY)
+    local minProjection = points[1].x * axisX + points[1].y * axisY
+    local maxProjection = minProjection
+
+    for i = 2, #points do
+        local projection = points[i].x * axisX + points[i].y * axisY
+        minProjection = math.min(minProjection, projection)
+        maxProjection = math.max(maxProjection, projection)
+    end
+
+    return minProjection, maxProjection
+end
+
+local function polygonsOverlapOnAxis(aPoints, bPoints, axisX, axisY)
+    local aMin, aMax = projectPolygon(aPoints, axisX, axisY)
+    local bMin, bMax = projectPolygon(bPoints, axisX, axisY)
+    return aMax > bMin and bMax > aMin
+end
+
+local function addPolygonAxes(points, axes)
+    for i = 1, #points do
+        local a = points[i]
+        local b = points[i % #points + 1]
+        local edgeX = b.x - a.x
+        local edgeY = b.y - a.y
+        local axisX = -edgeY
+        local axisY = edgeX
+        local length = math.sqrt(axisX * axisX + axisY * axisY)
+
+        if length > 0 then
+            axes[#axes + 1] = {x = axisX / length, y = axisY / length}
+        end
+    end
+end
+
+local function polygonsCollide(aPoints, bPoints)
+    local axes = {}
+    addPolygonAxes(aPoints, axes)
+    addPolygonAxes(bPoints, axes)
+
+    for _, axis in ipairs(axes) do
+        if not polygonsOverlapOnAxis(aPoints, bPoints, axis.x, axis.y) then
+            return false
+        end
+    end
+
+    return true
+end
+
+local function isPlayerTileColliding(playerBox, tile)
+    local tileBox = getPlayerTileCollisionBox(tile)
+    if not checkCollision(playerBox, tileBox) then
+        return false
+    end
+
+    return polygonsCollide(getPlayerOctagonPoints(playerBox), getRectPoints(tileBox))
+end
+
+local function getCornerSlideFromBox(playerBox, tileBox, axis, primaryMove)
+    local maxCornerDepth = 5.5
+
+    if axis == "x" then
+        local topDepth = playerBox.y + playerBox.height - tileBox.y
+        if topDepth > 0 and topDepth <= maxCornerDepth then
+            local step = math.min(topDepth * 0.45, math.max(0.12, math.abs(primaryMove) * 0.35))
+            return -step
+        end
+
+        local bottomDepth = tileBox.y + tileBox.height - playerBox.y
+        if bottomDepth > 0 and bottomDepth <= maxCornerDepth then
+            local step = math.min(bottomDepth * 0.45, math.max(0.12, math.abs(primaryMove) * 0.35))
+            return step
+        end
+    else
+        local leftDepth = playerBox.x + playerBox.width - tileBox.x
+        if leftDepth > 0 and leftDepth <= maxCornerDepth then
+            local step = math.min(leftDepth * 0.45, math.max(0.12, math.abs(primaryMove) * 0.35))
+            return -step
+        end
+
+        local rightDepth = tileBox.x + tileBox.width - playerBox.x
+        if rightDepth > 0 and rightDepth <= maxCornerDepth then
+            local step = math.min(rightDepth * 0.45, math.max(0.12, math.abs(primaryMove) * 0.35))
+            return step
+        end
+    end
+
+    return 0
+end
+
+function Player:isCollidingAtOffset(moveX, moveY)
+    local playerBox = self:getCollisionBox()
+    playerBox.x = playerBox.x + (moveX or 0)
+    playerBox.y = playerBox.y + (moveY or 0)
+
+    local closeTiles = Tilemap:getNearbyTiles(self.x + (moveX or 0), self.y + (moveY or 0))
+    for _, tile in ipairs(closeTiles) do
+        if tile.collider and isPlayerTileColliding(playerBox, tile) then
+            return true
+        end
+    end
+
+    for _, enemy in ipairs((Game and Game.enemies) or {}) do
+        if enemy.isAlive and enemy.blocksPlayer and enemy.collisionBox then
+            if checkCollision(playerBox, enemy:collisionBox()) then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+function Player:getCornerSlide(axis, primaryMove)
+    local playerBox = self:getCollisionBox()
+    if axis == "x" then
+        playerBox.x = playerBox.x + primaryMove
+    else
+        playerBox.y = playerBox.y + primaryMove
+    end
+
+    local bestSlide = 0
+    local closeTiles = Tilemap:getNearbyTiles(self.x, self.y)
+    for _, tile in ipairs(closeTiles) do
+        if tile.collider and isPlayerTileColliding(playerBox, tile) then
+            local slide = getCornerSlideFromBox(playerBox, getPlayerTileCollisionBox(tile), axis, primaryMove)
+            if slide ~= 0 and (bestSlide == 0 or math.abs(slide) < math.abs(bestSlide)) then
+                bestSlide = slide
+            end
+        end
+    end
+
+    return bestSlide
+end
+
+function Player:resolveCollisionMove(moveX, moveY)
+    if not self:isCollidingAtOffset(moveX, moveY) then
+        return moveX, moveY
+    end
+
+    local resolvedX = moveX
+    local resolvedY = moveY
+
+    if moveX ~= 0 and self:isCollidingAtOffset(moveX, 0) then
+        local slideY = self:getCornerSlide("x", moveX)
+        if slideY ~= 0 and not self:isCollidingAtOffset(0, moveY + slideY)
+            and not self:isCollidingAtOffset(moveX, moveY + slideY) then
+            resolvedY = moveY + slideY
+        else
+            resolvedX = 0
+        end
+    end
+
+    if moveY ~= 0 and self:isCollidingAtOffset(0, moveY) then
+        local slideX = self:getCornerSlide("y", moveY)
+        if slideX ~= 0 and not self:isCollidingAtOffset(moveX + slideX, 0)
+            and not self:isCollidingAtOffset(moveX + slideX, moveY) then
+            resolvedX = moveX + slideX
+        else
+            resolvedY = 0
+        end
+    end
+
+    if self:isCollidingAtOffset(resolvedX, resolvedY) then
+        if moveX ~= 0 and not self:isCollidingAtOffset(moveX, 0) then
+            return moveX, 0
+        end
+        if moveY ~= 0 and not self:isCollidingAtOffset(0, moveY) then
+            return 0, moveY
+        end
+        return 0, 0
+    end
+
+    return resolvedX, resolvedY
+end
+
+function Player:resolveStuckCollision()
+    if not self:isCollidingAtOffset(0, 0) then
+        return
+    end
+
+    local directions = {
+        {x = 0, y = -1},
+        {x = 1, y = 0},
+        {x = 0, y = 1},
+        {x = -1, y = 0},
+        {x = 1, y = -1},
+        {x = 1, y = 1},
+        {x = -1, y = 1},
+        {x = -1, y = -1},
+    }
+
+    for distanceStep = 0.5, 6, 0.5 do
+        for _, direction in ipairs(directions) do
+            local moveX = direction.x * distanceStep
+            local moveY = direction.y * distanceStep
+            if not self:isCollidingAtOffset(moveX, moveY) then
+                self.x = self.x + moveX
+                self.y = self.y + moveY
+                return
+            end
+        end
+    end
+end
+
 function Player:isColliding(moveX, moveY, size)
     if not size then size = self:getCollisionBox().size end
 
@@ -408,12 +660,10 @@ function Player:isColliding(moveX, moveY, size)
     local closeTiles = Tilemap:getNearbyTiles(self.x, self.y)
     for _, tile in ipairs(closeTiles) do
         if tile.collider then
-            local tileBox = { x = tile.xWorld - tile.size/2, y = tile.yWorld - tile.size, width = tile.size, height = tile.size }
-
-            if checkCollision(playerBoxX, tileBox) then
+            if isPlayerTileColliding(playerBoxX, tile) then
                 collidedX = true
             end
-            if checkCollision(playerBoxY, tileBox) then
+            if isPlayerTileColliding(playerBoxY, tile) then
                 collidedY = true
             end
         end

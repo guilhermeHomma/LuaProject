@@ -74,6 +74,45 @@ function baseMenu:drawTitle()
 
 end
 
+local hoverPalette = {
+    "b8bd99",
+    "9ab7ad",
+    "aa99bb",
+    "b6a49a",
+    "97a983",
+    "afa0b4",
+}
+
+function baseMenu:drawHoverText(text, y)
+    local time = love.timer.getTime()
+    local font = self.fontOptions
+    local textWidth = font:getWidth(text)
+    local x = self:getWidth() / 2 - textWidth / 2
+    local paletteShift = math.floor(time * 3.2)
+
+    for i = 1, #text do
+        local char = text:sub(i, i)
+        local charWidth = font:getWidth(char)
+        local phase = time * 4.2 + i * 0.72
+        local runX = math.sin(phase) * 0.9 + math.sin(time * 6.5 + i * 1.3) * 0.32
+        local runY = math.cos(time * 3.1 + i * 0.58) * 0.75
+        local drawX = math.floor(x + runX)
+        local drawY = math.floor(y + runY)
+        local color = hoverPalette[((i + paletteShift - 1) % #hoverPalette) + 1]
+
+        if char ~= " " then
+            love.graphics.setColor(0.02, 0.015, 0.025, 0.8)
+            love.graphics.print(char, drawX + 1, drawY + 1)
+            love.graphics.setColor(hexToRGB(color))
+            love.graphics.print(char, drawX, drawY)
+        end
+
+        x = x + charWidth
+    end
+
+    love.graphics.setColor(hexToRGB("fbfaf7"))
+end
+
 function baseMenu:drawOption(text, x, y, def, isSelected, isInactive, bounds)
     if isInactive then
         love.graphics.setColor(0, 0, 0, 0.45)
@@ -90,24 +129,8 @@ function baseMenu:drawOption(text, x, y, def, isSelected, isInactive, bounds)
         return
     end
 
-    local time = love.timer.getTime()
-    local blink = math.floor(time * 10) % 2 == 0 
-    
     self:drawSelectSprite(text, y)
-
-    if blink then
-        --drawOutline(text, x, y, self:getWidth(), def)
-        love.graphics.setColor(hexToRGB("c7c093"))
-        love.graphics.printf(text, x, y, self:getWidth(), def)
-        love.graphics.setColor(hexToRGB("fbfaf7"))
-        return
-    end
-
-    --drawOutline(text, x, y, self:getWidth(), def)
-    love.graphics.setColor(hexToRGB("fbfaf7"))
-
-    love.graphics.printf(text, x, y, self:getWidth(), def)
-
+    self:drawHoverText(text, y)
 
 end
 

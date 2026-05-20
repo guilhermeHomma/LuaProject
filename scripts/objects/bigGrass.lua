@@ -51,9 +51,21 @@ function BigGrass:new(x, y, options)
     grass.collisionDirection = 0
     grass.soundTimer = 2
     grass.changedTarget = true
-    grass.phase = math.random() * math.pi * 2
-    grass.drawPriority = math.random() * 0.1
+    grass.phase = options.phase or math.random() * math.pi * 2
+    grass.drawPriority = options.drawPriority or math.random() * 0.1
     grass.blades = {}
+
+    if options.blades then
+        for i, blade in ipairs(options.blades) do
+            grass.blades[i] = {
+                x = blade.x or 0,
+                y = blade.y or 0,
+                flipH = blade.flipH == true,
+                directionOffset = blade.directionOffset or 0,
+            }
+        end
+        return grass
+    end
 
     local bladeCount = math.random(1, 3)
     local ySlots = {0}

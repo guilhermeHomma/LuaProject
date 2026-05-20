@@ -5,7 +5,9 @@ require("scripts/utils")
 
 local Ball = require("scripts/particles/ballParticle")
 local GunStarParticle = require("scripts/particles/gunStarParticle")
+local BulletColorParticle = require("scripts/particles/bulletColorParticle")
 local Tilemap = require("scripts/tilemap")
+local DamageNumber = require("scripts/effects/damageNumber")
 
 local defaultTrail = {
     enabled = true,
@@ -43,6 +45,15 @@ local defaultShadow = {
     scaleX = 1.8,
     scaleY = 0.7,
     minRadius = 2.2
+}
+
+local defaultColorParticles = {
+    enabled = true,
+    count = 2,
+    trailCount = 1,
+    spawnInterval = 0.07,
+    lifeTime = 0.5,
+    size = 1,
 }
 
 local function copyTable(source)
@@ -135,8 +146,37 @@ function Bullet:new(x, y, angle, height, speed, damage, options)
     bullet.redTurn = 0
     bullet.cyanTurn = 0
     bullet.impactShockwave = options.impactShockwave
+    bullet.projectileSprite = options.projectileSprite
+    bullet.colorParticles = mergeTables(defaultColorParticles, options.colorParticles)
+    bullet.colorParticles.count = options.colorParticleCount or bullet.colorParticles.count
+    bullet.colorParticleTimer = 0
+    bullet.colorParticlePalette = BulletColorParticle.getPalette(bullet.projectileSprite, {
+        bullet.trail.headInnerColor,
+        bullet.trail.headMidColor,
+        bullet.trail.headOuterColor,
+        bullet.trail.lineColor,
+    })
+
+    if bullet.colorParticles.enabled ~= false then
+        bullet:spawnColorParticles(bullet.colorParticles.count)
+    end
 
     return bullet
+end
+
+function Bullet:spawnColorParticles(count)
+    if not (self.colorParticles and self.colorParticles.enabled ~= false) then
+        return
+    end
+
+    BulletColorParticle.spawnBurst(
+        self.x,
+        self.y,
+        self.height,
+        self.colorParticlePalette,
+        count or self.colorParticles.count,
+        self.colorParticles
+    )
 end
 
 function Bullet:checkCollisionWithEnemy(enemy)
@@ -153,7 +193,8 @@ function Bullet:isColliding(size)
     size = size or 4
     local box = { x = self.x - size / 2, y = self.y - size / 2, width = size, height = size }
 
-    for _, tile in ipairs(Tilemap.tiles) do
+    local nearbyTiles = Tilemap.getNearbyTiles and Tilemap:getNearbyTiles(self.x, self.y) or Tilemap.tiles
+    for _, tile in ipairs(nearbyTiles or {}) do
         if tile.collider and not tile.isWater then
             local tileBox = {
                 x = tile.xWorld - tile.size / 2,
@@ -163,8 +204,12 @@ function Bullet:isColliding(size)
             }
 
             if checkCollision(box, tileBox) then
+                local damaged = false
                 if type(tile.onshoot) == "function" then
-                    tile:onshoot(self.damage)
+                    damaged = tile:onshoot(self.damage) == true
+                end
+                if damaged then
+                    DamageNumber.spawn(self.x, self.y, self.height, self.damage)
                 end
                 return true
             end
@@ -289,6 +334,11 @@ function Bullet:update(dt)
     if self.isActive then
         self.x = self.x + self.dx * dt
         self.y = self.y + self.dy * dt
+        self.colorParticleTimer = self.colorParticleTimer + dt
+        if self.colorParticleTimer >= self.colorParticles.spawnInterval then
+            self.colorParticleTimer = 0
+            self:spawnColorParticles(self.colorParticles.trailCount)
+        end
 
         self.timer = self.timer + dt
         if self.timer >= self.lifeTime then
@@ -306,6 +356,7 @@ function Bullet:update(dt)
         for _, enemy in ipairs(Game.enemies) do
             if self:checkCollisionWithEnemy(enemy) and self.isActive and enemy.isAlive then
                 self:deactivate()
+                DamageNumber.spawn(self.x, self.y, self.height, self.damage)
                 enemy:takeDamage(self.damage, self.dx, self.dy)
                 self:death(0, 0)
                 break
@@ -324,6 +375,7 @@ function Bullet:death(dx, dy)
     end
 
     table.insert(Game.particles, GunStarParticle:new(self.x, self.y, self.height, 1))
+    self:spawnColorParticles(math.max(self.colorParticles.count, 1))
 
     if not dy or not dx then
         dx = math.cos(self.angle) / 2

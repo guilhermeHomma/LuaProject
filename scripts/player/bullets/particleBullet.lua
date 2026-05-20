@@ -7,7 +7,9 @@ local Particle = require("scripts/particles/particle")
 local Ball = require("scripts/particles/ballParticle")
 local GunStarParticle = require("scripts/particles/gunStarParticle")
 local BulletSpriteParticle = require("scripts/particles/bulletSpriteParticle")
+local BulletColorParticle = require("scripts/particles/bulletColorParticle")
 local Tilemap = require("scripts/tilemap")
+local DamageNumber = require("scripts/effects/damageNumber")
 
 local defaultGlow = {
     enabled = true,
@@ -27,6 +29,15 @@ local defaultShadow = {
     scaleX = 1.8,
     scaleY = 0.7,
     minRadius = 2.2
+}
+
+local defaultColorParticles = {
+    enabled = true,
+    count = 2,
+    trailCount = 1,
+    spawnInterval = 0.07,
+    lifeTime = 0.35,
+    size = 1,
 }
 
 local function copyTable(source)
@@ -93,8 +104,35 @@ function Bullet:new(x, y, angle, height, speed, damage, options)
     bullet.spriteTrailMaxPerUpdate = options.spriteTrailMaxPerUpdate or 5
     bullet.impactFlashSprite = options.impactFlashSprite
     bullet.impactShockwave = options.impactShockwave
+    bullet.colorParticles = mergeTables(defaultColorParticles, options.colorParticles)
+    bullet.colorParticles.count = options.colorParticleCount or bullet.colorParticles.count
+    bullet.colorParticleTimer = 0
+    bullet.colorParticlePalette = BulletColorParticle.getPalette(bullet.projectileSprite, {
+        bullet.glow.innerColor,
+        bullet.glow.midColor,
+        bullet.glow.outerColor,
+    })
+
+    if bullet.colorParticles.enabled ~= false then
+        bullet:spawnColorParticles(bullet.colorParticles.count)
+    end
 
     return bullet
+end
+
+function Bullet:spawnColorParticles(count)
+    if not (self.colorParticles and self.colorParticles.enabled ~= false) then
+        return
+    end
+
+    BulletColorParticle.spawnBurst(
+        self.x,
+        self.y,
+        self.height,
+        self.colorParticlePalette,
+        count or self.colorParticles.count,
+        self.colorParticles
+    )
 end
 
 function Bullet:spawnSpriteTrailPoint(x, y)
@@ -149,7 +187,8 @@ function Bullet:isColliding(size)
 
     local box = { x = self.x - size / 2, y = self.y - size / 2, width = size, height = size }
 
-    for _, tile in ipairs(Tilemap.tiles) do
+    local nearbyTiles = Tilemap.getNearbyTiles and Tilemap:getNearbyTiles(self.x, self.y) or Tilemap.tiles
+    for _, tile in ipairs(nearbyTiles or {}) do
         if tile.collider and not tile.isWater then
             local tileBox = {
                 x = tile.xWorld - tile.size / 2,
@@ -159,8 +198,12 @@ function Bullet:isColliding(size)
             }
 
             if checkCollision(box, tileBox) then
+                local damaged = false
                 if type(tile.onshoot) == "function" then
-                    tile:onshoot(self.damage)
+                    damaged = tile:onshoot(self.damage) == true
+                end
+                if damaged then
+                    DamageNumber.spawn(self.x, self.y, self.height, self.damage)
                 end
                 return true
             end
@@ -179,6 +222,11 @@ function Bullet:update(dt)
     self.x = self.x + self.dx * dt
     self.y = self.y + self.dy * dt
     self:spawnSpriteTrail(previousX, previousY)
+    self.colorParticleTimer = self.colorParticleTimer + dt
+    if self.colorParticleTimer >= self.colorParticles.spawnInterval then
+        self.colorParticleTimer = 0
+        self:spawnColorParticles(self.colorParticles.trailCount)
+    end
 
     addToDrawQueue(self.y, self)
     if Game and Game.addLightSource then
@@ -206,6 +254,7 @@ function Bullet:update(dt)
     for _, enemy in ipairs(Game.enemies) do
         if self:checkCollisionWithEnemy(enemy) and self.isAlive and enemy.isAlive then
             self.isAlive = false
+            DamageNumber.spawn(self.x, self.y, self.height, self.damage)
             enemy:takeDamage(self.damage, self.dx, self.dy)
             self:death(0, 0)
         end
@@ -218,6 +267,7 @@ function Bullet:death(dx, dy)
     end
 
     table.insert(Game.particles, GunStarParticle:new(self.x, self.y, self.height, 1, self.impactFlashSprite))
+    self:spawnColorParticles(math.max(self.colorParticles.count, 1))
 
     if not dy or not dx then
         dx = math.cos(self.angle) / 2

@@ -10,14 +10,14 @@ function Clouds:load(target)
     self.target = target
     self.layers = {
         {
-            alpha = 0.05,
+            alpha = 0.1,
             height = 70,
             parallax = 1.10,
             scale = 1,
             movementScale = 0.5,
         },
         {
-            alpha = 0.025,
+            alpha = 0.05,
             height = 108,
             parallax = 1.20,
             scale = 2.2,
@@ -28,7 +28,7 @@ end
 
 function Clouds:update(dt)
     local speed = (math.sin(love.timer.getTime() * 0.2) + 3 ) / 4
-    self.movement = (self.movement + 10 *dt * speed) % self.width 
+    self.movement = self.movement + 10 * dt * speed
 end
 
 function Clouds:drawShadow()

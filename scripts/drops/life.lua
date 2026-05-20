@@ -4,6 +4,7 @@ local Life = setmetatable({}, {__index = Drop})
 local Tilemap = require("scripts/tilemap")
 local Ball = require("scripts/particles/ballParticle")
 local DropShine = require("scripts/drops/dropShine")
+local PickupNumber = require("scripts/effects/damageNumber")
 
 Life.__index = Life
 
@@ -15,6 +16,8 @@ local sheetWidth = sheetImage:getWidth()
 local sheetHeight = sheetImage:getHeight()
 local maxAttractDistance = 35
 local baseAttractForce = 430
+local spawnCollisionAvoidRadius = 28
+local spawnCollisionAvoidForce = 58
 
 for x = 0, sheetWidth - 8, 8 do
     if x == 0 then 
@@ -48,8 +51,47 @@ function Life:new(x, y)
     life.spawnStretchDuration = 0.22
     life.drawScaleX = 1
     life.drawScaleY = 1.25
+    life.collectDuration = 0.16
     life.height = life.hoverHeight + life.popHeight
+    if not self.disableSpawnCollisionPush then
+        life:pushAwayFromSpawnCollisions()
+    end
     return life
+end
+
+function Life:pushAwayFromSpawnCollisions(force)
+    force = force or spawnCollisionAvoidForce
+
+    if not (Tilemap and Tilemap.getNearbyTiles) then
+        return
+    end
+
+    local pushX = 0
+    local pushY = 0
+    local nearbyTiles = Tilemap:getNearbyTiles(self.x, self.y)
+
+    for _, tile in ipairs(nearbyTiles) do
+        if tile.collider then
+            local dx = self.x - tile.xWorld
+            local dy = self.y - tile.yWorld
+            local distanceSq = dx * dx + dy * dy
+
+            if distanceSq > 0.001 and distanceSq < spawnCollisionAvoidRadius * spawnCollisionAvoidRadius then
+                local dist = math.sqrt(distanceSq)
+                local weight = 1 - dist / spawnCollisionAvoidRadius
+                pushX = pushX + (dx / dist) * weight
+                pushY = pushY + (dy / dist) * weight
+            end
+        end
+    end
+
+    local length = math.sqrt(pushX * pushX + pushY * pushY)
+    if length <= 0 then
+        return
+    end
+
+    self.vx = (self.vx or 0) + (pushX / length) * force
+    self.vy = (self.vy or 0) + (pushY / length) * force
 end
 
 function Life:changeHeight(dt)
@@ -85,6 +127,15 @@ function Life:getDrawScale()
     local scaleX = self.drawScaleX or 1
     local scaleY = self.drawScaleY or 1.25
 
+    if self.isCollecting then
+        local progress = math.min((self.collectTimer or 0) / (self.collectDuration or 0.16), 1)
+        local stretch = math.sin(progress * math.pi)
+        local shrink = 1 - progress
+        scaleX = scaleX * (0.28 + shrink * 0.72) * (1 + stretch * 0.22)
+        scaleY = scaleY * (0.26 + shrink * 0.74) * (1 - stretch * 0.14)
+        return scaleX, scaleY
+    end
+
     if self.spawnStretchTimer and self.spawnStretchTimer > 0 then
         local progress = 1 - self.spawnStretchTimer / (self.spawnStretchDuration or 0.22)
         local wave = math.sin(progress * math.pi)
@@ -96,7 +147,9 @@ function Life:getDrawScale()
 end
 
 function Life:update(dt)
-    Drop.update(self, dt)
+    if Drop.update(self, dt) then
+        return
+    end
 
 
     self:changeHeight(dt)
@@ -133,6 +186,24 @@ function Life:update(dt)
 
     self:animation(dt)
 
+end
+
+function Life:startCollectAnimation()
+    self.isCollecting = true
+    self.collectTimer = 0
+    self.vx = 0
+    self.vy = 0
+end
+
+function Life:updateCollectAnimation(dt)
+    self.collectTimer = (self.collectTimer or 0) + dt
+    self.height = (self.hoverHeight or self.baseHeight or 0) + (self.popHeight or 0)
+
+    if self.collectTimer >= (self.collectDuration or 0.16) then
+        self.isAlive = false
+        self.isCollecting = false
+        self:onCatch()
+    end
 end
 
 
@@ -185,7 +256,7 @@ function Life:onCatch()
     coinSound:setVolume(0.8)
     coinSound:setPitch((1) * GAME_PITCH)
     coinSound:play()
-    self:catchParticles()
+    PickupNumber.spawnPickup(self.x, self.y, self.height, "+1", "life")
 
 end
 
@@ -218,7 +289,12 @@ function Life:draw()
 
     love.graphics.setColor(1, 1, 1, alpha)
     local scaleX, scaleY = self:getDrawScale()
-    DropShine.draw(sheetImage, self.sprite, self.x, self.y - self.height, 0, scaleX, scaleY, 4, 8)
+    local drawY = self.y - self.height
+    if self.isCollecting then
+        local baseScaleY = self.drawScaleY or 1.25
+        drawY = drawY + 4 * (baseScaleY - scaleY)
+    end
+    DropShine.draw(sheetImage, self.sprite, self.x, drawY, 0, scaleX, scaleY, 4, 8)
     love.graphics.setColor(1, 1, 1, 1)
 
 end

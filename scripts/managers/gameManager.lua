@@ -22,8 +22,10 @@ local BabyZombie = require("scripts/enemies/babyZombie")
 local BigZombie = require("scripts/enemies/bigZombie")
 local NoHead = require("scripts/enemies/noHead")
 local Scarecrow = require("scripts/enemies/scarecrow")
+local CardChoice = require("scripts/managers/cardChoice")
 
 local font = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 32)
+local hudDistortionShader = love.graphics.newShader("scripts/shaders/hudWater.glsl")
 local playerLightImage = love.graphics.newImage("assets/sprites/effects/light.png")
 playerLightImage:setFilter("nearest", "nearest")
 local vignetteShader = love.graphics.newShader("scripts/shaders/vignette.glsl")
@@ -36,6 +38,7 @@ local minimapSprites = {
     connection = love.graphics.newImage("assets/sprites/ui/map/connection.png"),
     player = love.graphics.newImage("assets/sprites/ui/map/player.png"),
     store = love.graphics.newImage("assets/sprites/ui/map/store.png"),
+    cards = love.graphics.newImage("assets/sprites/ui/map/cards.png"),
     unknown = love.graphics.newImage("assets/sprites/ui/map/unknown.png"),
 }
 
@@ -229,6 +232,26 @@ local function getRoomEncounterOverrideValue(config, room, key)
     return override and override[key] or nil
 end
 
+local function resolveRangeValue(value, fallback)
+    if type(value) ~= "table" then
+        return value or fallback
+    end
+
+    local minValue = value.min or value[1] or fallback
+    local maxValue = value.max or value[2] or minValue
+    if not minValue then
+        return fallback
+    end
+
+    minValue = math.floor(minValue)
+    maxValue = math.floor(maxValue)
+    if maxValue < minValue then
+        minValue, maxValue = maxValue, minValue
+    end
+
+    return math.random(minValue, maxValue)
+end
+
 local function shouldSkipRoomEncounter(config, room)
     local state = room and room.state
     if not state then
@@ -244,16 +267,122 @@ local function shouldSkipRoomEncounter(config, room)
     return state.skipEncounter == true
 end
 
-local function getEncounterDifficulty(config)
-    return math.max(1, config and config.difficulty or 1)
+local function getEncounterDifficulty(config, room)
+    local difficulty = math.max(1, config and config.difficulty or 1)
+    local roomDistance = room and room.distanceFromStart or 0
+
+    for _, rule in ipairs((config and config.distanceDifficulty) or {}) do
+        if roomDistance >= (rule.minDistance or 0) then
+            difficulty = math.max(difficulty, rule.difficulty or difficulty)
+        end
+    end
+
+    return difficulty
+end
+
+local function getDistanceDifficultyRule(config, room)
+    local roomDistance = room and room.distanceFromStart or 0
+    local selected = nil
+
+    for _, rule in ipairs((config and config.distanceDifficulty) or {}) do
+        if roomDistance >= (rule.minDistance or 0)
+            and (not selected or (rule.minDistance or 0) >= (selected.minDistance or 0)) then
+            selected = rule
+        end
+    end
+
+    return selected
 end
 
 local function getEncounterWaves(config)
+    if config and config.waveTemplates and #config.waveTemplates > 0 then
+        return config.waveTemplates
+    end
+
     if config and config.waves and #config.waves > 0 then
         return config.waves
     end
 
     return {config or {}}
+end
+
+local function getRoomEncounterRangeValue(config, room, key, fallback)
+    local overrideValue = getRoomEncounterOverrideValue(config, room, key)
+    if overrideValue ~= nil then
+        return resolveRangeValue(overrideValue, fallback)
+    end
+
+    local distanceRule = getDistanceDifficultyRule(config, room)
+    if distanceRule and distanceRule[key] ~= nil then
+        return resolveRangeValue(distanceRule[key], fallback)
+    end
+
+    return resolveRangeValue(config and config[key], fallback)
+end
+
+local function getRoomEncounterNumberValue(config, room, key, fallback)
+    local overrideValue = getRoomEncounterOverrideValue(config, room, key)
+    if overrideValue ~= nil then
+        return overrideValue
+    end
+
+    local distanceRule = getDistanceDifficultyRule(config, room)
+    if distanceRule and distanceRule[key] ~= nil then
+        return distanceRule[key]
+    end
+
+    return config and config[key] or fallback
+end
+
+local function getRoomTotalWaves(config, room)
+    return math.max(1, getRoomEncounterRangeValue(config, room, "totalWaves", #(getEncounterWaves(config))))
+end
+
+local function getRoomSimultaneousWaves(config, room)
+    return math.max(1, getRoomEncounterRangeValue(config, room, "simultaneousWaves", 1))
+end
+
+local function getWaveChance(config, room, waveConfig)
+    local waveId = waveConfig and waveConfig.id
+    local override = getRoomEncounterOverride(config, room)
+    local waveChances = override and override.waveChances
+
+    if waveId and waveChances and waveChances[waveId] ~= nil then
+        return waveChances[waveId]
+    end
+
+    return waveConfig and (waveConfig.chance or waveConfig.weight) or 1
+end
+
+local function chooseEncounterWave(config, room)
+    local difficulty = getEncounterDifficulty(config, room)
+    local waves = getEncounterWaves(config)
+    local candidates = {}
+    local totalChance = 0
+
+    for _, waveConfig in ipairs(waves) do
+        if difficulty >= (waveConfig.minDifficulty or 1) then
+            local chance = getWaveChance(config, room, waveConfig)
+            if chance and chance > 0 then
+                candidates[#candidates + 1] = waveConfig
+                totalChance = totalChance + chance
+            end
+        end
+    end
+
+    if totalChance <= 0 then
+        return waves[1] or config or {}
+    end
+
+    local roll = math.random() * totalChance
+    for _, waveConfig in ipairs(candidates) do
+        roll = roll - getWaveChance(config, room, waveConfig)
+        if roll <= 0 then
+            return waveConfig
+        end
+    end
+
+    return candidates[#candidates] or waves[1] or config or {}
 end
 
 local function getEncounterSpawnMinDistance(config)
@@ -264,13 +393,16 @@ end
 
 local function getEncounterEnemyCount(config, waveConfig)
     local countConfig = waveConfig.count or config.count or {}
-    local difficulty = getEncounterDifficulty(config)
+    local currentRoom = FloorManager:getCurrentRoom()
+    local difficulty = getEncounterDifficulty(config, currentRoom)
     local perDifficulty = countConfig.perDifficulty or 0
     local bonus = math.max(0, difficulty - 1) * perDifficulty
     local minCount = (countConfig.min or 1) + bonus
     local maxCount = (countConfig.max or minCount) + bonus
-    local multiplier = waveConfig.countMultiplier or 1
-    local add = waveConfig.countAdd or 0
+    local roomMultiplier = getRoomEncounterNumberValue(config, currentRoom, "countMultiplier", 1) or 1
+    local roomAdd = getRoomEncounterNumberValue(config, currentRoom, "countAdd", 0) or 0
+    local multiplier = (waveConfig.countMultiplier or 1) * roomMultiplier
+    local add = (waveConfig.countAdd or 0) + roomAdd
 
     minCount = math.max(1, math.floor(minCount * multiplier + add + 0.5))
     maxCount = math.max(minCount, math.floor(maxCount * multiplier + add + 0.5))
@@ -279,7 +411,7 @@ local function getEncounterEnemyCount(config, waveConfig)
 end
 
 local function chooseEnemyType(config, waveConfig, spawnedCounts)
-    local difficulty = getEncounterDifficulty(config)
+    local difficulty = getEncounterDifficulty(config, FloorManager:getCurrentRoom())
     local enemyTypes = waveConfig.enemyTypes or config.enemyTypes or {}
     local enemyTypeWeights = waveConfig.enemyTypeWeights or {}
     local maxPerWave = waveConfig.maxPerWave or {}
@@ -506,6 +638,16 @@ local function shouldShowShopIcon(room)
         and state.visited == true
         and state.shopProduct ~= nil
         and not isStartRoom(room)
+        and not room.isCardRoom
+end
+
+local function shouldShowCardIcon(room)
+    local state = room and room.state
+    return room
+        and room.isCardRoom
+        and state
+        and state.visited == true
+        and not isStartRoom(room)
 end
 
 local function getMinimapRoomSprite(rect, room)
@@ -589,24 +731,36 @@ local function getGeneralShadow()
     return LightConfig:getGeneralShadow()
 end
 
-local function getPlayerLightBrightness(object)
+local function getPlayerLightBrightness(object, sources)
     local generalShadow = getGeneralShadow()
     local minBrightness = generalShadow.minBrightness or 1
     local brightness = minBrightness
-    local sources = Game and Game.getLightSources and Game:getLightSources() or {}
+    sources = sources or (Game and Game.getLightSources and Game:getLightSources()) or {}
+    local objectX = object and (object.xWorld or object.x)
+    local objectY = object and (object.yWorld or object.y)
+
+    if not (objectX and objectY) then
+        return brightness
+    end
 
     for _, source in ipairs(sources) do
         local spriteBrightness = source.config and source.config.spriteBrightness
         if spriteBrightness and spriteBrightness.enabled ~= false then
-            local d = distance(source, object)
             local minDist = spriteBrightness.minDistance or 35
             local maxDist = spriteBrightness.maxDistance or 230
             local maxBrightness = spriteBrightness.maxBrightness or 1
-            local range = math.max(1, maxDist - minDist)
-            local t = math.min(math.max((d - minDist) / range, 0), 1)
-            local sourceBrightness = maxBrightness + (minBrightness - maxBrightness) * t
-            sourceBrightness = math.min(math.max(sourceBrightness * (source.flicker or 1), minBrightness), maxBrightness)
-            brightness = math.max(brightness, sourceBrightness)
+            local dx = (source.x or 0) - objectX
+            local dy = (source.y or 0) - objectY
+            local maxDistSq = maxDist * maxDist
+
+            if dx * dx + dy * dy <= maxDistSq then
+                local d = math.sqrt(dx * dx + dy * dy)
+                local range = math.max(1, maxDist - minDist)
+                local t = math.min(math.max((d - minDist) / range, 0), 1)
+                local sourceBrightness = maxBrightness + (minBrightness - maxBrightness) * t
+                sourceBrightness = math.min(math.max(sourceBrightness * (source.flicker or 1), minBrightness), maxBrightness)
+                brightness = math.max(brightness, sourceBrightness)
+            end
         end
     end
 
@@ -653,6 +807,7 @@ function Game:load()
     ACTIVE_LIGHT_MANAGER = self
     math.randomseed(os.time())
     love.graphics.setDefaultFilter("nearest", "nearest")
+    CardChoice:load()
 
     FloorManager:load(CURRENT_LEVEL)
     Tilemap:load()
@@ -825,7 +980,7 @@ end
 
 function Game:spawnStartRoomScarecrow(currentRoom)
     local state = currentRoom and currentRoom.state
-    if not state or state.cleared or state.scarecrowDestroyed then
+    if not state or state.scarecrowDestroyed then
         return false
     end
 
@@ -864,7 +1019,25 @@ function Game:setupCurrentRoom(options)
         Tilemap:setAllRoomDoorsOpen(false)
     end
 
-    if currentRoom.isShopRoom then
+    if currentRoom.templateId == "start_32x32" or isStartRoom(currentRoom) then
+        self.enemies = {}
+        self.nearbyEnemies = {}
+        state.skipEncounter = true
+        state.activeEncounterWaves = {}
+        state.encounterSpawnedWaves = 0
+
+        if self:spawnStartRoomScarecrow(currentRoom) then
+            state.cleared = false
+            return
+        end
+
+        state.cleared = true
+        state.encounterSpawned = false
+        state.encounterCompleted = true
+        return
+    end
+
+    if currentRoom.isShopRoom or currentRoom.isCardRoom then
         state.cleared = true
         state.skipEncounter = true
         state.encounterSpawned = false
@@ -877,38 +1050,47 @@ function Game:setupCurrentRoom(options)
         return
     end
 
-    if isStartRoom(currentRoom) and self:spawnStartRoomScarecrow(currentRoom) then
-        return
-    end
-
-    if currentRoom.templateId == "start_32x32" and encounterConfig.startRoom == false then
-        state.cleared = true
-        state.encounterCompleted = true
-        return
-    end
-
     if shouldSkipRoomEncounter(encounterConfig, currentRoom) then
         state.cleared = true
         state.encounterCompleted = true
         return
     end
 
-    state.encounterWaveIndex = (state.encounterWaveIndex or 0) > 0 and state.encounterWaveIndex or 1
-    self:spawnCurrentRoomWave(currentRoom, encounterConfig)
+    state.encounterTotalWaves = state.encounterTotalWaves or getRoomTotalWaves(encounterConfig, currentRoom)
+    state.encounterSimultaneousWaves = state.encounterSimultaneousWaves or getRoomSimultaneousWaves(encounterConfig, currentRoom)
+    state.encounterSpawnedWaves = state.encounterSpawnedWaves or 0
+    state.activeEncounterWaves = state.activeEncounterWaves or {}
+    self:spawnEncounterWavesUntilFull(currentRoom, encounterConfig)
 end
 
 function Game:spawnCurrentRoomWave(currentRoom, encounterConfig)
     local state = currentRoom and currentRoom.state
-    if not state or currentRoom.isShopRoom then
+    if not state or currentRoom.isShopRoom or currentRoom.isCardRoom then
         return
     end
+    if currentRoom.templateId == "start_32x32" or isStartRoom(currentRoom) then
+        return false
+    end
 
-    local waves = getEncounterWaves(encounterConfig)
-    local waveIndex = math.max(1, state.encounterWaveIndex or 1)
-    local waveConfig = getRoomWaveConfig(encounterConfig, waves[waveIndex] or waves[#waves] or {}, currentRoom)
+    state.encounterTotalWaves = state.encounterTotalWaves or getRoomTotalWaves(encounterConfig, currentRoom)
+    state.encounterSpawnedWaves = state.encounterSpawnedWaves or 0
+    if state.encounterSpawnedWaves >= state.encounterTotalWaves then
+        return false
+    end
+
+    local waveIndex = state.encounterSpawnedWaves + 1
+    state.encounterWaveIndex = waveIndex
+    local waveConfig = getRoomWaveConfig(encounterConfig, chooseEncounterWave(encounterConfig, currentRoom), currentRoom)
     local enemyCount = getEncounterEnemyCount(encounterConfig, waveConfig)
     local spawnMinDistance = getEncounterSpawnMinDistance(encounterConfig)
     local spawnedCounts = {}
+    local waveId = (state.encounterWaveSerial or 0) + 1
+    local spawnedAny = false
+
+    state.encounterWaveSerial = waveId
+    state.encounterSpawnedWaves = waveIndex
+    state.activeEncounterWaves = state.activeEncounterWaves or {}
+    state.activeEncounterWaves[waveId] = true
 
     state.encounterSpawned = true
     for _ = 1, enemyCount do
@@ -917,13 +1099,50 @@ function Game:spawnCurrentRoomWave(currentRoom, encounterConfig)
         local x, y = Tilemap:getRandomReachableSpawnPosition(Player, spawnMinDistance)
 
         if x and y then
-            self.enemies[#self.enemies + 1] = factory:new(x, y)
+            local enemy = factory:new(x, y)
+            enemy.encounterWaveId = waveId
+            self.enemies[#self.enemies + 1] = enemy
             spawnedCounts[enemyId] = (spawnedCounts[enemyId] or 0) + 1
+            spawnedAny = true
         end
+    end
+
+    if not spawnedAny then
+        state.activeEncounterWaves[waveId] = nil
+        return false
     end
 
     Game.drawtext = "Wave " .. waveIndex
     Game.textAlphaTarget = 1
+    return true
+end
+
+local function getActiveEncounterWaveCount(state)
+    local count = 0
+    for _, active in pairs(state and state.activeEncounterWaves or {}) do
+        if active then
+            count = count + 1
+        end
+    end
+    return count
+end
+
+function Game:spawnEncounterWavesUntilFull(currentRoom, encounterConfig)
+    local state = currentRoom and currentRoom.state
+    if not state then
+        return
+    end
+    if currentRoom.templateId == "start_32x32" or isStartRoom(currentRoom) then
+        return
+    end
+
+    state.encounterSimultaneousWaves = state.encounterSimultaneousWaves or getRoomSimultaneousWaves(encounterConfig, currentRoom)
+
+    while getActiveEncounterWaveCount(state) < state.encounterSimultaneousWaves do
+        if not self:spawnCurrentRoomWave(currentRoom, encounterConfig) then
+            break
+        end
+    end
 end
 
 function Game:checkCurrentRoomClear()
@@ -933,25 +1152,55 @@ function Game:checkCurrentRoomClear()
         return
     end
 
-    if #self.enemies == 0 then
-        if state.startRoomScarecrowEncounter then
+    if currentRoom.templateId == "start_32x32" or isStartRoom(currentRoom) then
+        state.activeEncounterWaves = {}
+        state.encounterSpawnedWaves = 0
+
+        for index = #(self.enemies or {}), 1, -1 do
+            local enemy = self.enemies[index]
+            if getmetatable(enemy) ~= Scarecrow then
+                table.remove(self.enemies, index)
+            end
+        end
+
+        if #self.enemies == 0 then
             state.cleared = true
             state.encounterCompleted = true
-            Game.drawtext = "Room cleared"
-            Game.textAlphaTarget = 1
-            return
         end
+        return
+    end
 
-        local encounterConfig = getEncounterConfig()
-        local waves = getEncounterWaves(encounterConfig)
-        local nextWaveIndex = (state.encounterWaveIndex or 1) + 1
+    if state.startRoomScarecrowEncounter and #self.enemies == 0 then
+        state.cleared = true
+        state.encounterCompleted = true
+        Game.drawtext = "Room cleared"
+        Game.textAlphaTarget = 1
+        return
+    end
 
-        if encounterConfig and nextWaveIndex <= #waves then
-            state.encounterWaveIndex = nextWaveIndex
-            self:spawnCurrentRoomWave(currentRoom, encounterConfig)
-            return
+    local encounterConfig = getEncounterConfig()
+    local activeWaves = state.activeEncounterWaves or {}
+    for waveId, active in pairs(activeWaves) do
+        if active then
+            local hasAliveEnemy = false
+            for _, enemy in ipairs(self.enemies or {}) do
+                if enemy.isAlive ~= false and enemy.encounterWaveId == waveId then
+                    hasAliveEnemy = true
+                    break
+                end
+            end
+
+            if not hasAliveEnemy then
+                activeWaves[waveId] = nil
+            end
         end
+    end
 
+    if encounterConfig then
+        self:spawnEncounterWavesUntilFull(currentRoom, encounterConfig)
+    end
+
+    if #self.enemies == 0 and getActiveEncounterWaveCount(state) == 0 then
         state.cleared = true
         state.encounterCompleted = true
         Game.drawtext = "Room cleared"
@@ -1022,6 +1271,12 @@ function Game:loadRoomFromDirection(direction)
     end
 
     self.objects = {}
+    for index = #(self.particles or {}), 1, -1 do
+        if self.particles[index].particleType == "boxParticle" then
+            table.remove(self.particles, index)
+        end
+    end
+
     Tilemap:load()
     Tilemap:setDoorOpen(entryDirection, true)
     local spawnX, spawnY = getEntrySpawn(entryDirection)
@@ -1159,6 +1414,7 @@ end
 
 function Game:close()
     HeartSound:stop()
+    CardChoice:load()
     self = {}
 end
 
@@ -1309,6 +1565,9 @@ function Game:updateManagers(dt)
     Tutorial:update(dt)
     WaveManager:update(dt)
     Clouds:update(dt)
+    if CardChoice:isActive() then
+        Dialog.breakMovements = true
+    end
     if self:updateRoomExitTransition(dt) then
         -- Player is controlled by the room-exit sequence.
     elseif not self:updateEntryMove(dt) then
@@ -1319,6 +1578,7 @@ function Game:updateManagers(dt)
     Tilemap:update(dt)
     self:checkRoomTransition(dt)
     PointsManager:update(dt)
+    CardChoice:update(dt)
     camera:update(dt)
 end
 
@@ -1334,6 +1594,15 @@ function Game:update(dt)
 
     self.textAlpha = transitionValue(self.textAlpha, self.textAlphaTarget, 5, dt)
     self.textAlphaTarget = 0
+
+    local currentRoom = FloorManager:getCurrentRoom()
+    if currentRoom and (currentRoom.templateId == "start_32x32" or isStartRoom(currentRoom)) then
+        for index = #(self.enemies or {}), 1, -1 do
+            if getmetatable(self.enemies[index]) ~= Scarecrow then
+                table.remove(self.enemies, index)
+            end
+        end
+    end
 
     self:updateEntityList(self.enemies, dt)
     self:checkCurrentRoomClear()
@@ -1406,9 +1675,10 @@ end
 
 function Game:drawFootsteps()
     local brightnessByFootstep = {}
+    local lightSources = self:getLightSources()
 
     for index, item in ipairs(self.footsteps) do
-        local brightness = getPlayerLightBrightness(item)
+        local brightness = getPlayerLightBrightness(item, lightSources)
         brightnessByFootstep[index] = brightness
         item:drawLayer1(brightness)
     end
@@ -1425,19 +1695,37 @@ end
 function Game:drawShadows()
     Clouds:drawShadow()
     for _, item in ipairs(self.drawQueue) do
-        if type(item.object.drawShadow) == "function" then
+        if not item.object.isGroundLayer and type(item.object.drawShadow) == "function" then
             item.object:drawShadow()
         end
     end
 end
 
-function Game:drawQueueObjects()
+function Game:drawGroundQueueObjects()
+    local lightSources = self:getLightSources()
+
     for _, item in ipairs(self.drawQueue) do
-        local brightness = getPlayerLightBrightness(item.object)
-        local r, g, b = getShadowTint(brightness)
-        love.graphics.setColor(r, g, b, 1)
-        item.object:draw()
-        love.graphics.setColor(1, 1, 1, 1)
+        if item.object.isGroundLayer then
+            local brightness = getPlayerLightBrightness(item.object, lightSources)
+            local r, g, b = getShadowTint(brightness)
+            love.graphics.setColor(r, g, b, 1)
+            item.object:draw()
+            love.graphics.setColor(1, 1, 1, 1)
+        end
+    end
+end
+
+function Game:drawQueueObjects()
+    local lightSources = self:getLightSources()
+
+    for _, item in ipairs(self.drawQueue) do
+        if not item.object.isGroundLayer then
+            local brightness = getPlayerLightBrightness(item.object, lightSources)
+            local r, g, b = getShadowTint(brightness)
+            love.graphics.setColor(r, g, b, 1)
+            item.object:draw()
+            love.graphics.setColor(1, 1, 1, 1)
+        end
     end
 end
 
@@ -1544,6 +1832,13 @@ function Game:drawMinimap()
         drawMinimapSprite(minimapSprites.store, x, y, size, size)
     end
 
+    local function drawCardIconAt(x, y)
+        local size = config.shopIconSize or (minimapSprites.cards:getWidth() * minimapSpriteScale)
+
+        love.graphics.setColor(1, 1, 1, 1)
+        drawMinimapSprite(minimapSprites.cards, x, y, size, size)
+    end
+
     local function clamp(value, minValue, maxValue)
         return math.max(minValue, math.min(maxValue, value))
     end
@@ -1635,7 +1930,7 @@ function Game:drawMinimap()
     end
 
     for roomId, room in pairs(rooms) do
-        if knownRooms[roomId] and shouldShowShopIcon(room) then
+        if knownRooms[roomId] and (shouldShowShopIcon(room) or shouldShowCardIcon(room)) then
             local minX, minY, maxX, maxY = getRoomMinimapBounds(room)
             local inView = not (
                 maxX < currentCellX - viewRadius or
@@ -1648,7 +1943,11 @@ function Game:drawMinimap()
                 local iconCellX = (minX + maxX) / 2
                 local iconCellY = (minY + maxY) / 2
                 local iconX, iconY = toMinimapPosition(iconCellX, iconCellY)
-                drawShopIconAt(iconX, iconY)
+                if shouldShowCardIcon(room) then
+                    drawCardIconAt(iconX, iconY)
+                else
+                    drawShopIconAt(iconX, iconY)
+                end
             end
         end
     end
@@ -1703,12 +2002,13 @@ function Game:drawWorld()
     self:drawLightSprites()
     table.sort(self.drawQueue, sortDrawQueue)
 
-    self:drawFootsteps()
-    self:drawShadows()
-    Player:drawSight()
     if not (CURRENT_LEVEL and CURRENT_LEVEL.enableTrails == false) then
         Trail:draw()
     end
+    self:drawGroundQueueObjects()
+    self:drawFootsteps()
+    self:drawShadows()
+    Player:drawSight()
     self:drawQueueObjects()
     if CURRENT_LEVEL and CURRENT_LEVEL.drawDebug then
         CURRENT_LEVEL:drawDebug()
@@ -1752,7 +2052,25 @@ function Game:draw()
 end
 
 function Game:drawHUD()
+    if not self.hudCanvas or self.hudCanvas:getWidth() ~= baseWidth or self.hudCanvas:getHeight() ~= baseHeight then
+        self.hudCanvas = love.graphics.newCanvas(baseWidth, baseHeight)
+        self.hudCanvas:setFilter("nearest", "nearest")
+    end
+
+    local previousCanvas = love.graphics.getCanvas()
+    love.graphics.setCanvas(self.hudCanvas)
+    love.graphics.clear(0, 0, 0, 0)
     self:drawUI()
+    love.graphics.setCanvas(previousCanvas)
+
+    hudDistortionShader:send("u_time", love.timer.getTime()/2)
+    hudDistortionShader:send("u_strength", 0.00055)
+    love.graphics.setShader(hudDistortionShader)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.draw(self.hudCanvas, 0, 0)
+    love.graphics.setShader()
+
+    CardChoice:draw()
 end
 
 function DisableMouseTutorial()
@@ -1792,6 +2110,10 @@ function DisableWalkTutorial()
 end
 
 function Game:keypressed(key)
+    if CardChoice:isActive() and CardChoice:keypressed(key) then
+        return
+    end
+
     if key == "f6" then
         --DEBUG = not DEBUG
     elseif key == "1" then
@@ -1825,6 +2147,17 @@ function Game:keypressed(key)
     elseif tonumber(key) then
         --self:changeShaders(tonumber(key))
     end
+end
+
+function Game:mousepressed(x, y, button)
+    if CardChoice:isActive() then
+        return CardChoice:mousepressed(x, y, button)
+    end
+    return false
+end
+
+function Game:startCardChoice(x, y)
+    CardChoice:start(x, y)
 end
 
 return Game
