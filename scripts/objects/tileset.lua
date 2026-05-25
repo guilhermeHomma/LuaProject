@@ -2,9 +2,16 @@
 
 local TileSet = {}
 
+local DEFAULT_TILESET = "assets/sprites/florest/tileset.png"
 
-function TileSet:createTileSet()
-    self.tilesetImage = love.graphics.newImage("assets/sprites/florest/tileset.png")
+function TileSet:createTileSet(imagePath)
+    imagePath = imagePath or DEFAULT_TILESET
+    if self.tilesetImage and self.imagePath == imagePath then
+        return
+    end
+
+    self.imagePath = imagePath
+    self.tilesetImage = love.graphics.newImage(imagePath)
     self.tileSize = 16
     self.tileSet = {}
 

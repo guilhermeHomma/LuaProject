@@ -26,6 +26,7 @@ function Pole:new(x, y, quadIndex, collider)
     tile.flickerSeed = math.random() * 100
     tile.lightFlicker = 1
     tile.renderCullMargin = 320
+    tile.isXrayOccluder = true
     return tile
 end
 
@@ -59,6 +60,37 @@ end
 
 function Pole:drawShadow()
    
+end
+
+function Pole:getXrayOccluderBox()
+    local config = LightConfig:getWorldLightConfig("pole") or poleLightConfig
+    local anim = config.animation or animationConfig
+    local scaleX = anim.scaleX or 1
+    local scaleY = anim.scaleY or 1.5
+
+    return {
+        x = self.xWorld - (frameWidth * scaleX) / 2,
+        y = self.yWorld - spriteHeight * scaleY,
+        width = frameWidth * scaleX,
+        height = spriteHeight * scaleY,
+    }
+end
+
+function Pole:drawXrayOccluder()
+    local config = LightConfig:getWorldLightConfig("pole") or poleLightConfig
+    local anim = config.animation or animationConfig
+
+    love.graphics.draw(
+        sprite,
+        frames[self.currentFrame or 1],
+        self.xWorld,
+        self.yWorld,
+        0,
+        anim.scaleX or 1,
+        anim.scaleY or 1.5,
+        frameWidth / 2,
+        spriteHeight
+    )
 end
 
 function Pole:draw()

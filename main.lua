@@ -25,13 +25,13 @@ local TransitionManager = require("scripts.managers.transitionManager")
 
 canvas = nil
 local menuCanvas = nil
-STATES = {mainMenu = 1, game = 2, gamePause = 3, gameDead = 4, gameIntro = 5, startLogo = 6, settings = 7, confirm = 8}
+STATES = {mainMenu = 1, game = 2, gamePause = 3, gameDead = 4, gameIntro = 5, startLogo = 6, settings = 7, confirm = 8, floorIntro = 9}
 state = STATES.startLogo
 
 DEBUG = false
 FPS = false
 
-MUSIC_VOLUME = 0.6
+MUSIC_VOLUME = 0.3
 GAME_VOLUME = 0.95
 SOUND_VOLUME = 1
 GAME_PITCH = 1
@@ -71,6 +71,8 @@ end
 local function updateCurrentState(dt)
     if state == STATES.game then
         Game:update(dt)
+    elseif state == STATES.floorIntro then
+        Game:updateFloorIntroState(dt)
     elseif state == STATES.mainMenu then
         MainMenu:update(dt)
     elseif state == STATES.gameIntro then
@@ -130,6 +132,9 @@ local function drawScaledState()
         GameoverMenu:draw()
     elseif state == STATES.confirm then
         ConfirmMenu:draw()
+    elseif state == STATES.floorIntro then
+        Game:drawFloorIntro()
+        Game:drawThanksScreen()
     end
 end
 
@@ -138,7 +143,7 @@ local function drawMenuWithDistortion()
     love.graphics.clear(0, 0, 0, 0)
     drawScaledState()
 
-    love.graphics.setCanvas(canvas)
+    love.graphics.setCanvas({canvas, stencil = true})
     menuDistortionShader:send("u_time", love.timer.getTime())
     menuDistortionShader:send("u_strength", 0.00055)
     love.graphics.setShader(menuDistortionShader)
@@ -148,9 +153,16 @@ local function drawMenuWithDistortion()
 end
 
 local function presentCanvas()
+    local crtConfig = GAME_FLAGS and GAME_FLAGS.crt or {}
     presentationShader:send("u_sourceResolution", {baseWidth, baseHeight})
     presentationShader:send("u_viewportOffset", {viewportOffsetX, viewportOffsetY})
     presentationShader:send("u_scale", scale)
+    presentationShader:send("u_crtEnabled", crtConfig.enabled and 1 or 0)
+    presentationShader:send("u_crtIntensity", crtConfig.intensity or 0.55)
+    presentationShader:send("u_crtScanline", crtConfig.scanline or 0.18)
+    presentationShader:send("u_crtCurvature", crtConfig.curvature or 0.055)
+    presentationShader:send("u_crtVignette", crtConfig.vignette or 0.22)
+    presentationShader:send("u_crtChromatic", crtConfig.chromatic or 0.55)
 
     local spotlightEnabled = 0
     if state == STATES.game and Game.spot and Game.spot.enabled and camera then
@@ -230,9 +242,13 @@ function love.load()
     
     if SCAPE_INTRO then
         setLevel("default")
-        state = STATES.game
-        Game:load()
-        Music:startGame()
+        state = STATES.floorIntro
+        Game:load({
+            onFloorIntroComplete = function()
+                state = STATES.game
+                Music:startGame()
+            end,
+        })
     end
     --loadIntro()
 end
@@ -251,9 +267,13 @@ end
 function loadGame(levelId)
     local function callback()
         setLevel(levelId or "default")
-        state = STATES.game
-        Game:load()
-        Music:startGame()
+        state = STATES.floorIntro
+        Game:load({
+            onFloorIntroComplete = function()
+                state = STATES.game
+                Music:startGame()
+            end,
+        })
     end
 
     TransitionManager:startTransition(function() callback() end)
@@ -274,6 +294,14 @@ function openReturnToMenuConfirm(returnState)
     confirmReturnState = returnState or STATES.gamePause
     ConfirmMenu:open("MAIN MENU", "return to main menu?", function()
         quitToMenu()
+    end)
+    state = STATES.confirm
+end
+
+function openRestartConfirm(returnState)
+    confirmReturnState = returnState or STATES.gamePause
+    ConfirmMenu:open("NEW RUN", "start a new run?", function()
+        loadGame()
     end)
     state = STATES.confirm
 end
@@ -312,6 +340,21 @@ function quitToMenu()
         state = STATES.mainMenu
     end
     TransitionManager:startTransition(function() callback() end, 14, 3)
+end
+
+function quitToMenuImmediate()
+    setLevel("menu")
+    Music:closeGame()
+    Game:close()
+    state = STATES.mainMenu
+    if TransitionManager then
+        TransitionManager.alpha = 0
+        TransitionManager.targetAlpha = 0
+        TransitionManager.callback = nil
+        TransitionManager.isTransiting = false
+        TransitionManager.targetDistortion = 0
+        TransitionManager.distortion = 0
+    end
 end
 
 function quitGame()
@@ -447,7 +490,7 @@ end
 function love.draw()
     love.graphics.clear(0, 0, 0)
 
-    love.graphics.setCanvas(canvas)
+    love.graphics.setCanvas({canvas, stencil = true})
     love.graphics.clear(0.2, 0.3, 0.3)
     drawCurrentState()
     if isGameplayState() then

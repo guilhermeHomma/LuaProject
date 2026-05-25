@@ -36,12 +36,14 @@ local LightConfig = {
                 },
                 pole = {
                     enabled = true,
-                    calculationDistance = 320,
+                    calculationDistance = 350,
                     visual = {
                         enabled = true,
                         scale = 0.42,
                         alpha = 0.09,
                         color = {0.9, 0.78, 0.12},
+                        glowScale = 0.55,
+                        glowAlpha = 0.055,
                         flickerAmount = 0.02,
                         flickerSpeed = 1.6,
                         flickerScale = true,
@@ -91,8 +93,10 @@ local LightConfig = {
                     visual = {
                         enabled = true,
                         scale = 0.13,
-                        alpha = 0.035,
-                        color = {0.75, 0.92, 1.0},
+                        alpha = 0.04,
+                        color = {1.0, 0.28, 0.18},
+                        glowScale = 0.1,
+                        glowAlpha = 0.055,
                     },
                     spriteBrightness = {
                         enabled = true,
@@ -103,8 +107,10 @@ local LightConfig = {
                     groundLight = {
                         enabled = true,
                         innerRadius = 8,
-                        outerRadius = 108,
-                        maxBrightness = 0.75,
+                        outerRadius = 48,
+                        maxBrightness = 0.25,
+                        additive = true,
+                        additiveStrength = 0.1,
                     },
                 },
                 enemyProjectile = {
@@ -115,6 +121,8 @@ local LightConfig = {
                         scale = 0.13,
                         alpha = 0.04,
                         color = {1.0, 0.28, 0.18},
+                        glowScale = 0.1,
+                        glowAlpha = 0.055,
                     },
                     spriteBrightness = {
                         enabled = true,
@@ -125,8 +133,10 @@ local LightConfig = {
                     groundLight = {
                         enabled = true,
                         innerRadius = 8,
-                        outerRadius = 108,
-                        maxBrightness = 0.75,
+                        outerRadius = 48,
+                        maxBrightness = 0.25,
+                        additive = true,
+                        additiveStrength = 0.1,
                     },
                 },
             },
@@ -146,16 +156,53 @@ end
 
 function LightConfig:getGeneralShadow()
     local levelLightConfig = CURRENT_LEVEL and CURRENT_LEVEL.lightConfig
+    local result = nil
+
     if levelLightConfig and levelLightConfig.generalShadow then
-        return levelLightConfig.generalShadow
+        result = levelLightConfig.generalShadow
+    elseif CURRENT_LEVEL and CURRENT_LEVEL.generalShadow then
+        result = CURRENT_LEVEL.generalShadow
+    else
+        local active = self:getActive()
+        result = active and active.generalShadow or {}
     end
 
-    if CURRENT_LEVEL and CURRENT_LEVEL.generalShadow then
-        return CURRENT_LEVEL.generalShadow
+    local FloorManager = package.loaded["scripts/managers/floorManager"]
+    local theme = FloorManager
+        and FloorManager.getCurrentRoomTheme
+        and FloorManager:getCurrentRoomTheme()
+
+    if theme and theme.generalShadow then
+        local copy = {}
+        for key, value in pairs(result or {}) do
+            copy[key] = value
+        end
+
+        local shadow = theme.generalShadow
+        if shadow.minBrightnessMultiplier then
+            copy.minBrightness = (copy.minBrightness or 1) * shadow.minBrightnessMultiplier
+        end
+        if shadow.minBrightness ~= nil then
+            copy.minBrightness = shadow.minBrightness
+        end
+        if shadow.color then
+            copy.color = shadow.color
+        end
+
+        result = copy
     end
 
-    local active = self:getActive()
-    return active and active.generalShadow or {}
+    local room = FloorManager and FloorManager.getCurrentRoom and FloorManager:getCurrentRoom()
+    if room and (room.isShopRoom or room.isCardRoom) and not (theme and theme.lootLightBoost == false) then
+        local copy = {}
+        for key, value in pairs(result or {}) do
+            copy[key] = value
+        end
+        copy.minBrightness = math.max(copy.minBrightness or 0, 0.75)
+        return copy
+    end
+
+    return result
 end
 
 function LightConfig:getMaxWorldLights()

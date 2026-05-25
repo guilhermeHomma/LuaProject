@@ -8,6 +8,8 @@ PickupNumber.__index = PickupNumber
 
 local Ball = require("scripts/particles/ballParticle")
 local damageEnabled = false
+local pickupMergeWindow = 0.24
+local pickupMergeDistance = 28
 local itemParticleImage = love.graphics.newImage("assets/sprites/particles/itemparticle.png")
 itemParticleImage:setFilter("nearest", "nearest")
 local itemParticleFrameSize = 16
@@ -67,6 +69,7 @@ local digitPatterns = {
 
 local pickupDigitPatterns = {
     ["+"] = {"010", "010", "111", "010", "010"},
+    ["."] = {"000", "000", "000", "000", "010"},
     ["0"] = {"111", "101", "101", "101", "111"},
     ["1"] = {"010", "110", "010", "010", "111"},
     ["2"] = {"111", "001", "111", "100", "111"},
@@ -134,11 +137,13 @@ local function drawDigits(text, x, y, color, scaleX, scaleY)
     end
 end
 
-local function pickupTextWidth(text)
-    return #text * pickupDigitWidth + math.max(#text - 1, 0) * digitSpacing
+local function pickupTextWidth(text, scale)
+    scale = scale or 1
+    return (#text * pickupDigitWidth + math.max(#text - 1, 0) * digitSpacing) * scale
 end
 
-local function drawPickupDigits(text, x, y, color)
+local function drawPickupDigits(text, x, y, color, scale)
+    scale = scale or 1
     love.graphics.setColor(color[1], color[2], color[3], 1)
 
     local cursorX = x
@@ -149,19 +154,26 @@ local function drawPickupDigits(text, x, y, color)
                 local line = pattern[row]
                 for col = 1, pickupDigitWidth do
                     if line:sub(col, col) == "1" then
-                        love.graphics.rectangle("fill", cursorX + col - 1, y + row - 1, 1, 1)
+                        love.graphics.rectangle(
+                            "fill",
+                            cursorX + (col - 1) * scale,
+                            y + (row - 1) * scale,
+                            scale,
+                            scale
+                        )
                     end
                 end
             end
         end
-        cursorX = cursorX + pickupDigitWidth + digitSpacing
+        cursorX = cursorX + (pickupDigitWidth + digitSpacing) * scale
     end
 end
 
-local function drawPickupDigitBlock(text, x, y, color)
-    drawPickupDigits(text, x + 1, y, {0.05, 0.00, 0.04, 1})
-    drawPickupDigits(text, x, y + 1, {0.05, 0.00, 0.04, 1})
-    drawPickupDigits(text, x, y, color)
+local function drawPickupDigitBlock(text, x, y, color, scale)
+    scale = scale or 1
+    drawPickupDigits(text, x + scale, y, {0.05, 0.00, 0.04, 1}, scale)
+    drawPickupDigits(text, x, y + scale, {0.05, 0.00, 0.04, 1}, scale)
+    drawPickupDigits(text, x, y, color, scale)
 end
 
 local function drawDigitBlock(text, x, y, color, scaleX, scaleY, outlineMode)
@@ -198,8 +210,9 @@ local function drawConfettiText(text, x, y, colors, timer, scaleX, scaleY, outli
     end
 end
 
-local function drawPickupConfettiText(text, x, y, colors, timer)
-    local charStep = pickupDigitWidth + digitSpacing
+local function drawPickupConfettiText(text, x, y, colors, timer, scale)
+    scale = scale or 1
+    local charStep = (pickupDigitWidth + digitSpacing) * scale
 
     for i = 1, #text do
         local char = text:sub(i, i)
@@ -214,7 +227,7 @@ local function drawPickupConfettiText(text, x, y, colors, timer)
             local charY = math.floor(y - popOffset - riseOffset + 0.5)
             local color = colorFrom(colors, timer + i * 0.09, i * 2)
 
-            drawPickupDigitBlock(char, charX, charY, color)
+            drawPickupDigitBlock(char, charX, charY, color, scale)
         end
     end
 end
@@ -368,15 +381,43 @@ function PickupNumber:new(x, y, height, text, colors, options)
     pickup.y = y
     pickup.height = height or 0
     pickup.amount = tostring(text or "+1")
+    pickup.value = options.value or tonumber((pickup.amount:gsub("^%+", ""))) or 0
+    pickup.kind = options.kind or "coin"
+    pickup.decimals = options.decimals or 0
     pickup.palette = colors or coinPalette
     pickup.timer = 0
     pickup.lifeTime = options.lifeTime or 0.46
-    pickup.popDuration = 0.11
+    pickup.popDuration = 0.09
     pickup.floatSpeed = options.floatSpeed or 18
     pickup.spawnedPixels = false
     pickup.spawnedBalls = false
     pickup.isAlive = true
     return pickup
+end
+
+local function formatPickupText(value, decimals)
+    if (decimals or 0) > 0 then
+        local text = string.format("%." .. decimals .. "f", value or 0)
+        text = text:gsub("0+$", ""):gsub("%.$", "")
+        return "+" .. text
+    end
+
+    return "+" .. tostring(math.floor((value or 0) + 0.5))
+end
+
+function PickupNumber:merge(x, y, height, value)
+    local currentValue = self.value or tonumber((self.amount:gsub("^%+", ""))) or 0
+    local addedValue = value or 0
+    local total = currentValue + addedValue
+
+    self.value = total
+    self.amount = formatPickupText(total, self.decimals or 0)
+    self.x = (self.x + (x or self.x)) / 2
+    self.y = (self.y + (y or self.y)) / 2
+    self.height = math.max(self.height or 0, height or 0)
+    self.timer = math.min(self.timer, 0.08)
+    self.lifeTime = math.max(self.lifeTime or 0.46, self.timer + 0.38)
+    self.spawnedPixels = false
 end
 
 function PickupNumber:burstBalls()
@@ -434,8 +475,11 @@ end
 
 function PickupNumber:draw()
     local showNumber = self.timer >= 0.04
-    local width = pickupTextWidth(self.amount)
-    local height = digitHeight
+    local growProgress = math.min(self.timer / (self.popDuration or 0.09), 1)
+    local growWave = math.sin(growProgress * math.pi)
+    local scale = 0.62 + 0.38 * growProgress + 0.12 * growWave
+    local width = pickupTextWidth(self.amount, scale)
+    local height = digitHeight * scale
     local drawX = math.floor(self.x - width / 2 + 0.5)
     local drawY = math.floor(self.y - self.height - height / 2 + 0.5)
     if self.timer < itemParticleDuration then
@@ -456,19 +500,41 @@ function PickupNumber:draw()
     end
 
     if showNumber then
-        drawPickupConfettiText(self.amount, drawX, drawY, self.palette, self.timer - 0.04)
+        drawPickupConfettiText(self.amount, drawX, drawY, self.palette, self.timer - 0.04, scale)
     end
 
     love.graphics.setColor(1, 1, 1, 1)
 end
 
-function DamageNumber.spawnPickup(x, y, height, text, kind)
+function DamageNumber.spawnPickup(x, y, height, text, kind, options)
     if not (Game and Game.particles and x and y) then
         return
     end
 
+    options = options or {}
     local colors = kind == "life" and lifePalette or coinPalette
-    addParticle(PickupNumber:new(x, y, height or 0, text, colors))
+    local value = options.value or tonumber((tostring(text or "+1"):gsub("^%+", ""))) or 0
+    local decimals = options.decimals or (kind == "life" and 1 or 0)
+
+    for _, particle in ipairs(Game.particles) do
+        if getmetatable(particle) == PickupNumber
+            and particle.isAlive
+            and particle.kind == (kind or "coin")
+            and (particle.timer or 0) <= pickupMergeWindow then
+            local dx = (particle.x or x) - x
+            local dy = (particle.y or y) - y
+            if dx * dx + dy * dy <= pickupMergeDistance * pickupMergeDistance then
+                particle:merge(x, y, height or 0, value)
+                return
+            end
+        end
+    end
+
+    addParticle(PickupNumber:new(x, y, height or 0, formatPickupText(value, decimals), colors, {
+        kind = kind or "coin",
+        value = value,
+        decimals = decimals,
+    }))
 end
 
 return DamageNumber

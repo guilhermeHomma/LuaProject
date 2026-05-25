@@ -3,6 +3,7 @@ local DefaultLevel = {}
 local tilemapSystem = require("scripts/tilemaps/defaultSystem")
 local FloorManager = require("scripts/managers/floorManager")
 local RoomConfig = require("scripts/config/defaultRoomConfig")
+local FloorEncounterConfig = require("scripts/config/floorEncounterConfig")
 
 local function copyTable(source)
     if type(source) ~= "table" then
@@ -13,6 +14,23 @@ local function copyTable(source)
     for key, value in pairs(source) do
         result[key] = copyTable(value)
     end
+    return result
+end
+
+local function mergeTables(base, overrides)
+    local result = copyTable(base) or {}
+    if type(overrides) ~= "table" then
+        return result
+    end
+
+    for key, value in pairs(overrides) do
+        if type(value) == "table" and type(result[key]) == "table" then
+            result[key] = mergeTables(result[key], value)
+        else
+            result[key] = copyTable(value)
+        end
+    end
+
     return result
 end
 
@@ -39,7 +57,8 @@ DefaultLevel.renderDistances = {
 DefaultLevel.spawnMinDistance = 240
 DefaultLevel.currentFloorIndex = RoomConfig.currentFloorIndex
 DefaultLevel.floorLevels = copyTable(RoomConfig.floorLevels)
-DefaultLevel.roomEncounterConfig = copyTable(RoomConfig.roomEncounterConfig)
+DefaultLevel.baseRoomEncounterConfig = mergeTables(FloorEncounterConfig.base, RoomConfig.roomEncounterConfig)
+DefaultLevel.roomEncounterConfig = copyTable(DefaultLevel.baseRoomEncounterConfig)
 DefaultLevel.window = {
     width = 1280,
     height = 720,
@@ -110,6 +129,9 @@ function DefaultLevel:applyFloorLevel(floorIndex)
     end
 
     self.currentFloorIndex = floorIndex or self.currentFloorIndex or 1
+    local floorEncounter = FloorEncounterConfig.floors[self.currentFloorIndex] or {}
+    self.roomEncounterConfig = mergeTables(self.baseRoomEncounterConfig, floorEncounter)
+    self.roomEncounterConfig = mergeTables(self.roomEncounterConfig, floorLevel.roomEncounterConfig)
 
     if floorLevel.difficulty then
         self.roomEncounterConfig.difficulty = floorLevel.difficulty
@@ -199,6 +221,7 @@ function DefaultLevel:setCameraBounds(bounds)
 end
 
 function DefaultLevel:resetRuntimeState()
+    self.currentFloorIndex = RoomConfig.currentFloorIndex or 1
     self:applyFloorLevel(self.currentFloorIndex)
     self.cameraBounds = {}
     self.cameraAreas = {}

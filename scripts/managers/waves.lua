@@ -9,6 +9,15 @@ require("scripts/utils")
 
 local maxEnemiesAlive = 60
 
+local function currentThemeAllowsAmbience(soundId)
+    local FloorManager = package.loaded["scripts/managers/floorManager"]
+    local theme = FloorManager
+        and FloorManager.getCurrentRoomTheme
+        and FloorManager:getCurrentRoomTheme()
+    local ambience = theme and theme.ambience
+    return not ambience or ambience[soundId] ~= false
+end
+
 function WaveManager:load()
     self.wave = 0
     self.enemiesPerWave = 0
@@ -87,7 +96,7 @@ end
 
 function WaveManager:startNextWave()
 
-    if self.wave >= 4 then 
+    if self.wave >= 4 and currentThemeAllowsAmbience("owl") then
         local sound = love.audio.newSource("assets/sfx/ambience/owl.mp3", "static")
         sound:setVolume(0.15)
         sound:setPitch((0.9 + math.random() * 0.1) * GAME_PITCH)

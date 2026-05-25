@@ -8,7 +8,7 @@ setmetatable(gameOverMenu, { __index = baseMenu })
 function gameOverMenu:load()
     baseMenu.load(self)
     self.MenuTItle = "GAME OVER"
-    self.menuOptions = {"Restart", "Main Menu"}
+    self.menuOptions = {"New Run", "Main Menu"}
 end
 
 function gameOverMenu:draw()

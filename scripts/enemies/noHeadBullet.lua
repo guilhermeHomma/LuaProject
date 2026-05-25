@@ -5,6 +5,7 @@ local Tilemap = require("scripts/tilemap")
 local GunStarParticle = require("scripts/particles/gunStarParticle")
 local BallParticle = require("scripts/particles/ballParticle")
 local BulletColorParticle = require("scripts/particles/bulletColorParticle")
+local wallImpactSoundBase = love.audio.newSource("assets/sfx/gun/empty.mp3", "static")
 
 require("scripts/utils")
 
@@ -32,6 +33,13 @@ local defaultColorParticles = {
 }
 
 bulletSprite:setFilter("nearest", "nearest")
+
+local function playWallImpactSound()
+    local sound = wallImpactSoundBase:clone()
+    sound:setVolume(0.12)
+    sound:setPitch((1.05 + math.random() * 0.18) * (GAME_PITCH or 1))
+    sound:play()
+end
 
 local function getBulletQuad(frameIndex)
     if not bulletQuads[frameIndex] then
@@ -74,6 +82,8 @@ function NoHeadBullet:new(x, y, angle, speed, damage, tileDamage)
     bullet.colorParticlePalette = BulletColorParticle.getPalette(bulletSpritePath)
     bullet.isDying = false
     bullet.isAlive = true
+    bullet.isXrayVisible = true
+    bullet.isXrayProjectile = true
     bullet:spawnColorParticles(bullet.colorParticles.count)
     return bullet
 end
@@ -187,6 +197,7 @@ function NoHeadBullet:hitTile()
         return false
     end
 
+    self.hitTileOnDeath = true
     if type(tile.onshoot) == "function" then
         tile:onshoot(self.tileDamage)
     end
@@ -195,7 +206,7 @@ function NoHeadBullet:hitTile()
 end
 
 function NoHeadBullet:damagePlayer()
-    return Player:takeDamage(self.damage)
+    return Player:takeDamage(self.damage, self.dx or 0, self.dy or 0)
 end
 
 function NoHeadBullet:death()
@@ -205,6 +216,10 @@ function NoHeadBullet:death()
 
     self.isDying = true
     self.impactTimer = 0
+    if self.hitTileOnDeath then
+        playWallImpactSound()
+        self.hitTileOnDeath = false
+    end
     if self.impactShockwave and self.impactShockwave.enabled ~= false and Game and Game.addWeaponShockwave then
         Game:addWeaponShockwave(self.x, self.y - self.height, self.impactShockwave)
     end
@@ -343,6 +358,21 @@ function NoHeadBullet:draw()
     end
 
     love.graphics.setColor(1, 1, 1, 1)
+end
+
+function NoHeadBullet:drawXray()
+    local frameIndex = math.floor(self.timer / bulletFrameDuration) % bulletFrameCount
+    love.graphics.draw(
+        bulletSprite,
+        getBulletQuad(frameIndex),
+        self.x,
+        self.y - self.height,
+        self.angle,
+        1,
+        1,
+        bulletFrameSize / 2,
+        bulletFrameSize / 2
+    )
 end
 
 return NoHeadBullet

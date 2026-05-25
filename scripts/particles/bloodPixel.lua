@@ -1,7 +1,7 @@
 local BloodPixel = {}
 BloodPixel.__index = BloodPixel
 
-local bloodPixelScale = 1.45
+local bloodPixelScale = 1.35
 
 local palette = {
     {0.46, 0.12, 0.10, 1},
@@ -11,8 +11,9 @@ local palette = {
     {0.50, 0.15, 0.13, 1},
 }
 
-function BloodPixel:new(x, y, dx, dy)
+function BloodPixel:new(x, y, dx, dy, customPalette)
     local particle = setmetatable({}, BloodPixel)
+    local activePalette = customPalette or palette
     local angle = math.atan2(dy or 0, dx or 0)
     local hasDirection = math.abs(dx or 0) + math.abs(dy or 0) > 0.001
     local spread = (math.random() - 0.5) * 1.7
@@ -36,7 +37,8 @@ function BloodPixel:new(x, y, dx, dy)
     particle.grounded = false
     particle.groundedTimer = 0
     particle.colorFreezeDelay = 0.16
-    particle.colorOffset = math.random(0, #palette - 1)
+    particle.palette = activePalette
+    particle.colorOffset = math.random(0, #activePalette - 1)
     particle.frozenColor = nil
     particle.isAlive = true
     return particle
@@ -63,8 +65,9 @@ function BloodPixel:update(dt)
     else
         self.groundedTimer = (self.groundedTimer or 0) + dt
         if not self.frozenColor and self.groundedTimer >= (self.colorFreezeDelay or 0.16) then
-            local colorIndex = (math.floor(self.timer * 12 + self.colorOffset) % #palette) + 1
-            self.frozenColor = palette[colorIndex]
+            local activePalette = self.palette or palette
+            local colorIndex = (math.floor(self.timer * 12 + self.colorOffset) % #activePalette) + 1
+            self.frozenColor = activePalette[colorIndex]
         end
 
         local friction = math.max(0, 1 - 7 * dt)
@@ -82,9 +85,10 @@ end
 
 function BloodPixel:draw()
     local color = self.frozenColor
+    local activePalette = self.palette or palette
     if not color then
-        local colorIndex = (math.floor(self.timer * 12 + self.colorOffset) % #palette) + 1
-        color = palette[colorIndex]
+        local colorIndex = (math.floor(self.timer * 12 + self.colorOffset) % #activePalette) + 1
+        color = activePalette[colorIndex]
     end
 
     love.graphics.setColor(color[1], color[2], color[3], 1)
@@ -98,14 +102,14 @@ function BloodPixel:draw()
     love.graphics.setColor(1, 1, 1, 1)
 end
 
-function BloodPixel.spawnBurst(x, y, dx, dy, minCount, maxCount)
+function BloodPixel.spawnBurst(x, y, dx, dy, minCount, maxCount, customPalette)
     if not (Game and Game.particles) then
         return
     end
 
     local count = math.random(minCount or 4, maxCount or minCount or 4)
     for _ = 1, count do
-        table.insert(Game.particles, BloodPixel:new(x, y, dx, dy))
+        table.insert(Game.particles, BloodPixel:new(x, y, dx, dy, customPalette))
     end
 end
 

@@ -4,12 +4,26 @@ TileSet = require("scripts.objects.tileset")
 local Ball = require("scripts/particles/ballParticle")
 local BoxParticle = require("scripts/particles/boxParticle")
 local FootStep = require("scripts/particles/footstep")
+local BloodPixel = require("scripts/particles/bloodPixel")
 local DamageStretch = require("scripts/effects/damageStretch")
 local DropTemplates = require("scripts/drops/dropTemplates")
 local breakBoxBase = love.audio.newSource("assets/sfx/particles/break-box.mp3", "static")
 local coinDropBase = love.audio.newSource("assets/sfx/drops/coin-drop.mp3", "static")
 local shadowQuad = nil
 local whiteShader = love.graphics.newShader("scripts/shaders/whiteShader.glsl")
+local centerTilePriorityOffset = {
+    [5] = true,
+    [15] = true,
+    [35] = true,
+    [48] = true,
+}
+local boxPixelPalette = {
+    {0.62, 0.60, 0.54, 1},
+    {0.50, 0.49, 0.44, 1},
+    {0.42, 0.41, 0.37, 1},
+    {0.70, 0.66, 0.56, 1},
+    {0.36, 0.35, 0.32, 1},
+}
 
 local function getBoxParticleDropKey(tile)
     local FloorManager = require("scripts/managers/floorManager")
@@ -93,6 +107,9 @@ function Tile:new(x, y, quadIndex, collider)
     tile.size = tileSize
     tile.alpha = 1
     tile.collider = collider
+    tile.isXrayOccluder = collider == true
+    tile.isXrayTileOccluder = collider == true
+    tile.isXrayBoxOccluder = quadIndex == 14 or quadIndex == 18
     tile.xWorld, tile.yWorld = Tile.tilemap:mapToWorld(x,y)
     tile.distance = 0
     tile.isAlive = true
@@ -130,6 +147,10 @@ end
 function Tile:getDrawPriority()
     if self.quadIndex == 14 or self.quadIndex == 18 then
         return self.yWorld - 0.1
+    end
+
+    if centerTilePriorityOffset[self.quadIndex] then
+        return self.yWorld + 10
     end
 
     return self.yWorld
@@ -177,6 +198,7 @@ function Tile:explodeBox()
     self.hasExploded = true
     self.isBreaking = false
     self.isAlive = false
+    BloodPixel.spawnBurst(self.xWorld, self.yWorld - 5, 0, -1, 10, 16, boxPixelPalette)
 
     for i = 1, 3 do
         local angle = math.random() * 2 * math.pi
@@ -302,6 +324,53 @@ function Tile:drawShadow()
         shadowQuad = love.graphics.newQuad(110, 14, 20, 20, TileSet.sheetWidth, TileSet.sheetHeight)
     end
     love.graphics.draw(tilesetImage, shadowQuad, self.xWorld, self.yWorld, 0, 1, 1, 10, 16)
+end
+
+function Tile:getXrayOccluderBox()
+    if not self.collider then
+        return nil
+    end
+
+    local tileSize = TileSet.tileSize
+    if self.quadIndex == 1 or self.quadIndex == 2 or self.quadIndex == 3
+        or self.quadIndex == 31 or self.quadIndex == 32 or self.quadIndex == 33
+        or self.quadIndex == 44 or self.quadIndex == 45 or self.quadIndex == 46 then
+        return {
+            x = self.xWorld - tileSize / 2,
+            y = self.yWorld - tileSize * 2,
+            width = tileSize,
+            height = tileSize * 2,
+        }
+    end
+
+    return {
+        x = self.xWorld - tileSize / 2,
+        y = self.yWorld - tileSize,
+        width = tileSize,
+        height = tileSize,
+    }
+end
+
+function Tile:drawXrayOccluder()
+    if not (self.isAlive and self.collider and self.quad) then
+        return
+    end
+
+    local tileSize = TileSet.tileSize
+    local tilesetImage = TileSet.tilesetImage
+
+    if self.quadIndex == 14 or self.quadIndex == 18 then
+        love.graphics.draw(tilesetImage, self.quad, self.xWorld, self.yWorld, 0, 1, 1, tileSize / 2, tileSize * 2)
+    elseif self.quadIndex == 1 or self.quadIndex == 2 or self.quadIndex == 3
+        or self.quadIndex == 31 or self.quadIndex == 32 or self.quadIndex == 33
+        or self.quadIndex == 44 or self.quadIndex == 45 or self.quadIndex == 46 then
+        love.graphics.draw(tilesetImage, self.quad, self.xWorld, self.yWorld - 16, 0, 1, 1, tileSize / 2, tileSize)
+        if self.quad2 then
+            love.graphics.draw(tilesetImage, self.quad2, self.xWorld, self.yWorld, 0, 1, 1, tileSize / 2, tileSize)
+        end
+    else
+        love.graphics.draw(tilesetImage, self.quad, self.xWorld, self.yWorld, 0, 1, 1, tileSize / 2, tileSize)
+    end
 end
 
 

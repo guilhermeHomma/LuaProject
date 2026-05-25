@@ -10,6 +10,7 @@ local BulletSpriteParticle = require("scripts/particles/bulletSpriteParticle")
 local BulletColorParticle = require("scripts/particles/bulletColorParticle")
 local Tilemap = require("scripts/tilemap")
 local DamageNumber = require("scripts/effects/damageNumber")
+local wallImpactSoundBase = love.audio.newSource("assets/sfx/gun/empty.mp3", "static")
 
 local defaultGlow = {
     enabled = true,
@@ -39,6 +40,13 @@ local defaultColorParticles = {
     lifeTime = 0.35,
     size = 1,
 }
+
+local function playWallImpactSound(x, y, volume)
+    local sound = wallImpactSoundBase:clone()
+    sound:setVolume(volume or 0.12)
+    sound:setPitch((1.05 + math.random() * 0.18) * (GAME_PITCH or 1))
+    sound:play()
+end
 
 local function copyTable(source)
     local result = {}
@@ -112,6 +120,8 @@ function Bullet:new(x, y, angle, height, speed, damage, options)
         bullet.glow.midColor,
         bullet.glow.outerColor,
     })
+    bullet.isXrayVisible = false
+    bullet.isXrayProjectile = false
 
     if bullet.colorParticles.enabled ~= false then
         bullet:spawnColorParticles(bullet.colorParticles.count)
@@ -198,6 +208,7 @@ function Bullet:isColliding(size)
             }
 
             if checkCollision(box, tileBox) then
+                self.hitTileOnDeath = true
                 local damaged = false
                 if type(tile.onshoot) == "function" then
                     damaged = tile:onshoot(self.damage) == true
@@ -262,6 +273,11 @@ function Bullet:update(dt)
 end
 
 function Bullet:death(dx, dy)
+    if self.hitTileOnDeath then
+        playWallImpactSound(self.x, self.y)
+        self.hitTileOnDeath = false
+    end
+
     if self.impactShockwave and self.impactShockwave.enabled ~= false and Game and Game.addWeaponShockwave then
         Game:addWeaponShockwave(self.x, self.y - self.height, self.impactShockwave)
     end
@@ -375,6 +391,28 @@ function Bullet:drawSquare(x, y, angle, halfSize)
     love.graphics.line(x4, y4, x1, y1)
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.setLineWidth(1)
+end
+
+function Bullet:drawXray()
+    local drawX = self.x
+    local drawY = self.y - self.height
+
+    if self.projectileSprite then
+        local progress = (self.timer % self.spriteTrailLifetime) / self.spriteTrailLifetime
+        local frameIndex = math.floor(math.min(0.999, progress) * 5)
+        BulletSpriteParticle.drawSprite(
+            self.projectileSprite,
+            drawX,
+            drawY,
+            self.angle,
+            frameIndex,
+            1,
+            self.spriteTrailScale
+        )
+        return
+    end
+
+    love.graphics.circle("fill", drawX, drawY, math.max(self.radius * 1.8, 2.2))
 end
 
 return Bullet

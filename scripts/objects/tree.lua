@@ -2,6 +2,7 @@ TreeTile = setmetatable({}, {__index = Tile})
 TreeTile.__index = TreeTile
 TileSet = require("scripts.objects.tileset")
 local LeafParticle = require("scripts/particles/leafParticle")
+local FloorManager = require("scripts/managers/floorManager")
 local TreeConfig = require("scripts/config/treeConfig")
 
 local threeImage1 = love.graphics.newImage("assets/sprites/objects/three1.png")
@@ -150,11 +151,13 @@ local function drawTreeDebugFadeArea(box)
     love.graphics.setColor(r, g, b, a)
 end
 
-function TreeTile:new(x, y, quadIndex, collider)
+function TreeTile:new(x, y, quadIndex, collider, options)
     local tile = Tile.new(self, x, y, quadIndex, collider)
+    options = options or {}
 
     tile.shaderDirection = 0
     tile.yAdd = 3 + math.random() * 0.25
+    tile.ySortOffset = options.ySortOffset or 0
     tile.treeIndex = math.random(3)
 
     if math.random(30) == 1 and not collider then 
@@ -178,11 +181,13 @@ function TreeTile:new(x, y, quadIndex, collider)
     return tile
 end
 
-function TreeTile:newBig(x, y, quadIndex, collider)
+function TreeTile:newBig(x, y, quadIndex, collider, options)
     local tile = Tile.new(self, x, y, quadIndex, collider)
+    options = options or {}
 
     tile.shaderDirection = 0
     tile.yAdd = 18 + math.random() * 0.25
+    tile.ySortOffset = options.ySortOffset or 0
     tile.treeIndex = 6
     tile.stretch = 1.4
     tile.alpha = 1
@@ -221,6 +226,11 @@ function TreeTile:createLeaf()
 end
 
 function TreeTile:updateLeaves(dt)
+    local theme = FloorManager.getCurrentRoomTheme and FloorManager:getCurrentRoomTheme() or nil
+    if theme and theme.leafParticles == false then
+        return
+    end
+
     if not self:isCloseToPlayerForLeaves() then
         self.leafTimer = math.min(self.leafTimer, 0.35)
         return
@@ -236,7 +246,8 @@ function TreeTile:updateLeaves(dt)
 end
 
 function TreeTile:update(dt)
-    addToDrawQueue(self.yWorld+1 + self.yAdd, self, false)
+    self.isXrayOccluder = true
+    addToDrawQueue(self.yWorld + 1 + self.yAdd + (self.ySortOffset or 0), self, false)
     self.shaderDirection = math.sin(love.timer.getTime() + (self.yWorld/10)) * 0.45 + 1
     self:updateLeaves(dt)
     --print(self.shaderDirection)
@@ -283,6 +294,45 @@ end
 
 function TreeTile:drawShadow()
    
+end
+
+function TreeTile:getXrayOccluderBox()
+    local originX = 32
+    local originY = 93
+    local spriteWidth = 64
+    local spriteHeight = 96
+
+    if self.treeIndex == 6 then
+        originX = 80
+        originY = 156
+        spriteWidth = 160
+        spriteHeight = 160
+    end
+
+    return {
+        x = self.xWorld - originX,
+        y = self.yWorld - originY * (self.stretch or 1),
+        width = spriteWidth,
+        height = spriteHeight * (self.stretch or 1),
+    }
+end
+
+function TreeTile:drawXrayOccluder()
+    local image = threeImage1
+    local originX = 32
+    local originY = 93
+
+    if self.treeIndex == 2 then image = threeImage2 end
+    if self.treeIndex == 3 then image = threeImage3 end
+    if self.treeIndex == 4 then image = threeImage4 end
+    if self.treeIndex == 5 then image = threeImage5 end
+    if self.treeIndex == 6 then
+        image = bigThreeImage
+        originX = 80
+        originY = 156
+    end
+
+    love.graphics.draw(image, self.xWorld, self.yWorld, 0, 1, self.stretch, originX, originY)
 end
 
 function TreeTile:draw()

@@ -11,6 +11,7 @@ function Container:new(x, y, quadIndex, collider, draw)
     local tile = Tile.new(self, x, y, quadIndex, collider)
     setmetatable(tile, Container)
     tile.mustDraw = draw
+    tile.isXrayOccluder = true
     return tile
 end
 
@@ -21,6 +22,21 @@ end
 
 function Container:drawShadow()
    
+end
+
+function Container:getXrayOccluderBox()
+    return {
+        x = self.xWorld - 10,
+        y = self.yWorld - 45,
+        width = spriteWidth,
+        height = spriteHeight,
+    }
+end
+
+function Container:drawXrayOccluder()
+    if self.mustDraw then
+        love.graphics.draw(sprite, self.xWorld - 10, self.yWorld - 45)
+    end
 end
 
 function Container:draw()

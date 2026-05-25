@@ -139,7 +139,7 @@ function Grass:update(dt)
     if self.tile ~= 1 then 
         addToDrawQueue(self.y + 3 , self)
     else
-        addToDrawQueue(self.y + 8, self)
+        addToDrawQueue(self.y + 18, self)
     end
     
     self.collisionDirection = self.collisionDirection + (target - self.collisionDirection) * dt * speed

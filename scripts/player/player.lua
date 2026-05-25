@@ -8,6 +8,7 @@ local WalkParticle = require("scripts/particles/walkParticle")
 local WalkParticleSquare = require("scripts/particles/walkParticleSquare")
 local FootStep = require("scripts/particles/footstep")
 local BloodPixel = require("scripts/particles/bloodPixel")
+local BloodDecal = require("scripts/particles/bloodDecal")
 local Tilemap = require("scripts/tilemap")
 local TransitionManager = require("scripts.managers.transitionManager")
 local playerGlitchShader = love.graphics.newShader("scripts/shaders/playerGlitch.glsl")
@@ -36,7 +37,8 @@ end
 function Player:load(camera, spawnX, spawnY)
     self.x = spawnX or 30
     self.y = spawnY or 340
-    self.speed = 83
+    self.baseSpeed = 85
+    self.speed = self.baseSpeed
     self.velocityX = 0
     self.velocityY = 0
     self.acceleration = 12
@@ -62,7 +64,7 @@ function Player:load(camera, spawnX, spawnY)
     self.mouseAngle = 0
     self.animations = {
         idle = { frames = {0, 1}, duration = 2 },
-        walk = { frames = {2, 3, 4, 5}, duration = 0.6 }
+        walk = { frames = {2, 3, 4, 5}, duration = 0.52 }
     }
     self.currentAnimation = "idle"
     self.currentFrame = 1
@@ -113,8 +115,14 @@ function Player:load(camera, spawnX, spawnY)
     self.glitchDisplacementPixels = 2
     self.whiteFlashDuration = 0.12
     self.whiteFlashTimer = 0
+    self.cardPickupFlashDuration = 0.55
+    self.cardPickupFlashTimer = 0
     self.damageBlinkDelay = 0.1
     self.damageVignettePulse = 0
+    self.reloadBarFlashDuration = 0.18
+    self.reloadBarFlashTimer = 0
+    self.reloadBarWasReloading = false
+    self.isXrayVisible = true
 
 end
 
@@ -140,6 +148,15 @@ function Player:updateAnimation(dt, moving)
     end
     self.SquareParticleTime = self.SquareParticleTime + dt
     local anim = self.animations[self.currentAnimation]
+
+    if not moving then
+        self.currentFrame = 1
+        self.animationTimer = 0
+        self.idleHandFrame = 1
+        self.idleHandTimer = 0
+        self.footStepTimer = 0
+        return
+    end
 
     local duration = anim.duration
     if self.gun.showGun then duration = duration * 1.25 end
@@ -172,16 +189,18 @@ function Player:updateAnimation(dt, moving)
     
     end
     
-    if self.animationTimer >= frameTime then
+    local advancedFrames = 0
+    while self.animationTimer >= frameTime and advancedFrames < 4 do
         self.animationTimer = self.animationTimer - frameTime
         self.currentFrame = self.currentFrame + 1
         if self.currentFrame > #anim.frames then
             self.currentFrame = 1
         end
+        advancedFrames = advancedFrames + 1
 
         if moving and self.currentFrame % 2 == 0 then
             
-            playClonedSound(footstepBase, 0.75, (0.9 + math.random() * 0.4) * GAME_PITCH)
+            playClonedSound(footstepBase, 0.55, (0.7 + math.random() * 0.6) * GAME_PITCH)
             
             local lifetime = math.random(45, 55) / 100
             local particle = WalkParticle:new(self.x, self.y, lifetime)
@@ -203,7 +222,7 @@ function Player:update(dt)
 
     local damageAlphaTarget = 0
     self.sideChangeTimer = self.sideChangeTimer + dt
-    if self.life <= 2 then
+    if self.life <= 1 then
         damageAlphaTarget = 1
     end
 
@@ -220,6 +239,7 @@ function Player:update(dt)
     self.damageTimer = self.damageTimer + dt
     self.glitchTimer = math.max(0, self.glitchTimer - dt)
     self.whiteFlashTimer = math.max(0, self.whiteFlashTimer - dt)
+    self.cardPickupFlashTimer = math.max(0, (self.cardPickupFlashTimer or 0) - dt)
 
     self.mouseAngle = math.floor(mouseAngle() * 4) / 4
     local moveX, moveY = 0, 0
@@ -243,6 +263,18 @@ function Player:update(dt)
         local diagFactor = 1 / math.sqrt(2)
         moveX = moveX * diagFactor
         moveY = moveY * diagFactor
+    end
+
+    local assistX, assistY = self:getCornerAssistInput(moveX, moveY)
+    moveX = moveX + assistX
+    moveY = moveY + assistY
+
+    if moveX ~= 0 and moveY ~= 0 then
+        local length = math.sqrt(moveX * moveX + moveY * moveY)
+        if length > 1 then
+            moveX = moveX / length
+            moveY = moveY / length
+        end
     end
 
     if moveX ~= 0 or moveY ~= 0 then
@@ -287,25 +319,29 @@ function Player:update(dt)
 
     addToDrawQueue(self.y + 6, Player)
 
+    local wasReloading = self.reloadBarWasReloading == true
     self.gun:update(dt, self.x, self.y)
+    local isReloading = self.gun and self.gun.reloadingSlot ~= nil
+    if wasReloading and not isReloading then
+        self.reloadBarFlashTimer = self.reloadBarFlashDuration
+    elseif isReloading then
+        self.reloadBarFlashTimer = 0
+    else
+        self.reloadBarFlashTimer = math.max(0, (self.reloadBarFlashTimer or 0) - dt)
+    end
+    self.reloadBarWasReloading = isReloading
 
     local mouseX, mouseY = mousePosition()
 
     local canChangeSide = self.sideChangeTimer > 0.25
     local haschangedSide = false
-    local visualMoveX = moveX
-    local visualMoveY = moveY
-    if visualMoveX == 0 and visualMoveY == 0 and (self.velocityX ~= 0 or self.velocityY ~= 0) then
-        visualMoveX = self.velocityX
-        visualMoveY = self.velocityY
-    end
+    local visualMoveX = math.abs(sumMoveX) >= 0.01 and sumMoveX or 0
+    local visualMoveY = math.abs(sumMoveY) >= 0.01 and sumMoveY or 0
 
     if (visualMoveX ~= 0 or visualMoveY ~= 0) and canChangeSide then
         self.moveX = visualMoveX
         self.moveY = visualMoveY
-        if self.moveX ~= moveX or self.moveY ~= moveY then
-            self.sideChangeTimer = 0
-        end
+        self.sideChangeTimer = 0
     end
 
     if not self.gun.showGun and visualMoveX ~= 0 and canChangeSide then
@@ -343,18 +379,28 @@ function Player:update(dt)
     self:checkDamage()
 
 
-    local animationSpeed = math.sqrt(self.velocityX * self.velocityX + self.velocityY * self.velocityY)
-    self:updateAnimation(dt, animationSpeed > 8)
+    local actualMoveSpeed = math.sqrt(sumMoveX * sumMoveX + sumMoveY * sumMoveY) / math.max(dt, 0.001)
+    local moving = actualMoveSpeed > 3
+    self:updateAnimation(dt, moving)
     self:death()
 end
 
-function Player:takeDamage(amount)
+function Player:takeDamage(amount, damageDx, damageDy)
     if self.damageTimer < 1.2 then return false end
 
-    BloodPixel.spawnBurst(self.x, self.y - 2, self.velocityX or 0, self.velocityY or 0, 5, 7)
+    damageDx = damageDx or self.velocityX or 0
+    damageDy = damageDy or self.velocityY or 0
+    BloodPixel.spawnBurst(self.x, self.y - 2, damageDx, damageDy, 5, 7)
     camera:shake(10, 0.97)
     camera:damageZoom(0.85, 16, 8, 0.06)
     self.life = math.max(0, self.life - (amount or 1))
+    if self.life > 0 then
+        BloodDecal.spawn(self.x, self.y, damageDx, damageDy, {
+            scaleMultiplier = 0.45,
+            volumeMultiplier = 0.45,
+            pitchMultiplier = 0.78,
+        })
+    end
     playClonedSound(electricBase, 0.9, (1.5 + math.random() * 0.1) * GAME_PITCH)
     TransitionManager:setDistortion(1)
     TransitionManager.distortionTimer = 0.5
@@ -362,9 +408,11 @@ function Player:takeDamage(amount)
     self.glitchTimer = self.glitchDuration
     self.whiteFlashTimer = self.whiteFlashDuration
     playClonedSound(damageBase, 1.8, (0.9 + math.random() * 0.2) * GAME_PITCH)
-    self.damageVignettePulse = 0.85
-    if self.life > 0 then
+    self.damageVignettePulse = self.life <= 1 and 0.85 or 0
+    if self.life == 1 then
         GAME_PITCH = 0.6
+    elseif self.life > 0 then
+        GAME_PITCH = math.max(GAME_PITCH, 1)
     else
         TransitionManager.distortionTimer = 1
     end
@@ -383,18 +431,24 @@ function Player:checkDamage()
         if enemy.canDamagePlayer ~= false and distance < 10 then
             --enemy.life = 0
             --enemy:death()
-            self:takeDamage(1)
+            self:takeDamage(1, self.x - enemy.x, self.y - enemy.y)
             break
         end
     end
 end
 
 function Player:catchLife()
+    local previousLife = self.life or 0
     if self.life < self.totalLife then
         self.life = math.min(self.totalLife, self.life + 2)
     end
     self.damageTimer = 0
     self.whiteFlashTimer = self.whiteFlashDuration
+    return (self.life or 0) - previousLife
+end
+
+function Player:startCardPickupFlash()
+    self.cardPickupFlashTimer = self.cardPickupFlashDuration or 0.55
 end
 
 function Player:getCollisionBox()
@@ -499,36 +553,65 @@ local function isPlayerTileColliding(playerBox, tile)
     return polygonsCollide(getPlayerOctagonPoints(playerBox), getRectPoints(tileBox))
 end
 
-local function getCornerSlideFromBox(playerBox, tileBox, axis, primaryMove)
-    local maxCornerDepth = 5.5
+local function clamp(value, minValue, maxValue)
+    return math.max(minValue, math.min(maxValue, value))
+end
 
-    if axis == "x" then
-        local topDepth = playerBox.y + playerBox.height - tileBox.y
-        if topDepth > 0 and topDepth <= maxCornerDepth then
-            local step = math.min(topDepth * 0.45, math.max(0.12, math.abs(primaryMove) * 0.35))
-            return -step
-        end
+local function getCircleTileCollision(centerX, centerY, radius, tile)
+    local tileBox = getPlayerTileCollisionBox(tile)
+    local closestX = clamp(centerX, tileBox.x, tileBox.x + tileBox.width)
+    local closestY = clamp(centerY, tileBox.y, tileBox.y + tileBox.height)
+    local dx = centerX - closestX
+    local dy = centerY - closestY
+    local distSq = dx * dx + dy * dy
 
-        local bottomDepth = tileBox.y + tileBox.height - playerBox.y
-        if bottomDepth > 0 and bottomDepth <= maxCornerDepth then
-            local step = math.min(bottomDepth * 0.45, math.max(0.12, math.abs(primaryMove) * 0.35))
-            return step
-        end
-    else
-        local leftDepth = playerBox.x + playerBox.width - tileBox.x
-        if leftDepth > 0 and leftDepth <= maxCornerDepth then
-            local step = math.min(leftDepth * 0.45, math.max(0.12, math.abs(primaryMove) * 0.35))
-            return -step
-        end
+    if distSq > radius * radius then
+        return nil
+    end
 
-        local rightDepth = tileBox.x + tileBox.width - playerBox.x
-        if rightDepth > 0 and rightDepth <= maxCornerDepth then
-            local step = math.min(rightDepth * 0.45, math.max(0.12, math.abs(primaryMove) * 0.35))
-            return step
+    if distSq > 0.0001 then
+        local dist = math.sqrt(distSq)
+        return {
+            normalX = dx / dist,
+            normalY = dy / dist,
+            penetration = radius - dist,
+        }
+    end
+
+    local leftDepth = math.abs(centerX - tileBox.x)
+    local rightDepth = math.abs((tileBox.x + tileBox.width) - centerX)
+    local topDepth = math.abs(centerY - tileBox.y)
+    local bottomDepth = math.abs((tileBox.y + tileBox.height) - centerY)
+    local minDepth = math.min(leftDepth, rightDepth, topDepth, bottomDepth)
+
+    if minDepth == leftDepth then
+        return {normalX = -1, normalY = 0, penetration = radius}
+    elseif minDepth == rightDepth then
+        return {normalX = 1, normalY = 0, penetration = radius}
+    elseif minDepth == topDepth then
+        return {normalX = 0, normalY = -1, penetration = radius}
+    end
+
+    return {normalX = 0, normalY = 1, penetration = radius}
+end
+
+function Player:getTileCollisionAtOffset(moveX, moveY)
+    local radius = 6
+    local centerX = self.x + (moveX or 0)
+    local centerY = self.y + (moveY or 0)
+
+    local closeTiles = Tilemap:getNearbyTiles(centerX, centerY)
+    local bestCollision = nil
+    for _, tile in ipairs(closeTiles) do
+        if tile.collider then
+            local collision = getCircleTileCollision(centerX, centerY, radius, tile)
+            if collision and (not bestCollision or collision.penetration > bestCollision.penetration) then
+                bestCollision = collision
+            end
         end
     end
 
-    return 0
+    return bestCollision
 end
 
 function Player:isCollidingAtOffset(moveX, moveY)
@@ -536,11 +619,8 @@ function Player:isCollidingAtOffset(moveX, moveY)
     playerBox.x = playerBox.x + (moveX or 0)
     playerBox.y = playerBox.y + (moveY or 0)
 
-    local closeTiles = Tilemap:getNearbyTiles(self.x + (moveX or 0), self.y + (moveY or 0))
-    for _, tile in ipairs(closeTiles) do
-        if tile.collider and isPlayerTileColliding(playerBox, tile) then
-            return true
-        end
+    if self:getTileCollisionAtOffset(moveX, moveY) then
+        return true
     end
 
     for _, enemy in ipairs((Game and Game.enemies) or {}) do
@@ -554,67 +634,58 @@ function Player:isCollidingAtOffset(moveX, moveY)
     return false
 end
 
-function Player:getCornerSlide(axis, primaryMove)
-    local playerBox = self:getCollisionBox()
-    if axis == "x" then
-        playerBox.x = playerBox.x + primaryMove
-    else
-        playerBox.y = playerBox.y + primaryMove
+function Player:getCornerAssistInput(moveX, moveY)
+    local assistStrength = 0.42
+    local lookAhead = 4.4
+
+    if moveX ~= 0 and moveY == 0 then
+        local collision = self:getTileCollisionAtOffset((moveX > 0 and 1 or -1) * lookAhead, 0)
+        if collision and math.abs(collision.normalY) > 0.18 then
+            return 0, collision.normalY * assistStrength
+        end
+    elseif moveY ~= 0 and moveX == 0 then
+        local collision = self:getTileCollisionAtOffset(0, (moveY > 0 and 1 or -1) * lookAhead)
+        if collision and math.abs(collision.normalX) > 0.18 then
+            return collision.normalX * assistStrength, 0
+        end
     end
 
-    local bestSlide = 0
-    local closeTiles = Tilemap:getNearbyTiles(self.x, self.y)
-    for _, tile in ipairs(closeTiles) do
-        if tile.collider and isPlayerTileColliding(playerBox, tile) then
-            local slide = getCornerSlideFromBox(playerBox, getPlayerTileCollisionBox(tile), axis, primaryMove)
-            if slide ~= 0 and (bestSlide == 0 or math.abs(slide) < math.abs(bestSlide)) then
-                bestSlide = slide
+    return 0, 0
+end
+
+function Player:resolveCollisionMove(moveX, moveY)
+    local collision = self:getTileCollisionAtOffset(moveX, moveY)
+    if not collision and not self:isCollidingAtOffset(moveX, moveY) then
+        return moveX, moveY
+    end
+
+    if collision then
+        local dot = moveX * collision.normalX + moveY * collision.normalY
+        if dot < 0 then
+            local stickiness = 0.14
+            local slideX = moveX - collision.normalX * dot
+            local slideY = moveY - collision.normalY * dot
+            local resolvedX = slideX * (1 - stickiness)
+            local resolvedY = slideY * (1 - stickiness)
+
+            for _ = 1, 4 do
+                if not self:isCollidingAtOffset(resolvedX, resolvedY) then
+                    return resolvedX, resolvedY
+                end
+                resolvedX = resolvedX * 0.5
+                resolvedY = resolvedY * 0.5
             end
         end
     end
 
-    return bestSlide
-end
-
-function Player:resolveCollisionMove(moveX, moveY)
-    if not self:isCollidingAtOffset(moveX, moveY) then
-        return moveX, moveY
+    if moveX ~= 0 and not self:isCollidingAtOffset(moveX, 0) then
+        return moveX, 0
+    end
+    if moveY ~= 0 and not self:isCollidingAtOffset(0, moveY) then
+        return 0, moveY
     end
 
-    local resolvedX = moveX
-    local resolvedY = moveY
-
-    if moveX ~= 0 and self:isCollidingAtOffset(moveX, 0) then
-        local slideY = self:getCornerSlide("x", moveX)
-        if slideY ~= 0 and not self:isCollidingAtOffset(0, moveY + slideY)
-            and not self:isCollidingAtOffset(moveX, moveY + slideY) then
-            resolvedY = moveY + slideY
-        else
-            resolvedX = 0
-        end
-    end
-
-    if moveY ~= 0 and self:isCollidingAtOffset(0, moveY) then
-        local slideX = self:getCornerSlide("y", moveY)
-        if slideX ~= 0 and not self:isCollidingAtOffset(moveX + slideX, 0)
-            and not self:isCollidingAtOffset(moveX + slideX, moveY) then
-            resolvedX = moveX + slideX
-        else
-            resolvedY = 0
-        end
-    end
-
-    if self:isCollidingAtOffset(resolvedX, resolvedY) then
-        if moveX ~= 0 and not self:isCollidingAtOffset(moveX, 0) then
-            return moveX, 0
-        end
-        if moveY ~= 0 and not self:isCollidingAtOffset(0, moveY) then
-            return 0, moveY
-        end
-        return 0, 0
-    end
-
-    return resolvedX, resolvedY
+    return 0, 0
 end
 
 function Player:resolveStuckCollision()
@@ -690,6 +761,11 @@ function Player:death()
     end
     
     self.isAlive = false 
+    BloodDecal.spawn(self.x, self.y, self.velocityX or 0, self.velocityY or 0, {
+        scaleMultiplier = 1.15,
+        volumeMultiplier = 1,
+        pitchMultiplier = 0.82,
+    })
     for i = 1, -3 do
         local angle = math.random() * 2 * math.pi
 
@@ -727,7 +803,8 @@ function Player:drawLife()
         love.graphics.setShader(heartWhiteShader)
     end
 
-    for i = 1, 3 do
+    local slots = math.max(1, math.floor((self.totalLife or 0) / 2 + 0.5))
+    for i = 1, slots do
         local remaining = self.life - ((i - 1) * 2)
         local frame = heartFrames.empty
 
@@ -771,6 +848,39 @@ function Player:drawShadow()
 
     end
     
+end
+
+function Player:drawReloadBar()
+    if not (self.gun and self.gun.getReloadProgress) then
+        return
+    end
+
+    local progress = self.gun:getReloadProgress()
+    local flashTimer = self.reloadBarFlashTimer or 0
+    local isFlashing = not progress and flashTimer > 0
+    if not progress and not isFlashing then
+        return
+    end
+
+    progress = progress or 1
+
+    local width = 7
+    local height = 1.2
+    local x = math.floor(self.x - width / 2 + 0.5)
+    local y = math.floor(self.y - 42 + 0.5)
+    local r, g, b, a = love.graphics.getColor()
+    local flashProgress = isFlashing and (flashTimer / self.reloadBarFlashDuration) or 0
+    local fillAlpha = isFlashing and (0.95 * flashProgress) or 0.72
+    local backAlpha = isFlashing and (0.14 * flashProgress) or 0.18
+    local outlineAlpha = isFlashing and (0.32 * flashProgress) or 0.24
+
+    love.graphics.setColor(1, 1, 1, backAlpha)
+    love.graphics.rectangle("fill", x, y, width, height)
+    love.graphics.setColor(1, 1, 1, fillAlpha)
+    love.graphics.rectangle("fill", x, y, width * progress, height)
+    love.graphics.setColor(1, 1, 1, outlineAlpha)
+    love.graphics.rectangle("line", x - 1, y - 1, width + 2, height + 2)
+    love.graphics.setColor(r, g, b, a)
 end
 
 function Player:drawSquare(x, y, angle, halfSize)
@@ -868,34 +978,52 @@ end
 function Player:drawPlayerImage(image, quad, x, y, rotation, scaleX, scaleY, originX, originY)
     local hasGlitch = self:applyGlitchShader(image)
 
+    local function drawImageWithCurrentColor()
+        if quad then
+            love.graphics.draw(
+                image,
+                quad,
+                x,
+                y,
+                rotation or 0,
+                scaleX or 1,
+                scaleY or 1,
+                originX or 0,
+                originY or 0
+            )
+        else
+            love.graphics.draw(
+                image,
+                x,
+                y,
+                rotation or 0,
+                scaleX or 1,
+                scaleY or 1,
+                originX or 0,
+                originY or 0
+            )
+        end
+    end
+
+    love.graphics.setColor(1, 1, 1, 1)
+    drawImageWithCurrentColor()
+
     if quad then
-        love.graphics.draw(
-            image,
-            quad,
-            x,
-            y,
-            rotation or 0,
-            scaleX or 1,
-            scaleY or 1,
-            originX or 0,
-            originY or 0
-        )
-    else
-        love.graphics.draw(
-            image,
-            x,
-            y,
-            rotation or 0,
-            scaleX or 1,
-            scaleY or 1,
-            originX or 0,
-            originY or 0
-        )
+        local flashProgress = math.max(0, math.min((self.cardPickupFlashTimer or 0) / (self.cardPickupFlashDuration or 0.55), 1))
+        if flashProgress > 0 then
+            love.graphics.setShader()
+            love.graphics.setColor(1, 1, 1, 0.72 * flashProgress)
+            drawImageWithCurrentColor()
+            if hasGlitch then
+                self:applyGlitchShader(image)
+            end
+        end
     end
 
     if hasGlitch then
         love.graphics.setShader()
     end
+    love.graphics.setColor(1, 1, 1, 1)
 end
 
 function Player:draw()
@@ -978,6 +1106,8 @@ function Player:draw()
         self:drawIdleHand(handQuad, scaleX, originX)
     end
 
+    self:drawReloadBar()
+
     if DEBUG then
         local collisionBox = self:getCollisionBox()
         love.graphics.rectangle("line", collisionBox.x, collisionBox.y, collisionBox.width, collisionBox.height)
@@ -990,6 +1120,83 @@ function Player:draw()
         love.graphics.setColor(0, 1, 1, 0.1)
         love.graphics.rectangle("fill", worldX-8, worldY-16, 16, 16)
         love.graphics.setColor(1, 1, 1, 1)
+    end
+end
+
+function Player:getCurrentDrawQuads()
+    local anim = self.animations[self.currentAnimation]
+    local frameIndex = anim.frames[self.currentFrame]
+    local handFrameIndex = frameIndex
+    local quad = self.quads[frameIndex + 1]
+    local handQuad = quad
+
+    if self.moveX == 0 and self.moveY > 0 then
+        quad = self.quads[frameIndex + 1 + 6]
+        handQuad = quad
+    end
+
+    if self.moveX == 0 and self.moveY < 0 then
+        quad = self.quads[frameIndex + 1 + 12]
+        handQuad = quad
+    end
+
+    if self.currentAnimation == "idle" then
+        handFrameIndex = anim.frames[self.idleHandFrame]
+        handQuad = self.quads[handFrameIndex + 1]
+
+        if self.moveX == 0 and self.moveY > 0 then
+            handQuad = self.quads[handFrameIndex + 1 + 6]
+        end
+
+        if self.moveX == 0 and self.moveY < 0 then
+            handQuad = self.quads[handFrameIndex + 1 + 12]
+        end
+    end
+
+    return quad, handQuad
+end
+
+function Player:drawXray()
+    if not self.isAlive then return end
+
+    local quad, handQuad = self:getCurrentDrawQuads()
+    local scaleX = self.flipH and -1 or 1
+    local scaleY = 1.5
+    local originX = self.flipH and (self.spriteSize - self.spriteSize / 2) or (self.spriteSize / 2)
+
+    love.graphics.draw(self.playerSheet, quad, self.x, self.y, 0, scaleX, scaleY, originX, self.spriteSize)
+
+    if self.gun and self.gun.showGun and not Dialog.breakMovements then
+        local handX = self.x + math.cos(self.mouseAngle) * 5
+        local handY = self.y + math.sin(self.mouseAngle) * 7
+        love.graphics.draw(self.handImage, handX - 8, handY - 2, 0, 1, 1.2, 0, 16)
+
+        local slot = self.gun.getSelectedWeaponSlot and self.gun:getSelectedWeaponSlot()
+        if slot and self.gun.gunSheet then
+            local weaponQuad = love.graphics.newQuad(
+                (slot.index - 1) * self.gun.size,
+                0,
+                self.gun.size,
+                self.gun.size,
+                self.gun.gunSheet:getDimensions()
+            )
+            local angle = self.gun.angle or self.mouseAngle
+            local offsetX = math.cos(angle) * (self.gun.centerDistance or 0)
+            local offsetY = math.sin(angle) * (self.gun.centerDistance or 0)
+            love.graphics.draw(
+                self.gun.gunSheet,
+                weaponQuad,
+                self.x + offsetX,
+                self.y + offsetY - (self.gun.height or 16),
+                angle,
+                0.8,
+                0.8,
+                0,
+                self.gun.size / 2
+            )
+        end
+    elseif not self.gun or not self.gun.showGun then
+        love.graphics.draw(self.idleHandSheet, handQuad, self.x, self.y, 0, scaleX, 1.5, originX, self.spriteSize)
     end
 end
 

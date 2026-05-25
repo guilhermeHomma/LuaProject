@@ -5,6 +5,7 @@ local DamageStretch = require("scripts/effects/damageStretch")
 local DropTemplates = require("scripts/drops/dropTemplates")
 local EnemyDeadDropParticle = require("scripts/particles/enemyDeadDropParticle")
 local Ball = require("scripts/particles/ballParticle")
+local BloodPixel = require("scripts/particles/bloodPixel")
 local FootStep = require("scripts/particles/footstep")
 local FloorManager = require("scripts/managers/floorManager")
 
@@ -26,12 +27,26 @@ outlineShader:send("u_texel", {1 / sprite:getWidth(), 1 / sprite:getHeight()})
 outlineShader:send("u_uvMin", {0, 0})
 outlineShader:send("u_uvMax", {1, 1})
 
+local strawBloodPalette = {
+    {0.55, 0.52, 0.43, 1},
+    {0.42, 0.40, 0.34, 1},
+    {0.66, 0.62, 0.50, 1},
+    {0.34, 0.33, 0.30, 1},
+    {0.48, 0.46, 0.38, 1},
+}
+
 local function playClonedSound(baseSource, volume, pitch)
     local sound = baseSource:clone()
     sound:setVolume(volume)
     sound:setPitch(pitch)
     sound:play()
     return sound
+end
+
+local function getLightTint(enemy)
+    local brightness = enemy and enemy.lightBrightness or 1
+    brightness = math.max(brightness, 0.8)
+    return brightness, brightness, brightness
 end
 
 function Scarecrow:new(x, y)
@@ -44,6 +59,7 @@ function Scarecrow:new(x, y)
     scarecrow.dropPoints = 0
     scarecrow.drawPriority = math.random()
     scarecrow.isAlive = true
+    scarecrow.isXrayVisible = true
     scarecrow.blocksPlayer = true
     scarecrow.canDamagePlayer = false
     scarecrow.hitFlashTimer = 0
@@ -76,6 +92,7 @@ function Scarecrow:takeDamage(damage)
     self.hitFlashTimer = self.hitFlashDuration
     DamageStretch:start(self)
     self.life = self.life - (damage or 10)
+    BloodPixel.spawnBurst(self.x, self.y - 8, 0, -1, 4, 6, strawBloodPalette)
     playClonedSound(enemyDamageBase, 0.8, (1 + math.random() * 0.1) * GAME_PITCH)
 
     if self.life <= 0 then
@@ -113,6 +130,7 @@ function Scarecrow:breakApart()
         table.insert(Game.particles, Ball:new(self.x, self.y, 1, dx, dy, lifetime, size))
         table.insert(Game.particles, Ball:new(self.x, self.y, 1, -dx, -dy, lifetime, size))
     end
+    BloodPixel.spawnBurst(self.x, self.y - 8, 0, -1, 9, 12, strawBloodPalette)
 
     table.insert(Game.footsteps, FootStep:new(self.x, self.y - 8))
     for _ = 1, 2 do
@@ -142,7 +160,7 @@ function Scarecrow:triggerShootTutorial()
 
     local Tutorial = require("scripts/managers/tutorial")
     Tutorial.drawWalk = false
-    Tutorial.drawX = false
+    Tutorial.drawInteract = false
     Tutorial.drawmouse = true
     Tutorial.tutorialTimer = Tutorial.startTutorialTime or 0
 end
@@ -198,11 +216,16 @@ function Scarecrow:draw()
         scaleX, scaleY = DamageStretch:getScale(self)
     end
 
+    local r, g, b = getLightTint(self)
+
     if self.isBreaking or self.hitFlashTimer > 0 then
         love.graphics.setShader(whiteShader)
         love.graphics.setColor(1, 1, 1, self.isBreaking and 0.7 or self.hitFlashTimer / self.hitFlashDuration)
     elseif self.showTutorialOutline then
         love.graphics.setShader(outlineShader)
+    end
+    if not (self.isBreaking or self.hitFlashTimer > 0) then
+        love.graphics.setColor(r, g, b, 1)
     end
 
     love.graphics.draw(sprite, self.x, self.y + yOffset, 0, scaleX, scaleY * 1.2, 16, 48)
@@ -213,6 +236,29 @@ function Scarecrow:draw()
         local box = self:collisionBox()
         love.graphics.rectangle("line", box.x, box.y, box.width, box.height)
     end
+end
+
+function Scarecrow:drawXray()
+    if not self.isAlive then
+        return
+    end
+
+    local scaleX = 1
+    local scaleY = 1
+    local yOffset = 0
+
+    if self.isBreaking then
+        local progress = math.min(self.breakTimer / self.breakDuration, 1)
+        local squash = progress < 0.45 and progress / 0.45 or 1 - ((progress - 0.45) / 0.55)
+        scaleX = 1 + squash * 0.05
+        scaleY = 1 - squash * 0.05
+        yOffset = squash
+    elseif self.hitFlashTimer > 0 then
+        scaleX, scaleY = DamageStretch:getScale(self)
+    end
+
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.draw(sprite, self.x, self.y + yOffset, 0, scaleX, scaleY * 1.2, 16, 48)
 end
 
 return Scarecrow

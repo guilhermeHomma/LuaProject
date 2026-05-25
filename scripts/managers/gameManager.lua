@@ -23,12 +23,17 @@ local BigZombie = require("scripts/enemies/bigZombie")
 local NoHead = require("scripts/enemies/noHead")
 local Scarecrow = require("scripts/enemies/scarecrow")
 local CardChoice = require("scripts/managers/cardChoice")
+local Hollow = require("scripts/objects/hollow")
+local FloorIntroManager = require("scripts/managers/floorIntroManager")
 
 local font = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 32)
 local hudDistortionShader = love.graphics.newShader("scripts/shaders/hudWater.glsl")
+local xraySoftShader = love.graphics.newShader("scripts/shaders/xraySoft.glsl")
+local xrayStencilShader = love.graphics.newShader("scripts/shaders/xrayStencilAlpha.glsl")
 local playerLightImage = love.graphics.newImage("assets/sprites/effects/light.png")
 playerLightImage:setFilter("nearest", "nearest")
 local vignetteShader = love.graphics.newShader("scripts/shaders/vignette.glsl")
+local waveClearFeedbackSound = love.audio.newSource("assets/sfx/ambience/nextWave.mp3", "static")
 local minimapSprites = {
     panel = love.graphics.newImage("assets/sprites/ui/map/map.png"),
     room32x32 = love.graphics.newImage("assets/sprites/ui/map/32x32.png"),
@@ -47,6 +52,12 @@ for _, image in pairs(minimapSprites) do
 end
 
 local function sortDrawQueue(a, b)
+    if a.priority == b.priority then
+        local aSort = a.object and a.object.drawSortOrder or 0
+        local bSort = b.object and b.object.drawSortOrder or 0
+        return aSort < bSort
+    end
+
     return a.priority < b.priority
 end
 
@@ -68,7 +79,12 @@ local function configurePersistedRoomDrop(drop, key, entry)
     drop.pickupX = entry.pickupX
     drop.pickupY = entry.pickupY
     drop.drawBaseY = entry.drawBaseY
-    drop.drawPriorityOffset = 12
+    drop.fromChest = entry.drawBaseY ~= nil
+    drop.drawPriorityOffset = entry.drawPriorityOffset or 0.35
+    if drop.fromChest and drop.drawPriorityOffset > 2 then
+        drop.drawPriorityOffset = 0.35
+    end
+    drop.drawSortOrder = entry.drawSortOrder or 0
     drop.vx = 0
     drop.vy = 0
     return drop
@@ -87,8 +103,10 @@ local gridDirectionVectors = {
     east = {x = 1, y = 0},
 }
 local TILE_WORLD_SIZE = 16
-local ENTRY_MOVE_DISTANCE = TILE_WORLD_SIZE * 3
-local ENTRY_MOVE_DURATION = 0.62
+local ENTRY_MOVE_DISTANCE = TILE_WORLD_SIZE * 1.5
+local ENTRY_MOVE_DURATION = 0.24
+local ENTRY_DOOR_CLOSE_WAIT = 0.18
+local ENTRY_DOOR_CLOSE_SPEED = 28
 local EXIT_RUN_DISTANCE = TILE_WORLD_SIZE * 3
 local ROOM_FADE_OUT_DURATION = 0.6
 local ROOM_FADE_IN_DURATION = 0.4
@@ -142,6 +160,50 @@ local function getEntrySpawn(direction)
     end
 
     return getStartRoomPlayerSpawn()
+end
+
+local function getEntryDoorAvoidPoint(direction)
+    local currentRoom = FloorManager:getCurrentRoom()
+    local slot = resolveDoorSlot(currentRoom, direction)
+    local doorTiles = slot and slot.doorTiles
+
+    if not (doorTiles and #doorTiles > 0) then
+        return nil
+    end
+
+    local x, y = 0, 0
+    for _, point in ipairs(doorTiles) do
+        local worldX, worldY = mapTemplatePointToWorld(point)
+        x = x + worldX
+        y = y + worldY
+    end
+
+    return {
+        x = x / #doorTiles,
+        y = y / #doorTiles,
+    }
+end
+
+local function getEntryMoveTarget(entryDirection, fallbackX, fallbackY)
+    local currentRoom = FloorManager:getCurrentRoom()
+    local slot = resolveDoorSlot(currentRoom, entryDirection)
+    local doorTiles = slot and slot.doorTiles
+    local vector = entryMoveVectors[entryDirection] or {x = 0, y = 0}
+
+    if not (doorTiles and #doorTiles > 0) then
+        return fallbackX + vector.x * ENTRY_MOVE_DISTANCE, fallbackY + vector.y * ENTRY_MOVE_DISTANCE
+    end
+
+    local x, y = 0, 0
+    for _, point in ipairs(doorTiles) do
+        local worldX, worldY = mapTemplatePointToWorld(point)
+        x = x + worldX
+        y = y + worldY
+    end
+
+    local doorX = x / #doorTiles
+    local doorY = y / #doorTiles
+    return doorX + vector.x * ENTRY_MOVE_DISTANCE, doorY + vector.y * ENTRY_MOVE_DISTANCE
 end
 
 local function getWorldDirectionVector(direction)
@@ -222,6 +284,12 @@ local function getRoomWaveConfig(config, waveConfig, room)
     end
     if override.countAdd then
         result.countAdd = (result.countAdd or 0) + override.countAdd
+    end
+    if config.enemyTypes then
+        result.enemyTypes = copyTable(config.enemyTypes)
+    end
+    if config.maxPerWave then
+        result.maxPerWave = mergeTables(result.maxPerWave or {}, config.maxPerWave)
     end
 
     return result
@@ -346,9 +414,19 @@ local function getWaveChance(config, room, waveConfig)
     local waveId = waveConfig and waveConfig.id
     local override = getRoomEncounterOverride(config, room)
     local waveChances = override and override.waveChances
+    local distanceRule = getDistanceDifficultyRule(config, room)
+    local distanceWaveChances = distanceRule and distanceRule.waveChances
 
     if waveId and waveChances and waveChances[waveId] ~= nil then
+        if distanceWaveChances and distanceWaveChances[waveId] ~= nil then
+            return distanceWaveChances[waveId]
+        end
+
         return waveChances[waveId]
+    end
+
+    if waveId and distanceWaveChances and distanceWaveChances[waveId] ~= nil then
+        return distanceWaveChances[waveId]
     end
 
     return waveConfig and (waveConfig.chance or waveConfig.weight) or 1
@@ -389,6 +467,49 @@ local function getEncounterSpawnMinDistance(config)
     local tileDistance = (config and config.spawnMinDistanceTiles or 4) * TILE_WORLD_SIZE
     local worldDistance = config and config.spawnMinDistance or 0
     return math.max(TILE_WORLD_SIZE * 4, tileDistance, worldDistance)
+end
+
+local function getEncounterSpawnMinDistanceForWave(config, waveIndex)
+    if waveIndex and waveIndex > 1 then
+        return TILE_WORLD_SIZE * 3
+    end
+
+    return getEncounterSpawnMinDistance(config)
+end
+
+local function getEncounterSpawnAvoidPoints(config, waveIndex, spawnedPositions)
+    local avoidPoints = {}
+    local currentRoom = FloorManager:getCurrentRoom()
+    local state = currentRoom and currentRoom.state
+    local entryPoint = state and state.entryDoorAvoidPoint
+
+    if waveIndex == 1 and entryPoint then
+        avoidPoints[#avoidPoints + 1] = {
+            x = entryPoint.x,
+            y = entryPoint.y,
+            radius = TILE_WORLD_SIZE * (config and config.spawnEntryAvoidDistanceTiles or 4),
+        }
+    end
+
+    for _, enemy in ipairs(Game and Game.enemies or {}) do
+        if enemy.isAlive ~= false and enemy.x and enemy.y then
+            avoidPoints[#avoidPoints + 1] = {
+                x = enemy.x,
+                y = enemy.y,
+                radius = TILE_WORLD_SIZE * 3,
+            }
+        end
+    end
+
+    for _, position in ipairs(spawnedPositions or {}) do
+        avoidPoints[#avoidPoints + 1] = {
+            x = position.x,
+            y = position.y,
+            radius = TILE_WORLD_SIZE * 3,
+        }
+    end
+
+    return avoidPoints
 end
 
 local function getEncounterEnemyCount(config, waveConfig)
@@ -448,6 +569,42 @@ local function chooseEnemyType(config, waveConfig, spawnedCounts)
     end
 
     return "zombie"
+end
+
+local earlyCombatRoomWaves = {
+    {
+        { id = "early_room_1", enemies = {"zombie"} },
+    },
+    {
+        { id = "early_room_2_wave_1", enemies = {"zombie", "zombie"} },
+        { id = "early_room_2_wave_2", enemies = {"zombie", "babyZombie"} },
+    },
+}
+
+local function isFirstFloorActive()
+    local level = FloorManager and FloorManager.level
+    local floorIndex = level and level.currentFloorIndex or 1
+    return floorIndex == 1
+end
+
+local function getEarlyCombatRoomWave(room, waveIndex)
+    if not isFirstFloorActive() then
+        return nil
+    end
+
+    local order = room and room.state and room.state.playerCombatRoomOrder
+    local waves = order and earlyCombatRoomWaves[order]
+    return waves and waves[waveIndex] or nil
+end
+
+local function getEarlyCombatRoomWaveCount(room)
+    if not isFirstFloorActive() then
+        return nil
+    end
+
+    local order = room and room.state and room.state.playerCombatRoomOrder
+    local waves = order and earlyCombatRoomWaves[order]
+    return waves and #waves or nil
 end
 
 local function getRoomCells(room)
@@ -632,6 +789,19 @@ local function isStartRoom(room)
     return room and room.id == startRoomId
 end
 
+local function setBattleMusicActive(active)
+    if Music and Music.setBattleActive then
+        Music:setBattleActive(active == true)
+    end
+end
+
+local function playWaveClearFeedback()
+    waveClearFeedbackSound:stop()
+    waveClearFeedbackSound:setVolume(0.35 * (SOUND_VOLUME or 1))
+    waveClearFeedbackSound:setPitch((1.08 + math.random() * 0.12) * GAME_PITCH)
+    waveClearFeedbackSound:play()
+end
+
 local function shouldShowShopIcon(room)
     local state = room and room.state
     return state
@@ -803,8 +973,10 @@ local function revealRoomConnections(room)
     end
 end
 
-function Game:load()
+function Game:load(options)
+    options = options or {}
     ACTIVE_LIGHT_MANAGER = self
+    setBattleMusicActive(false)
     math.randomseed(os.time())
     love.graphics.setDefaultFilter("nearest", "nearest")
     CardChoice:load()
@@ -847,6 +1019,9 @@ function Game:load()
     self:resetRuntimeState()
     self:setupCurrentRoom()
     self:restoreCurrentRoomDrops()
+    if options.startFloorIntro ~= false then
+        self:startFloorIntro(CURRENT_LEVEL and CURRENT_LEVEL.currentFloorIndex or 1, options.onFloorIntroComplete)
+    end
 end
 
 function Game:resetRuntimeState()
@@ -866,11 +1041,16 @@ function Game:resetRuntimeState()
     self.drawtext = "init text\ninit text\nyou shouldnt see this"
     self.textAlpha = 0
     self.textAlphaTarget = 0
+    self.bottomMessageText = nil
+    self.bottomMessageTimer = 0
     self.timer = 0
     self.roomTransitionCooldown = 0
     self.playerRoomEntryMove = nil
     self.playerRoomExitTransition = nil
+    self.currentEntryDoorAvoidPoint = nil
+    self.playerCombatRoomsEntered = 0
     self.roomFadeAlpha = 0
+    self.floorChanging = false
     Dialog.breakMovements = false
 end
 
@@ -980,7 +1160,7 @@ end
 
 function Game:spawnStartRoomScarecrow(currentRoom)
     local state = currentRoom and currentRoom.state
-    if not state or state.scarecrowDestroyed then
+    if not state or state.scarecrowDestroyed or not isFirstFloorActive() then
         return false
     end
 
@@ -999,6 +1179,18 @@ function Game:spawnStartRoomScarecrow(currentRoom)
     state.encounterSpawned = true
     state.encounterCompleted = false
     return true
+end
+
+function Game:spawnEndRoomHollow(currentRoom)
+    if not (currentRoom and currentRoom.isEndRoom) then
+        return
+    end
+
+    local map = Tilemap:getTilemap()
+    local centerX = map and #(map[1] or {}) / 2 or 16
+    local centerY = map and #map / 2 or 16
+    local worldX, worldY = Tilemap:mapToWorld(centerX + 0.5, centerY + 0.5)
+    self.objects[#self.objects + 1] = Hollow:new(worldX, worldY)
 end
 
 function Game:setupCurrentRoom(options)
@@ -1020,6 +1212,7 @@ function Game:setupCurrentRoom(options)
     end
 
     if currentRoom.templateId == "start_32x32" or isStartRoom(currentRoom) then
+        setBattleMusicActive(false)
         self.enemies = {}
         self.nearbyEnemies = {}
         state.skipEncounter = true
@@ -1038,6 +1231,7 @@ function Game:setupCurrentRoom(options)
     end
 
     if currentRoom.isShopRoom or currentRoom.isCardRoom then
+        setBattleMusicActive(false)
         state.cleared = true
         state.skipEncounter = true
         state.encounterSpawned = false
@@ -1045,34 +1239,61 @@ function Game:setupCurrentRoom(options)
         return
     end
 
-    local encounterConfig = getEncounterConfig()
-    if not (encounterConfig and encounterConfig.enabled) or state.cleared then
+    if currentRoom.isEndRoom then
+        setBattleMusicActive(false)
+        state.cleared = true
+        state.skipEncounter = true
+        state.encounterSpawned = false
+        state.encounterCompleted = true
+        self.enemies = {}
+        self.nearbyEnemies = {}
+        self:spawnEndRoomHollow(currentRoom)
         return
     end
 
-    if shouldSkipRoomEncounter(encounterConfig, currentRoom) then
+    if isFirstFloorActive() and not state.playerCombatRoomOrder then
+        self.playerCombatRoomsEntered = (self.playerCombatRoomsEntered or 0) + 1
+        state.playerCombatRoomOrder = self.playerCombatRoomsEntered
+    end
+
+    local encounterConfig = getEncounterConfig()
+    if not (encounterConfig and encounterConfig.enabled) or state.cleared then
+        setBattleMusicActive(false)
+        return
+    end
+
+    local earlyWaveCount = getEarlyCombatRoomWaveCount(currentRoom)
+    if not earlyWaveCount and shouldSkipRoomEncounter(encounterConfig, currentRoom) then
+        setBattleMusicActive(false)
         state.cleared = true
         state.encounterCompleted = true
         return
     end
 
-    state.encounterTotalWaves = state.encounterTotalWaves or getRoomTotalWaves(encounterConfig, currentRoom)
-    state.encounterSimultaneousWaves = state.encounterSimultaneousWaves or getRoomSimultaneousWaves(encounterConfig, currentRoom)
+    state.encounterTotalWaves = state.encounterTotalWaves
+        or earlyWaveCount
+        or getRoomTotalWaves(encounterConfig, currentRoom)
+    state.encounterSimultaneousWaves = state.encounterSimultaneousWaves
+        or (earlyWaveCount and 1)
+        or getRoomSimultaneousWaves(encounterConfig, currentRoom)
     state.encounterSpawnedWaves = state.encounterSpawnedWaves or 0
     state.activeEncounterWaves = state.activeEncounterWaves or {}
     self:spawnEncounterWavesUntilFull(currentRoom, encounterConfig)
+    self:updateBattleMusicForCurrentRoom()
 end
 
 function Game:spawnCurrentRoomWave(currentRoom, encounterConfig)
     local state = currentRoom and currentRoom.state
-    if not state or currentRoom.isShopRoom or currentRoom.isCardRoom then
+    if not state or currentRoom.isShopRoom or currentRoom.isCardRoom or currentRoom.isEndRoom then
         return
     end
     if currentRoom.templateId == "start_32x32" or isStartRoom(currentRoom) then
         return false
     end
 
-    state.encounterTotalWaves = state.encounterTotalWaves or getRoomTotalWaves(encounterConfig, currentRoom)
+    state.encounterTotalWaves = state.encounterTotalWaves
+        or getEarlyCombatRoomWaveCount(currentRoom)
+        or getRoomTotalWaves(encounterConfig, currentRoom)
     state.encounterSpawnedWaves = state.encounterSpawnedWaves or 0
     if state.encounterSpawnedWaves >= state.encounterTotalWaves then
         return false
@@ -1080,9 +1301,11 @@ function Game:spawnCurrentRoomWave(currentRoom, encounterConfig)
 
     local waveIndex = state.encounterSpawnedWaves + 1
     state.encounterWaveIndex = waveIndex
-    local waveConfig = getRoomWaveConfig(encounterConfig, chooseEncounterWave(encounterConfig, currentRoom), currentRoom)
-    local enemyCount = getEncounterEnemyCount(encounterConfig, waveConfig)
-    local spawnMinDistance = getEncounterSpawnMinDistance(encounterConfig)
+    local fixedWave = getEarlyCombatRoomWave(currentRoom, waveIndex)
+    local waveConfig = fixedWave or getRoomWaveConfig(encounterConfig, chooseEncounterWave(encounterConfig, currentRoom), currentRoom)
+    local enemyCount = fixedWave and #fixedWave.enemies or getEncounterEnemyCount(encounterConfig, waveConfig)
+    local spawnMinDistance = getEncounterSpawnMinDistanceForWave(encounterConfig, waveIndex)
+    local spawnedPositions = {}
     local spawnedCounts = {}
     local waveId = (state.encounterWaveSerial or 0) + 1
     local spawnedAny = false
@@ -1093,15 +1316,17 @@ function Game:spawnCurrentRoomWave(currentRoom, encounterConfig)
     state.activeEncounterWaves[waveId] = true
 
     state.encounterSpawned = true
-    for _ = 1, enemyCount do
-        local enemyId = chooseEnemyType(encounterConfig, waveConfig, spawnedCounts)
+    for spawnIndex = 1, enemyCount do
+        local enemyId = fixedWave and fixedWave.enemies[spawnIndex] or chooseEnemyType(encounterConfig, waveConfig, spawnedCounts)
         local factory = EnemyFactories[enemyId] or EnemyFactories.zombie
-        local x, y = Tilemap:getRandomReachableSpawnPosition(Player, spawnMinDistance)
+        local spawnAvoidPoints = getEncounterSpawnAvoidPoints(encounterConfig, waveIndex, spawnedPositions)
+        local x, y = Tilemap:getRandomReachableSpawnPosition(Player, spawnMinDistance, spawnAvoidPoints)
 
         if x and y then
             local enemy = factory:new(x, y)
             enemy.encounterWaveId = waveId
             self.enemies[#self.enemies + 1] = enemy
+            spawnedPositions[#spawnedPositions + 1] = { x = x, y = y }
             spawnedCounts[enemyId] = (spawnedCounts[enemyId] or 0) + 1
             spawnedAny = true
         end
@@ -1127,16 +1352,38 @@ local function getActiveEncounterWaveCount(state)
     return count
 end
 
+function Game:updateBattleMusicForCurrentRoom()
+    local currentRoom = FloorManager:getCurrentRoom()
+    local roomState = currentRoom and currentRoom.state
+    local battleActive = false
+
+    if roomState
+        and roomState.encounterSpawned == true
+        and roomState.cleared ~= true
+        and not (currentRoom.templateId == "start_32x32" or isStartRoom(currentRoom))
+        and not currentRoom.isShopRoom
+        and not currentRoom.isCardRoom
+        and not currentRoom.isEndRoom then
+        battleActive = #self.enemies > 0
+            or getActiveEncounterWaveCount(roomState) > 0
+            or (roomState.encounterSpawnedWaves or 0) < (roomState.encounterTotalWaves or 0)
+    end
+
+    setBattleMusicActive(battleActive)
+end
+
 function Game:spawnEncounterWavesUntilFull(currentRoom, encounterConfig)
     local state = currentRoom and currentRoom.state
     if not state then
         return
     end
-    if currentRoom.templateId == "start_32x32" or isStartRoom(currentRoom) then
+    if currentRoom.templateId == "start_32x32" or isStartRoom(currentRoom) or currentRoom.isEndRoom then
         return
     end
 
-    state.encounterSimultaneousWaves = state.encounterSimultaneousWaves or getRoomSimultaneousWaves(encounterConfig, currentRoom)
+    state.encounterSimultaneousWaves = state.encounterSimultaneousWaves
+        or (getEarlyCombatRoomWaveCount(currentRoom) and 1)
+        or getRoomSimultaneousWaves(encounterConfig, currentRoom)
 
     while getActiveEncounterWaveCount(state) < state.encounterSimultaneousWaves do
         if not self:spawnCurrentRoomWave(currentRoom, encounterConfig) then
@@ -1203,6 +1450,8 @@ function Game:checkCurrentRoomClear()
     if #self.enemies == 0 and getActiveEncounterWaveCount(state) == 0 then
         state.cleared = true
         state.encounterCompleted = true
+        setBattleMusicActive(false)
+        playWaveClearFeedback()
         Game.drawtext = "Room cleared"
         Game.textAlphaTarget = 1
     end
@@ -1210,15 +1459,18 @@ end
 
 function Game:startEntryMove(entryDirection)
     local vector = entryMoveVectors[entryDirection] or {x = 0, y = 0}
+    local targetX, targetY = getEntryMoveTarget(entryDirection, Player.x, Player.y)
     self.playerRoomEntryMove = {
+        phase = "move",
         timer = 0,
         duration = ENTRY_MOVE_DURATION,
+        closeWaitTimer = 0,
         vectorX = vector.x,
         vectorY = vector.y,
         startX = Player.x,
         startY = Player.y,
-        targetX = Player.x + vector.x * ENTRY_MOVE_DISTANCE,
-        targetY = Player.y + vector.y * ENTRY_MOVE_DISTANCE,
+        targetX = targetX,
+        targetY = targetY,
     }
     Player.moveX = vector.x
     Player.moveY = vector.y
@@ -1229,6 +1481,24 @@ function Game:updateEntryMove(dt)
     local move = self.playerRoomEntryMove
     if not move then
         return false
+    end
+
+    if move.phase == "closing" then
+        move.closeWaitTimer = math.max(0, (move.closeWaitTimer or ENTRY_DOOR_CLOSE_WAIT) - dt)
+        Player.velocityX = 0
+        Player.velocityY = 0
+        Player.moveX = 0
+        Player.moveY = 0
+        Player:updateAnimation(dt, true)
+        Player.gun:update(dt, Player.x, Player.y)
+        addToDrawQueue(Player.y + 6, Player)
+
+        if move.closeWaitTimer == 0 then
+            self.playerRoomEntryMove = nil
+            Dialog.breakMovements = false
+        end
+
+        return true
     end
 
     move.timer = math.min(move.duration, move.timer + dt)
@@ -1249,9 +1519,9 @@ function Game:updateEntryMove(dt)
     addToDrawQueue(Player.y + 6, Player)
 
     if move.timer >= move.duration then
-        self.playerRoomEntryMove = nil
-        Tilemap:setAllRoomDoorsOpen(false, true)
-        Dialog.breakMovements = false
+        move.phase = "closing"
+        move.closeWaitTimer = ENTRY_DOOR_CLOSE_WAIT
+        Tilemap:setAllRoomDoorsOpen(false, true, { frameSpeed = ENTRY_DOOR_CLOSE_SPEED })
     end
 
     return true
@@ -1272,7 +1542,8 @@ function Game:loadRoomFromDirection(direction)
 
     self.objects = {}
     for index = #(self.particles or {}), 1, -1 do
-        if self.particles[index].particleType == "boxParticle" then
+        local particleType = self.particles[index].particleType
+        if particleType == "boxParticle" or particleType == "bloodDecal" or particleType == "leafParticle" then
             table.remove(self.particles, index)
         end
     end
@@ -1282,6 +1553,11 @@ function Game:loadRoomFromDirection(direction)
     local spawnX, spawnY = getEntrySpawn(entryDirection)
     Player.x = spawnX
     Player.y = spawnY
+    self.currentEntryDoorAvoidPoint = getEntryDoorAvoidPoint(entryDirection) or { x = spawnX, y = spawnY }
+    local state = FloorManager:getCurrentRoomState()
+    if state then
+        state.entryDoorAvoidPoint = self.currentEntryDoorAvoidPoint
+    end
     Player.velocityX = 0
     Player.velocityY = 0
 
@@ -1388,8 +1664,145 @@ function Game:enterRoomFrom(direction)
     return self:startRoomExitTransition(direction)
 end
 
+function Game:startFloorIntro(floorIndex, onComplete)
+    Dialog.breakMovements = true
+    setBattleMusicActive(false)
+    if Music and Music.closeForFloorIntro then
+        Music:closeForFloorIntro()
+    elseif Music and Music.closeGame then
+        Music:closeGame()
+    end
+    FloorIntroManager:startFloor(floorIndex, function()
+        Dialog.breakMovements = self.playerRoomEntryMove ~= nil
+        if onComplete then
+            onComplete()
+        end
+    end)
+end
+
+function Game:updateFloorIntro(dt)
+    return FloorIntroManager:updateFloor(dt)
+end
+
+function Game:updateFloorIntroState(dt)
+    FloorIntroManager:update(dt)
+end
+
+function Game:loadFloor(floorIndex, onIntroComplete)
+    if not (CURRENT_LEVEL and CURRENT_LEVEL.applyFloorLevel and CURRENT_LEVEL:applyFloorLevel(floorIndex)) then
+        return false
+    end
+
+    FloorManager:load(CURRENT_LEVEL)
+    Tilemap:load()
+
+    self.enemies = {}
+    self.nearbyEnemies = {}
+    self.objects = {}
+    self.particles = {}
+    self.drawQueue = {}
+    self.lightSources = {}
+    self.weaponShockwaves = {}
+    self.footsteps = {}
+    self.roomTransitionCooldown = 0.45
+    self.playerRoomEntryMove = nil
+    self.playerRoomExitTransition = nil
+    self.currentEntryDoorAvoidPoint = nil
+    self.playerCombatRoomsEntered = 0
+    self.roomFadeAlpha = 0
+    self.floorChanging = false
+    self.sPSoundPlayed = false
+    self.sPSoundPlayedOutro = false
+    self.timer = 0
+    self.spot = self.spot or {}
+    self.spot.radius = 1
+    self.spot.feather = 3
+    self.spot.target = 60
+    self.spot.speed = 160
+    self.spot.speedIncrease = 1000
+    self.spot.enabled = true
+
+    local spawnX, spawnY = getStartRoomPlayerSpawn()
+    Player.x = spawnX
+    Player.y = spawnY
+    Player.velocityX = 0
+    Player.velocityY = 0
+    Player.moveX = 0
+    Player.moveY = 0
+
+    if camera then
+        camera.x = Player.x - 5
+        camera.y = Player.y - 30
+        camera:snapToCurrentMode()
+    end
+
+    self:setupCurrentRoom()
+    self:restoreCurrentRoomDrops()
+    self:startFloorIntro(floorIndex, onIntroComplete)
+    return true
+end
+
+function Game:startThanksScreen()
+    self.floorChanging = false
+    Dialog.breakMovements = true
+    setBattleMusicActive(false)
+    if Music and Music.closeGame then
+        Music:closeGame()
+    end
+    if STATES and STATES.floorIntro then
+        state = STATES.floorIntro
+    end
+    FloorIntroManager:startThanks(function()
+        Dialog.breakMovements = false
+        if quitToMenuImmediate then
+            quitToMenuImmediate()
+        elseif quitToMenu then
+            quitToMenu()
+        end
+    end)
+end
+
+function Game:updateThanksScreen(dt)
+    return FloorIntroManager:updateThanks(dt)
+end
+
+function Game:showBottomMessage(text, duration)
+    self.bottomMessageText = text
+    self.bottomMessageTimer = duration or 3
+    self.drawtext = text
+    self.textAlphaTarget = 1
+end
+
+function Game:enterFloorHollow()
+    if self.floorChanging or FloorIntroManager:hasThanksScreen() then
+        return
+    end
+
+    self.floorChanging = true
+    local floorIndex = CURRENT_LEVEL and CURRENT_LEVEL.currentFloorIndex or 1
+    local nextFloorIndex = floorIndex + 1
+    if CURRENT_LEVEL and CURRENT_LEVEL.floorLevels and CURRENT_LEVEL.floorLevels[nextFloorIndex] then
+        if Music and Music.closeGame then
+            Music:closeGame()
+        end
+        if STATES and STATES.floorIntro then
+            state = STATES.floorIntro
+        end
+        self:loadFloor(nextFloorIndex, function()
+            if STATES and STATES.game then
+                state = STATES.game
+            end
+            if Music and Music.startGame then
+                Music:startGame()
+            end
+        end)
+    else
+        self:startThanksScreen()
+    end
+end
+
 function Game:checkRoomTransition(dt)
-    if self.playerRoomExitTransition then
+    if self.playerRoomExitTransition or self.playerRoomEntryMove then
         return
     end
 
@@ -1473,21 +1886,31 @@ end
 
 function Game:updateAmbientTimers(dt)
     self.timer = self.timer + dt
+    local theme = FloorManager:getCurrentRoomTheme()
+    local ambience = theme and theme.ambience or {}
 
-    self.crowTimer = self.crowTimer - dt
-    if self.crowTimer <= 0 then
-        self:crowNoise()
+    if ambience.crow == false then
+        self.crowTimer = math.random(20, 50)
+    else
+        self.crowTimer = self.crowTimer - dt
+        if self.crowTimer <= 0 then
+            self:crowNoise()
+        end
     end
 
-    self.cricketTimer = self.cricketTimer - dt
-    if self.cricketTimer <= 0 then
-        self:cricketNoise()
+    if ambience.cricket == false then
+        self.cricketTimer = math.random(20, 30)
+    else
+        self.cricketTimer = self.cricketTimer - dt
+        if self.cricketTimer <= 0 then
+            self:cricketNoise()
+        end
     end
 end
 
 function Game:updatePitch(dt)
     local targetPitch = 1
-    if Player.life <= 2 then
+    if Player.life <= 1 then
         targetPitch = 0.9
     end
     GAME_PITCH = transitionValue(GAME_PITCH, targetPitch, 1.3, dt)
@@ -1568,7 +1991,16 @@ function Game:updateManagers(dt)
     if CardChoice:isActive() then
         Dialog.breakMovements = true
     end
-    if self:updateRoomExitTransition(dt) then
+    if FloorIntroManager:isActive() then
+        Dialog.breakMovements = true
+        if FloorIntroManager:hasFloorIntro() and Player and Player.isAlive then
+            Player.velocityX = 0
+            Player.velocityY = 0
+            Player:updateAnimation(dt, false)
+            Player.gun:update(dt, Player.x, Player.y)
+            addToDrawQueue(Player.y + 6, Player)
+        end
+    elseif self:updateRoomExitTransition(dt) then
         -- Player is controlled by the room-exit sequence.
     elseif not self:updateEntryMove(dt) then
         Player:update(dt)
@@ -1591,9 +2023,15 @@ function Game:update(dt)
     self:updateSpotlight(dt)
     self:updateAmbientTimers(dt)
     self:updatePitch(dt)
+    local showingThanks = FloorIntroManager:hasThanksScreen()
 
     self.textAlpha = transitionValue(self.textAlpha, self.textAlphaTarget, 5, dt)
     self.textAlphaTarget = 0
+    if (self.bottomMessageTimer or 0) > 0 then
+        self.bottomMessageTimer = math.max(0, self.bottomMessageTimer - dt)
+        self.drawtext = self.bottomMessageText or self.drawtext
+        self.textAlphaTarget = 1
+    end
 
     local currentRoom = FloorManager:getCurrentRoom()
     if currentRoom and (currentRoom.templateId == "start_32x32" or isStartRoom(currentRoom)) then
@@ -1604,15 +2042,18 @@ function Game:update(dt)
         end
     end
 
-    self:updateEntityList(self.enemies, dt)
-    self:checkCurrentRoomClear()
-    self:refreshNearbyEnemies()
-    PlayerCloseStore = false
-    self:updateEntityList(self.objects, dt)
-    self:updateEntityList(self.particles, dt)
-    self:updateFootsteps(dt)
-    self:updateWeaponShockwaves(dt)
-    self:updateManagers(dt)
+    if not showingThanks then
+        self:updateEntityList(self.enemies, dt)
+        self:checkCurrentRoomClear()
+        self:updateBattleMusicForCurrentRoom()
+        self:refreshNearbyEnemies()
+        PlayerCloseStore = false
+        self:updateEntityList(self.objects, dt)
+        self:updateEntityList(self.particles, dt)
+        self:updateFootsteps(dt)
+        self:updateWeaponShockwaves(dt)
+        self:updateManagers(dt)
+    end
 end
 
 function Game:addLightSource(lightType, x, y, options)
@@ -1661,12 +2102,22 @@ function Game:crowNoise()
     if not (Player.isAlive and Player.life > 2) then
         return
     end
+    local theme = FloorManager:getCurrentRoomTheme()
+    if theme and theme.ambience and theme.ambience.crow == false then
+        self.crowTimer = math.random(20, 50)
+        return
+    end
     self.crowTimer = math.random(20, 50)
     AmbienceSound:playCrowSound()
 end
 
 function Game:cricketNoise()
     if not (Player.isAlive and Player.life > 2) then
+        return
+    end
+    local theme = FloorManager:getCurrentRoomTheme()
+    if theme and theme.ambience and theme.ambience.cricket == false then
+        self.cricketTimer = math.random(20, 30)
         return
     end
     self.cricketTimer = math.random(20, 30)
@@ -1722,20 +2173,158 @@ function Game:drawQueueObjects()
         if not item.object.isGroundLayer then
             local brightness = getPlayerLightBrightness(item.object, lightSources)
             local r, g, b = getShadowTint(brightness)
+            item.object.lightBrightness = brightness
+            item.object.lightTint = {r, g, b}
             love.graphics.setColor(r, g, b, 1)
             item.object:draw()
+            item.object.lightBrightness = nil
+            item.object.lightTint = nil
             love.graphics.setColor(1, 1, 1, 1)
         end
     end
+end
+
+local function canDrawXrayTarget(object)
+    return object
+        and object.isXrayVisible == true
+        and type(object.drawXray) == "function"
+        and object.isAlive ~= false
+end
+
+local function canMaskXrayOccluder(object)
+    return object
+        and object.isXrayOccluder == true
+        and object.isAlive ~= false
+end
+
+local function getXrayOccluderBox(object)
+    if object and type(object.getXrayOccluderBox) == "function" then
+        return object:getXrayOccluderBox()
+    end
+
+    local x = object and (object.xWorld or object.x)
+    local y = object and (object.yWorld or object.y)
+    if not (x and y) then
+        return nil
+    end
+
+    local width = object.xrayMaskWidth or ((object.size or 16) * 2)
+    local height = object.xrayMaskHeight or ((object.size or 16) * 3)
+    return {
+        x = x - width / 2,
+        y = y - height,
+        width = width,
+        height = height,
+    }
+end
+
+local function getXraySortY(object)
+    if not object then
+        return nil
+    end
+
+    if object.drawBaseY then
+        return object.drawBaseY + (object.drawPriorityOffset or 0)
+    end
+
+    return object.xraySortY
+        or object.yWorld
+        or object.y
+end
+
+local function isTargetBehindBoxOccluder(targetObject, occluderObject)
+    local targetY = getXraySortY(targetObject)
+    local occluderY = getXraySortY(occluderObject)
+
+    if not (targetY and occluderY) then
+        return false
+    end
+
+    return targetY < occluderY
+end
+
+local function shouldUseXrayOccluder(target, item)
+    if not (target and item and canMaskXrayOccluder(item.object)) then
+        return false
+    end
+
+    if item.priority > target.priority then
+        return true
+    end
+
+    if item.object and item.object.isXrayBoxOccluder == true then
+        return isTargetBehindBoxOccluder(target.object, item.object)
+    end
+
+    return target.object
+        and target.object.isXrayProjectile == true
+        and item.object
+        and item.object.isXrayTileOccluder == true
+end
+
+function Game:drawXrayTargets()
+    local targets = {}
+    for _, item in ipairs(self.drawQueue) do
+        if canDrawXrayTarget(item.object) then
+            targets[#targets + 1] = item
+        end
+    end
+
+    if #targets == 0 then
+        return
+    end
+
+    local previousShader = love.graphics.getShader()
+    local previousBlendMode, previousAlphaMode = love.graphics.getBlendMode()
+    local previousColor = {love.graphics.getColor()}
+
+    love.graphics.setBlendMode("alpha", "alphamultiply")
+    xraySoftShader:send("u_time", love.timer.getTime())
+    xraySoftShader:send("u_alpha", 0.72)
+    love.graphics.setShader(xraySoftShader)
+
+    for _, target in ipairs(targets) do
+        love.graphics.stencil(function()
+            love.graphics.setShader()
+            for _, item in ipairs(self.drawQueue) do
+                if shouldUseXrayOccluder(target, item) then
+                    if type(item.object.drawXrayOccluder) == "function" then
+                        love.graphics.setShader(xrayStencilShader)
+                        love.graphics.setColor(1, 1, 1, 1)
+                        item.object:drawXrayOccluder()
+                        love.graphics.setShader()
+                    else
+                        local box = getXrayOccluderBox(item.object)
+                        if box then
+                            love.graphics.setColor(1, 1, 1, 1)
+                            love.graphics.rectangle("fill", box.x, box.y, box.width, box.height)
+                        end
+                    end
+                end
+            end
+        end, "replace", 1, false)
+
+        love.graphics.setShader(xraySoftShader)
+        love.graphics.setStencilTest("greater", 0)
+        love.graphics.setColor(1, 1, 1, 1)
+        target.object:drawXray()
+        love.graphics.setStencilTest()
+    end
+
+    love.graphics.setBlendMode(previousBlendMode, previousAlphaMode)
+    love.graphics.setShader(previousShader)
+    love.graphics.setColor(previousColor[1], previousColor[2], previousColor[3], previousColor[4])
 end
 
 function Game:drawLightSprites()
     local width = playerLightImage:getWidth()
     local height = playerLightImage:getHeight()
     local previousBlendMode, previousAlphaMode = love.graphics.getBlendMode()
+    local sources = self:getLightSources()
+
     love.graphics.setBlendMode("alpha", "alphamultiply")
 
-    for _, source in ipairs(self:getLightSources()) do
+    for _, source in ipairs(sources) do
         local visual = source.config and source.config.visual
         if visual and visual.enabled ~= false then
             local color = visual.color or {1, 1, 1}
@@ -1750,6 +2339,36 @@ function Game:drawLightSprites()
                 color[2] or 1,
                 color[3] or 1,
                 (visual.alpha or 0.18) * flicker
+            )
+            love.graphics.draw(
+                playerLightImage,
+                source.x,
+                source.y,
+                0,
+                scale,
+                scale,
+                width / 2,
+                height / 2
+            )
+        end
+    end
+
+    love.graphics.setBlendMode("add", "alphamultiply")
+    for _, source in ipairs(sources) do
+        local visual = source.config and source.config.visual
+        if visual and visual.enabled ~= false and visual.glowAlpha and visual.glowAlpha > 0 then
+            local color = visual.color or {1, 1, 1}
+            local flicker = source.flicker or 1
+            local scale = visual.glowScale or (visual.scale or 0.65)
+            if visual.flickerScale then
+                scale = scale * flicker
+            end
+
+            love.graphics.setColor(
+                color[1] or 1,
+                color[2] or 1,
+                color[3] or 1,
+                (visual.glowAlpha or 0.05) * flicker
             )
             love.graphics.draw(
                 playerLightImage,
@@ -1977,6 +2596,14 @@ function Game:drawRoomFade()
     love.graphics.setColor(1, 1, 1, 1)
 end
 
+function Game:drawFloorIntro()
+    FloorIntroManager:drawFloor()
+end
+
+function Game:drawThanksScreen()
+    FloorIntroManager:drawThanks()
+end
+
 function Game:drawLowHealthVignette()
     local intensity = Player and Player.damageAlha or 0
     if intensity <= 0 then
@@ -2005,8 +2632,8 @@ function Game:drawWorld()
     if not (CURRENT_LEVEL and CURRENT_LEVEL.enableTrails == false) then
         Trail:draw()
     end
-    self:drawGroundQueueObjects()
     self:drawFootsteps()
+    self:drawGroundQueueObjects()
     self:drawShadows()
     Player:drawSight()
     self:drawQueueObjects()
@@ -2014,6 +2641,7 @@ function Game:drawWorld()
         CURRENT_LEVEL:drawDebug()
     end
     Clouds:draw()
+    self:drawXrayTargets()
 
     love.graphics.scale(1, 1)
     camera:detach()
@@ -2045,6 +2673,8 @@ function Game:drawUI()
     end
 
     self:drawRoomFade()
+    self:drawFloorIntro()
+    self:drawThanksScreen()
 end
 
 function Game:draw()
@@ -2080,10 +2710,10 @@ function DisableMouseTutorial()
     Tutorial.tutorialTimer = 0
 end
 
-function DisableXTutorial()
-    if Tutorial.drawX == false then return end
+function DisableInteractTutorial()
+    if Tutorial.drawInteract == false then return end
     Tutorial:playSound()
-    Tutorial.drawX = false
+    Tutorial.drawInteract = false
     Tutorial.drawmouse = true
     Tutorial.tutorialTimer = 0
 end
@@ -2095,7 +2725,7 @@ function DisableWalkTutorial()
             Tutorial:playSound()
         end
         Tutorial.drawWalk = false
-        Tutorial.drawX = false
+        Tutorial.drawInteract = false
         Tutorial.drawmouse = false
         Tutorial.tutorialTimer = 0
         state.playerMovedForScarecrowTutorial = true
@@ -2105,7 +2735,7 @@ function DisableWalkTutorial()
     if Tutorial.drawWalk == false then return end
     Tutorial:playSound()
     Tutorial.drawWalk = false
-    Tutorial.drawX = true
+    Tutorial.drawInteract = true
     Tutorial.tutorialTimer = 0
 end
 
@@ -2124,11 +2754,15 @@ function Game:keypressed(key)
         if Player and Player.gun then
             Player.gun:selectSlot(2)
         end
-    elseif key == "tab" or key == "q" then
+    elseif key == "e" then
         if Player and Player.gun then
             Player.gun:toggleWeaponSlot()
         end
-    elseif key == "x" then
+    elseif key == "q" then
+        if Player and Player.gun then
+            Player.gun:reloadSelectedWeapon()
+        end
+    elseif key == "f" then
         if not Dialog.visible then
             Tilemap:keypressed(key)
             for i = #self.objects, 1, -1 do
@@ -2156,8 +2790,8 @@ function Game:mousepressed(x, y, button)
     return false
 end
 
-function Game:startCardChoice(x, y)
-    CardChoice:start(x, y)
+function Game:startCardChoice(x, y, options)
+    CardChoice:start(x, y, options)
 end
 
 return Game

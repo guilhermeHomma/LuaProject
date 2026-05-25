@@ -12,7 +12,7 @@ end
 
 
 function CreatorManager:keypressed(key)
-    if not key == "x" then return end
+    if key ~= "f" then return end
     
     Creator:keypressed(key)
     

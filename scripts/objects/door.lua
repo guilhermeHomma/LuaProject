@@ -6,6 +6,10 @@ sheetImage:setFilter("nearest", "nearest")
 local lockIconImage = love.graphics.newImage("assets/sprites/icons/lock.png")
 lockIconImage:setFilter("nearest", "nearest")
 local whiteShader = love.graphics.newShader("scripts/shaders/whiteShader.glsl")
+local doorHandleSoundBase = love.audio.newSource("assets/sfx/door/doorhandle.mp3", "static")
+local doorCloseSoundBase = love.audio.newSource("assets/sfx/door/doorclose.mp3", "static")
+local doorOpenSoundBase = love.audio.newSource("assets/sfx/door/dooropen.mp3", "static")
+local doorSoundLastPlayed = {}
 
 local sheetWidth, sheetHeight = sheetImage:getDimensions()
 local frameWidth = 16
@@ -45,6 +49,7 @@ function DoorTile:new(x, y, quadIndex, collider, options)
     tile.frame = tile.frameSequence and 1 or tile.closedFrame
     tile.targetFrame = tile.frame
     tile.frameSpeed = options.frameSpeed or 12
+    tile.defaultFrameSpeed = tile.frameSpeed
     tile.opening = false
     tile.openPhase = nil
     tile.open = false
@@ -98,6 +103,32 @@ local function isDoorPairAnchor(door, doors)
     end
 
     return true
+end
+
+local function playClonedSound(baseSource, volume, pitch)
+    local sound = baseSource:clone()
+    sound:setVolume(volume)
+    sound:setPitch(pitch)
+    sound:play()
+    return sound
+end
+
+local function playDoorSound(baseSource, door, volume)
+    local playerDistance = Player and distance(Player, {x = door.xWorld, y = door.yWorld}) or 0
+    local soundVolume = getDistanceVolume(playerDistance, volume or 0.45, 210)
+    playClonedSound(baseSource, soundVolume, (0.95 + math.random() * 0.08) * GAME_PITCH)
+end
+
+local function playDoorSoundOnce(eventName, baseSource, door, volume, minInterval, global)
+    local key = global and ("global:" .. eventName) or ((door.doorPairKey or "single") .. ":" .. eventName)
+    local now = love.timer.getTime()
+
+    if doorSoundLastPlayed[key] and now - doorSoundLastPlayed[key] < (minInterval or 0.18) then
+        return
+    end
+
+    doorSoundLastPlayed[key] = now
+    playDoorSound(baseSource, door, volume)
 end
 
 local function getDoorPairCenter(doors)
@@ -170,13 +201,19 @@ function DoorTile:startOpening()
     self.alpha = 1
     self.isAlive = true
     self.targetFrame = self.frameSequence and #self.frameSequence or self.openFrame
+
+    local doors = getConnectedDoors(self.doorPairKey)
+    if #doors == 0 or isDoorPairAnchor(self, doors) then
+        playDoorSound(doorHandleSoundBase, self, 0.42)
+    end
 end
 
-function DoorTile:startClosing()
+function DoorTile:startClosing(options)
     if self.opening and self.animationMode == "closing" then
         return
     end
 
+    options = options or {}
     self.opening = true
     self.animationMode = "closing"
     self.openPhase = "animate"
@@ -185,6 +222,7 @@ function DoorTile:startClosing()
     self.alpha = 1
     self.isAlive = true
     self.targetFrame = self.frameSequence and 1 or self.closedFrame
+    self.frameSpeed = options.frameSpeed or options.closeFrameSpeed or self.defaultFrameSpeed or self.frameSpeed
 end
 
 function DoorTile:openConnectedDoors()
@@ -347,6 +385,7 @@ end
 
 function DoorTile:update(dt)
     self:updateLockState(dt)
+    self.isXrayOccluder = self.collider == true
     addToDrawQueue(self.yWorld + self.ySortOffset, self)
     self:queueLockIcon()
 
@@ -389,13 +428,24 @@ function DoorTile:update(dt)
                 self:loadQuad()
 
                 if self.animationMode == "closing" then
+                    local doors = getConnectedDoors(self.doorPairKey)
+                    if #doors == 0 or isDoorPairAnchor(self, doors) then
+                        playDoorSoundOnce("close", doorCloseSoundBase, self, 0.5, 0.35, true)
+                    end
+
                     self.opening = false
                     self.openPhase = nil
                     self.animationMode = nil
                     self.open = false
                     self.collider = true
                     self.alpha = 1
+                    self.frameSpeed = self.defaultFrameSpeed or self.frameSpeed
                 else
+                    local doors = getConnectedDoors(self.doorPairKey)
+                    if #doors == 0 or isDoorPairAnchor(self, doors) then
+                        playDoorSound(doorOpenSoundBase, self, 0.46)
+                    end
+
                     self.open = true
                     self.collider = false
                     self.opening = false
@@ -433,7 +483,8 @@ function DoorTile:update(dt)
                 return
             end
 
-            Game.drawtext = "Click X to open this door"
+            self:openConnectedDoors()
+            return
         else
             Game.drawtext = "Clear the room first"
         end
@@ -469,6 +520,25 @@ function DoorTile:draw()
     self:drawDebug()
 end
 
+function DoorTile:drawXrayOccluder()
+    if not self.collider then
+        return
+    end
+
+    local scaleX = self.mirrored and -1 or 1
+    love.graphics.draw(
+        sheetImage,
+        self.quad,
+        self.xWorld,
+        self.yWorld,
+        0,
+        scaleX,
+        1,
+        frameWidth / 2,
+        frameHeight
+    )
+end
+
 function DoorTile:openDoor()
     self.collider = false
     self.open = true
@@ -478,6 +548,7 @@ function DoorTile:openDoor()
     self.autoCloseTimer = 0
     self.alpha = 1
     self.isAlive = true
+    self.frameSpeed = self.defaultFrameSpeed or self.frameSpeed
     self.frame = self.frameSequence and #self.frameSequence or self.openFrame
     self:loadQuad()
 end
@@ -491,6 +562,7 @@ function DoorTile:closeDoor()
     self.autoCloseTimer = 0
     self.alpha = 1
     self.isAlive = true
+    self.frameSpeed = self.defaultFrameSpeed or self.frameSpeed
     self.frame = self.frameSequence and 1 or self.closedFrame
     self.targetFrame = self.frame
     self:loadQuad()

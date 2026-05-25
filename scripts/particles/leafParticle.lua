@@ -22,6 +22,7 @@ function LeafParticle:new(x, y)
     end
 
     local particle = Particle.new(self, x, y, 0, 1, lifetime)
+    particle.particleType = "leafParticle"
     particle.frameOffset = math.random(0, frameCount - 1)
     particle.fallSpeed = 7 + math.random() * 5
     particle.driftSpeed = 5 + math.random() * 4
@@ -35,6 +36,15 @@ function LeafParticle:new(x, y)
 end
 
 function LeafParticle:update(dt)
+    local FloorManager = package.loaded["scripts/managers/floorManager"]
+    local theme = FloorManager
+        and FloorManager.getCurrentRoomTheme
+        and FloorManager:getCurrentRoomTheme()
+    if theme and theme.leafParticles == false then
+        self.isAlive = false
+        return
+    end
+
     addToDrawQueue(self.y + 17, self)
 
     self.timer = self.timer + dt

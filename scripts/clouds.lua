@@ -1,4 +1,10 @@
 local Clouds = {}
+local FloorManager = require("scripts/managers/floorManager")
+
+local function currentThemeAllowsClouds()
+    local theme = FloorManager.getCurrentRoomTheme and FloorManager:getCurrentRoomTheme() or nil
+    return not theme or theme.clouds ~= false
+end
 
 
 function Clouds:load(target)
@@ -27,11 +33,19 @@ function Clouds:load(target)
 end
 
 function Clouds:update(dt)
+    if not currentThemeAllowsClouds() then
+        return
+    end
+
     local speed = (math.sin(love.timer.getTime() * 0.2) + 3 ) / 4
     self.movement = self.movement + 10 * dt * speed
 end
 
 function Clouds:drawShadow()
+    if not currentThemeAllowsClouds() then
+        return
+    end
+
     --self:drawCloud(true)
 end
 
@@ -76,6 +90,10 @@ function Clouds:drawCloud(shadow)
 end
 
 function Clouds:draw()
+    if not currentThemeAllowsClouds() then
+        return
+    end
+
     self:drawCloud(false)
 end
 

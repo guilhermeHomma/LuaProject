@@ -23,7 +23,7 @@ function MainMenu:load()
     baseMenu.load(self)
     self.MenuTItle = "mobize"
     self.menuOptions = {"start game", "settings", "exit game"}
-    self.fontTitle = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 48)
+    self.fontTitle = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 56)
     self.fontTitle:setFilter("nearest", "nearest")
 
     self.fontOptions = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 32)

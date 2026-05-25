@@ -6,6 +6,7 @@ extern vec2 u_lightCenters[MAX_LIGHTS];
 extern number u_innerRadii[MAX_LIGHTS];
 extern number u_outerRadii[MAX_LIGHTS];
 extern number u_maxBrightnesses[MAX_LIGHTS];
+extern number u_additiveStrengths[MAX_LIGHTS];
 extern number u_generalShadowMinBrightness;
 extern vec3 u_generalShadowColor;
 extern number u_occluderCount;
@@ -68,6 +69,7 @@ float getOcclusion(vec2 lightCenter, vec2 screenCoord) {
 vec4 effect(vec4 color, Image tex, vec2 texCoord, vec2 screenCoord) {
     vec4 pixel = Texel(tex, texCoord) * color;
     float brightness = u_generalShadowMinBrightness;
+    float additiveBrightness = 0.0;
 
     if (u_lightCount > 0.0) {
         for (int i = 0; i < MAX_LIGHTS; i++) {
@@ -80,10 +82,12 @@ vec4 effect(vec4 color, Image tex, vec2 texCoord, vec2 screenCoord) {
             float lightBrightness = mix(u_maxBrightnesses[i], u_generalShadowMinBrightness, t);
             lightBrightness = mix(lightBrightness, u_generalShadowMinBrightness, occlusion);
             brightness = max(brightness, lightBrightness);
+            additiveBrightness += (1.0 - t) * u_additiveStrengths[i] * (1.0 - occlusion);
         }
     }
 
     vec3 shadowedColor = pixel.rgb * u_generalShadowColor;
     pixel.rgb = mix(shadowedColor, pixel.rgb, brightness);
+    pixel.rgb = min(pixel.rgb + additiveBrightness, vec3(1.0));
     return pixel;
 }

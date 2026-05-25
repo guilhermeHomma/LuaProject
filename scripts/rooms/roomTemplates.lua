@@ -499,6 +499,29 @@ local templates = {
         moonbeams = basicMoonbeamConfig,
         ambientDust = basicAmbientDustConfig,
     },
+    end_32x32 = {
+        id = "end_32x32",
+        name = "End 32x32",
+        width = 32,
+        height = 32,
+        gridWidth = 1,
+        gridHeight = 1,
+        shape = "rect",
+        tilemapConfig = {
+            mapImage = "assets/maps/endRoom.png",
+            centerOrigin = true,
+        },
+        doorSlots = basicDoorSlots,
+        spawnPoints = basicSpawnPoints,
+        tags = {
+            "end",
+            "small",
+        },
+        moonbeams = {
+            enabled = false,
+        },
+        ambientDust = basicAmbientDustConfig,
+    },
     wide_48x32 = {
         id = "wide_48x32",
         name = "Wide 48x32",

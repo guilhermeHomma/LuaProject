@@ -95,8 +95,10 @@ function Life:pushAwayFromSpawnCollisions(force)
 end
 
 function Life:changeHeight(dt)
-    self.oscillator = self.oscillator + dt * 4 
-    self.hoverHeight = (self.baseHeight or 10) + math.sin(self.oscillator) * 2.5
+    local speed = self.hoverSpeed or 4
+    local amplitude = self.hoverAmplitude or 2.5
+    self.oscillator = self.oscillator + dt * speed
+    self.hoverHeight = (self.baseHeight or 10) + math.sin(self.oscillator) * amplitude
 end 
 
 function Life:updateSpawnMotion(dt)
@@ -248,15 +250,22 @@ function Life:animation(dt)
 end
 
 function Life:onCatch()
+    local recoveredLife = 0
     if Player then
-        Player:catchLife()
+        recoveredLife = Player:catchLife() or 0
     end
 
     local coinSound = love.audio.newSource("assets/sfx/drops/life-catch.mp3", "static")
     coinSound:setVolume(0.8)
     coinSound:setPitch((1) * GAME_PITCH)
     coinSound:play()
-    PickupNumber.spawnPickup(self.x, self.y, self.height, "+1", "life")
+    if recoveredLife > 0 then
+        local recoveredHearts = recoveredLife / 2
+        PickupNumber.spawnPickup(self.x, self.y, self.height, nil, "life", {
+            value = recoveredHearts,
+            decimals = 1,
+        })
+    end
 
 end
 
@@ -297,6 +306,22 @@ function Life:draw()
     DropShine.draw(sheetImage, self.sprite, self.x, drawY, 0, scaleX, scaleY, 4, 8)
     love.graphics.setColor(1, 1, 1, 1)
 
+end
+
+function Life:drawXray()
+    if not self.isAlive then
+        return
+    end
+
+    local scaleX, scaleY = self:getDrawScale()
+    local drawY = self.y - self.height
+    if self.isCollecting then
+        local baseScaleY = self.drawScaleY or 1.25
+        drawY = drawY + 4 * (baseScaleY - scaleY)
+    end
+
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.draw(sheetImage, self.sprite, self.x, drawY, 0, scaleX, scaleY, 4, 8)
 end
 
 return Life

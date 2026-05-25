@@ -6,6 +6,7 @@ local RoomBuilder = require("scripts/rooms/roomBuilder")
 local RoomTemplates = require("scripts/rooms/roomTemplates")
 local Moonbeam = require("scripts/objects/moonbeam")
 local AmbientDust = require("scripts/objects/ambientDust")
+local VisualThemes = require("scripts/config/visualThemes")
 local Grid = require("jumperj.grid")
 local Pathfinder = require("jumperj.pathfinder")
 
@@ -51,14 +52,61 @@ local tileDefinitions = {
 }
 
 local TILE_FLOOR = 0
+local TILE_BOX = 2
 local TILE_DOOR = 4
 local TILE_STORE = 7
 local TILE_DOOR_BACK = 9
+local TILE_CONTAINER = 13
 local TILE_CHEST = 15
 local TILE_CHEST_MARKER = 6
 
 local function isWalkableTile(tile)
     return tile == TILE_FLOOR or tile == TILE_DOOR_BACK
+end
+
+local function isTreeTile(tile)
+    return tile == 3 or tile == 14
+end
+
+local function isPoleTile(tile)
+    return tile == 11
+end
+
+local function isWalkableOrChestTile(tile)
+    return isWalkableTile(tile) or tile == TILE_CHEST or tile == TILE_CHEST_MARKER
+end
+
+local function hasAdjacentWalkableOrChest(x, y, sourceMap)
+    return (sourceMap[y] and isWalkableOrChestTile(sourceMap[y][x + 1]))
+        or (sourceMap[y] and isWalkableOrChestTile(sourceMap[y][x - 1]))
+        or (sourceMap[y + 1] and isWalkableOrChestTile(sourceMap[y + 1][x]))
+        or (sourceMap[y - 1] and isWalkableOrChestTile(sourceMap[y - 1][x]))
+end
+
+local function applyVisualThemeTileRules(theme)
+    if not (theme and tilemap) then
+        return
+    end
+
+    local replacements = {}
+    for y = 1, #tilemap do
+        replacements[y] = {}
+        for x = 1, #tilemap[y] do
+            local tile = tilemap[y][x]
+            if theme.hasTrees == false and isTreeTile(tile) then
+                replacements[y][x] = hasAdjacentWalkableOrChest(x, y, tilemap) and TILE_FLOOR or 1
+            elseif theme.removeSurroundedPoles and isPoleTile(tile)
+                and not hasAdjacentWalkableOrChest(x, y, tilemap) then
+                replacements[y][x] = 1
+            end
+        end
+    end
+
+    for y = 1, #replacements do
+        for x, tile in pairs(replacements[y]) do
+            tilemap[y][x] = tile
+        end
+    end
 end
 
 local function canDrawFloorPathOnTile(tile)
@@ -72,6 +120,38 @@ local function isWalkableMapPosition(x, y)
 
     local tile = tilemap[y][x]
     return isWalkableTile(tile)
+end
+
+local function isSurroundedByNonWalkableTiles(x, y)
+    return not (
+        isWalkableMapPosition(x + 1, y)
+        or isWalkableMapPosition(x - 1, y)
+        or isWalkableMapPosition(x, y + 1)
+        or isWalkableMapPosition(x, y - 1)
+    )
+end
+
+local function isWalkableGroundEdgeTile(tile)
+    return tile == TILE_FLOOR
+        or tile == 5
+        or tile == TILE_CHEST_MARKER
+        or tile == TILE_DOOR
+        or tile == TILE_DOOR_BACK
+        or tile == TILE_CHEST
+end
+
+local function hasAdjacentWalkableGroundEdge(x, y)
+    return (tilemap[y] and isWalkableGroundEdgeTile(tilemap[y][x + 1]))
+        or (tilemap[y] and isWalkableGroundEdgeTile(tilemap[y][x - 1]))
+        or (tilemap[y + 1] and isWalkableGroundEdgeTile(tilemap[y + 1][x]))
+        or (tilemap[y - 1] and isWalkableGroundEdgeTile(tilemap[y - 1][x]))
+end
+
+local function isWallTouchingWalkableGround(x, y)
+    return tilemap
+        and tilemap[y]
+        and tilemap[y][x] == 1
+        and hasAdjacentWalkableGroundEdge(x, y)
 end
 
 local function buildPathfinderMap(sourceMap)
@@ -174,8 +254,49 @@ local function getActiveTilemapConfig()
     return FloorManager:getCurrentTilemapConfig() or GameConfig.tilemapConfig
 end
 
-local function shouldCreateGrass(tile, collider)
-    return (tile == 0 or tile == 5 or tile == 6 or (tile == 1 and not collider)) and math.random() > 0.9
+local function currentThemeAllowsWallGrass()
+    local theme = FloorManager:getCurrentRoomTheme()
+    return not theme or theme.wallGrass ~= false
+end
+
+local function isGrassBlockingObjectTile(tile)
+    return tile == TILE_CHEST
+        or tile == TILE_CHEST_MARKER
+        or tile == TILE_STORE
+        or tile == TILE_BOX
+        or tile == TILE_CONTAINER
+end
+
+local function isNearGrassBlockingObject(x, y)
+    local neighbors = {
+        {x = x, y = y},
+        {x = x + 1, y = y},
+        {x = x - 1, y = y},
+        {x = x, y = y + 1},
+        {x = x, y = y - 1},
+    }
+
+    for _, position in ipairs(neighbors) do
+        local tile = tilemap[position.y] and tilemap[position.y][position.x]
+        if isGrassBlockingObjectTile(tile) then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function shouldCreateGrass(tile, collider, x, y)
+    if isNearGrassBlockingObject(x, y) then
+        return false
+    end
+
+    local canUseTile = tile == 0 or tile == 5 or tile == 6
+    if tile == 1 and currentThemeAllowsWallGrass() and not isWallTouchingWalkableGround(x, y) then
+        canUseTile = true
+    end
+
+    return canUseTile and math.random() > 0.9
 end
 
 local function getTileKey(x, y)
@@ -421,6 +542,11 @@ local function getAmbientDustConfig(room)
         config = mergeTables(config, templateOverride)
     end
 
+    local theme = FloorManager:getCurrentRoomTheme()
+    if theme and theme.ambientDust then
+        config = mergeTables(config, theme.ambientDust)
+    end
+
     return config or {
         enabled = true,
         count = 28,
@@ -649,11 +775,25 @@ local function isFloorNearWall(x, y)
 end
 
 local function shouldCreateBigGrass(tile, collider, x, y, occupied)
+    if isNearGrassBlockingObject(x, y) then
+        return false
+    end
+
     return (tile == 0 or tile == 5 or tile == 6) and isFloorNearWall(x, y) and not occupied[getTileKey(x, y)] and math.random() < 0.05
 end
 
 local function shouldCreateDecorativeBigGrass(tile, collider, x, y, occupied)
-    return tile == 1 and not collider and hasTreeNearby(x, y) and not occupied[getTileKey(x, y)] and math.random() < 0.05
+    if isNearGrassBlockingObject(x, y) then
+        return false
+    end
+
+    return tile == 1
+        and currentThemeAllowsWallGrass()
+        and not collider
+        and not isWallTouchingWalkableGround(x, y)
+        and hasTreeNearby(x, y)
+        and not occupied[getTileKey(x, y)]
+        and math.random() < 0.05
 end
 
 local function canCreateBigGrassAt(x, y, occupied)
@@ -661,7 +801,7 @@ local function canCreateBigGrassAt(x, y, occupied)
         return false
     end
 
-    return isFloorNearWall(x, y)
+    return not isNearGrassBlockingObject(x, y) and isFloorNearWall(x, y)
 end
 
 local function canCreateDecorativeBigGrassAt(x, y, occupied)
@@ -669,16 +809,20 @@ local function canCreateDecorativeBigGrassAt(x, y, occupied)
         return false
     end
 
-    return tilemap[y][x] == 1 and not (
-        DefaultTilemap:hasTileClose(x, y, 0) or
-        DefaultTilemap:hasTileClose(x, y, 5) or
-        DefaultTilemap:hasTileClose(x, y, 6) or
-        DefaultTilemap:hasTileClose(x, y, 8) or
-        DefaultTilemap:hasTileClose(x, y, 4) or
-        DefaultTilemap:hasTileClose(x, y, 9) or
-        DefaultTilemap:hasTileClose(x, y, 2) or
-        DefaultTilemap:hasTileClose(x, y, 11)
-    )
+    return currentThemeAllowsWallGrass()
+        and not isNearGrassBlockingObject(x, y)
+        and tilemap[y][x] == 1
+        and not isWallTouchingWalkableGround(x, y)
+        and not (
+            DefaultTilemap:hasTileClose(x, y, 0) or
+            DefaultTilemap:hasTileClose(x, y, 5) or
+            DefaultTilemap:hasTileClose(x, y, 6) or
+            DefaultTilemap:hasTileClose(x, y, 8) or
+            DefaultTilemap:hasTileClose(x, y, 4) or
+            DefaultTilemap:hasTileClose(x, y, 9) or
+            DefaultTilemap:hasTileClose(x, y, 2) or
+            DefaultTilemap:hasTileClose(x, y, 11)
+        )
 end
 
 local function randomGrassIndex(tile)
@@ -693,6 +837,19 @@ local function randomGrassIndex(tile)
     if math.random() < 0.4 then return 3 end
     if math.random() < 0.05 then return 2 end
     return 4
+end
+
+local function canRenderGrassEntry(entry)
+    local tile = tilemap[entry.y] and tilemap[entry.y][entry.x]
+    if not tile then
+        return false
+    end
+
+    if tile == 1 then
+        return currentThemeAllowsWallGrass() and not isWallTouchingWalkableGround(entry.x, entry.y)
+    end
+
+    return true
 end
 
 local function appendGrassState(entries, x, y, worldX, worldY, tile)
@@ -784,7 +941,7 @@ end
 local function buildFloorPathState()
     local room = FloorManager:getCurrentRoom()
     local state = room and room.state
-    local floorPathVersion = 4
+    local floorPathVersion = 5
     if not state then
         return {}
     end
@@ -795,7 +952,13 @@ local function buildFloorPathState()
 
     state.floorPathTiles = {}
     state.floorPathVersion = floorPathVersion
-    local config = (CURRENT_LEVEL and CURRENT_LEVEL.floorPathTiles) or {}
+    local baseConfig = (CURRENT_LEVEL and CURRENT_LEVEL.floorPathTiles) or {}
+    local templateOverride = room
+        and room.templateId
+        and baseConfig.templateOverrides
+        and baseConfig.templateOverrides[room.templateId]
+        or nil
+    local config = mergeTables(baseConfig, templateOverride)
     local pathChance = config.pathChance or 0.78
     local bendChance = config.bendChance or 0.32
     local sideTileChance = config.sideTileChance or 0.28
@@ -804,10 +967,17 @@ local function buildFloorPathState()
     local branchMax = config.branchMax or 5
     local looseChance = config.looseChance or 0.006
     local used = {}
+    local hollowClearCenterX = room and room.isEndRoom and (#(tilemap[1] or {}) + 1) / 2 or nil
+    local hollowClearCenterY = room and room.isEndRoom and (#tilemap + 1) / 2 or nil
 
     local function addPathTile(x, y)
         local key = getTileKey(x, y)
         if used[key] or not (tilemap[y] and canDrawFloorPathOnTile(tilemap[y][x])) then
+            return false
+        end
+        if hollowClearCenterX
+            and math.abs(x - hollowClearCenterX) <= 2
+            and math.abs(y - hollowClearCenterY) <= 2 then
             return false
         end
 
@@ -1160,7 +1330,7 @@ local function getSlotDoorPositions(room, direction)
     return positions
 end
 
-function DefaultTilemap:setDoorOpen(direction, open, animate)
+function DefaultTilemap:setDoorOpen(direction, open, animate, options)
     local room = FloorManager:getCurrentRoom()
     local doorPositions = getSlotDoorPositions(room, direction)
     local changed = false
@@ -1175,7 +1345,7 @@ function DefaultTilemap:setDoorOpen(direction, open, animate)
                 end
             else
                 if animate and tile.startClosing then
-                    tile:startClosing()
+                    tile:startClosing(options)
                 else
                     tile:closeDoor()
                 end
@@ -1192,7 +1362,7 @@ function DefaultTilemap:setDoorOpen(direction, open, animate)
     end
 end
 
-function DefaultTilemap:setAllRoomDoorsOpen(open, animate)
+function DefaultTilemap:setAllRoomDoorsOpen(open, animate, options)
     local room = FloorManager:getCurrentRoom()
     local changed = false
 
@@ -1209,7 +1379,7 @@ function DefaultTilemap:setAllRoomDoorsOpen(open, animate)
                         end
                     else
                         if animate and tile.startClosing then
-                            tile:startClosing()
+                            tile:startClosing(options)
                         else
                             tile:closeDoor()
                         end
@@ -1377,11 +1547,15 @@ function DefaultTilemap:createTile(x, y, tile, collider)
     end
 
     if tile == 3 then
-        return TreeTile:new(x, y, tile, collider)
+        return TreeTile:new(x, y, tile, collider, {
+            ySortOffset = isSurroundedByNonWalkableTiles(x, y) and 10 or 0,
+        })
     end
 
     if tile == 14 then
-        return TreeTile:newBig(x, y, tile, collider)
+        return TreeTile:newBig(x, y, tile, collider, {
+            ySortOffset = isSurroundedByNonWalkableTiles(x, y) and 10 or 0,
+        })
     end
 
     if tile == TILE_STORE then
@@ -1527,8 +1701,11 @@ end
 
 function DefaultTilemap:load()
     local tilemapConfig = getActiveTilemapConfig()
+    local visualTheme = FloorManager:getCurrentRoomTheme() or VisualThemes:getDefault()
     tilemap, self.mapWidth, self.mapHeight = loadTilemapFromImage(tilemapConfig.mapImage)
-    self.roomTransitions = buildTransitionLookup(RoomBuilder:build(tilemap, FloorManager:getCurrentRoom()))
+    local transitions = RoomBuilder:build(tilemap, FloorManager:getCurrentRoom())
+    applyVisualThemeTileRules(visualTheme)
+    self.roomTransitions = buildTransitionLookup(transitions)
     applyPersistedRoomState()
     applyOptionalObjectSpawnChances()
     applyRoomShopState()
@@ -1541,7 +1718,7 @@ function DefaultTilemap:load()
         tilemapWorldY = origin.y
     end
 
-    tileSet:createTileSet()
+    tileSet:createTileSet(visualTheme.tileset)
     Tile:setTilemap(self)
     self:loadfinders()
 
@@ -1610,7 +1787,7 @@ function DefaultTilemap:load()
             end
 
             if generatingGrassState then
-                if shouldCreateGrass(tile, collider) then
+                if shouldCreateGrass(tile, collider, x, y) then
                     appendGrassState(grassState, x, y, worldX, worldY, tile)
                 end
 
@@ -1619,7 +1796,7 @@ function DefaultTilemap:load()
                 end
 
                 if shouldCreateDecorativeBigGrass(tile, collider, x, y, bigGrassOccupied) then
-                    appendBigGrassCluster(bigGrassState, x, y, bigGrassOccupied, canCreateDecorativeBigGrassAt, {yOffset = 16, interactive = false})
+                    appendBigGrassCluster(bigGrassState, x, y, bigGrassOccupied, canCreateDecorativeBigGrassAt, {yOffset = 16, ySortOffset = 10, interactive = false})
                 end
             end
 
@@ -1641,7 +1818,7 @@ function DefaultTilemap:load()
     end
 
     for _, entry in ipairs(grassState) do
-        if tilemap[entry.y] and tilemap[entry.y][entry.x] then
+        if canRenderGrassEntry(entry) then
             local worldX, worldY = self:mapToWorld(entry.x, entry.y)
             self.grass[#self.grass + 1] = Grass:new(
                 worldX + (entry.offsetX or 0),
@@ -1653,7 +1830,7 @@ function DefaultTilemap:load()
     end
 
     for _, entry in ipairs(bigGrassState) do
-        if tilemap[entry.y] and tilemap[entry.y][entry.x] then
+        if canRenderGrassEntry(entry) then
             local worldX, worldY = self:mapToWorld(entry.x, entry.y)
             self.bigGrass[#self.bigGrass + 1] = BigGrass:new(worldX, worldY, entry.options)
         end
@@ -1663,7 +1840,21 @@ function DefaultTilemap:load()
     self:loadAmbientDust(walkablePositions)
 end
 
-function DefaultTilemap:getRandomSpawnPosition(reference, minDistance)
+local function isSpawnCandidateAllowed(candidate, reference, targetDistance, avoidPoints)
+    if reference and distance(candidate, reference) <= targetDistance then
+        return false
+    end
+
+    for _, avoidPoint in ipairs(avoidPoints or {}) do
+        if avoidPoint.x and avoidPoint.y and distance(candidate, avoidPoint) <= (avoidPoint.radius or targetDistance) then
+            return false
+        end
+    end
+
+    return true
+end
+
+function DefaultTilemap:getRandomSpawnPosition(reference, minDistance, avoidPoints)
     if not tilemap then
         return nil, nil
     end
@@ -1679,8 +1870,8 @@ function DefaultTilemap:getRandomSpawnPosition(reference, minDistance)
             local worldX, worldY = self:mapToWorld(x, y)
             local candidate = {x = worldX, y = worldY - 8}
 
-            fallback = fallback or candidate
-            if not reference or distance(candidate, reference) > targetDistance then
+            if isSpawnCandidateAllowed(candidate, reference, targetDistance, avoidPoints) then
+                fallback = fallback or candidate
                 return candidate.x, candidate.y
             end
         end
@@ -1693,9 +1884,9 @@ function DefaultTilemap:getRandomSpawnPosition(reference, minDistance)
     return nil, nil
 end
 
-function DefaultTilemap:getRandomReachableSpawnPosition(reference, minDistance)
+function DefaultTilemap:getRandomReachableSpawnPosition(reference, minDistance, avoidPoints)
     if not tilemap or not self.finderAstar then
-        return self:getRandomSpawnPosition(reference, minDistance)
+        return self:getRandomSpawnPosition(reference, minDistance, avoidPoints)
     end
 
     local targetDistance = minDistance or GameConfig.spawnMinDistance
@@ -1712,7 +1903,7 @@ function DefaultTilemap:getRandomReachableSpawnPosition(reference, minDistance)
         if tilemap[y][x] == TILE_FLOOR then
             local worldX, worldY = self:mapToWorld(x, y)
             local candidate = {x = worldX, y = worldY - 8}
-            local farEnough = not reference or distance(candidate, reference) > targetDistance
+            local farEnough = isSpawnCandidateAllowed(candidate, reference, targetDistance, avoidPoints)
 
             if farEnough then
                 if not referenceMapX then
@@ -1793,11 +1984,15 @@ function DefaultTilemap:update(dt)
 end
 
 function DefaultTilemap:keypressed(key)
+    if key ~= "f" then
+        return
+    end
+
     for _, tile in ipairs(self.tiles) do
         if type(tile.keypressed) == "function" then
             tile:keypressed(key)
         end
-        if type(tile.performBuy) == "function" then
+        if type(tile.performBuy) == "function" and not tile.doorPairKey then
             tile:performBuy()
         end
     end

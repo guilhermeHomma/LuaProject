@@ -115,4 +115,14 @@ function Bullets:draw()
     love.graphics.setColor(1, 1, 1, 1)
 end
 
+function Bullets:drawXray()
+    if not self.isAlive then
+        return
+    end
+
+    local scaleX, scaleY = self:getDrawScale()
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.draw(sheetImage, self.sprite, self.x, self.y - self.height, 0, scaleX, scaleY, 4, 8)
+end
+
 return Bullets

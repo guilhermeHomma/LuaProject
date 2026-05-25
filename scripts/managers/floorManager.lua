@@ -2,6 +2,7 @@ local FloorManager = {}
 
 local RoomTemplates = require("scripts/rooms/roomTemplates")
 local WeaponDefinitions = require("scripts/player/weapons/init")
+local VisualThemes = require("scripts/config/visualThemes")
 
 local DEFAULT_START_ROOM_ID = "0:0"
 local directions = {
@@ -116,6 +117,8 @@ local function createRoom(roomConfig, level)
         height = roomConfig.height or (template and template.height),
         gridWidth = roomConfig.gridWidth or (template and template.gridWidth) or 1,
         gridHeight = roomConfig.gridHeight or (template and template.gridHeight) or 1,
+        distanceFromStart = roomConfig.distanceFromStart or 0,
+        themeId = roomConfig.themeId,
         occupancyVariants = copyTable(roomConfig.occupancyVariants or (template and template.occupancyVariants)),
         occupancyVariant = roomConfig.occupancyVariant,
         occupiedOffsets = copyTable(resolveOccupiedOffsets(roomConfig, template)),
@@ -128,6 +131,7 @@ local function createRoom(roomConfig, level)
         tilemapConfig = copyTable(roomConfig.tilemapConfig or chooseTemplateTilemapConfig(template) or level.tilemapConfig),
         isShopRoom = roomConfig.isShopRoom == true or templateId == "store_32x32",
         isCardRoom = roomConfig.isCardRoom == true or templateId == "cards_32x32",
+        isEndRoom = roomConfig.isEndRoom == true or templateId == "end_32x32",
         state = roomConfig.state or {
             visited = false,
             discovered = false,
@@ -448,6 +452,131 @@ local function shuffledDirectionsList()
     return shuffledDirections
 end
 
+local function getDirectionsAwayFromStart(room)
+    local ordered = copyTable(directionOrder)
+    local tieBreakers = {}
+    for index, direction in ipairs(shuffledDirectionsList()) do
+        tieBreakers[direction] = index
+    end
+
+    table.sort(ordered, function(a, b)
+        local dirA = directions[a]
+        local dirB = directions[b]
+        local scoreA = math.abs((room.gridX or 0) + dirA.dx) + math.abs((room.gridY or 0) + dirA.dy)
+        local scoreB = math.abs((room.gridX or 0) + dirB.dx) + math.abs((room.gridY or 0) + dirB.dy)
+        if scoreA == scoreB then
+            return (tieBreakers[a] or 0) < (tieBreakers[b] or 0)
+        end
+        return scoreA > scoreB
+    end)
+    return ordered
+end
+
+local function createEndRoomFromAnchor(anchorRoom, generateConfig, generatedRooms, roomIds, occupiedCells)
+    local endTemplateId = generateConfig and generateConfig.endRoomTemplateId
+    if not (endTemplateId and anchorRoom) then
+        return nil
+    end
+
+    local anchorCells = getOccupiedCells(anchorRoom)
+    for i = #anchorCells, 2, -1 do
+        local j = math.random(1, i)
+        anchorCells[i], anchorCells[j] = anchorCells[j], anchorCells[i]
+    end
+
+    for _, anchorCell in ipairs(anchorCells) do
+        for _, direction in ipairs(getDirectionsAwayFromStart(anchorRoom)) do
+            local directionConfig = directions[direction]
+            local x = anchorCell.x + directionConfig.dx
+            local y = anchorCell.y + directionConfig.dy
+            if not anchorRoom.neighbors[direction] and not occupiedCells[getRoomId(x, y)] then
+                local placement = chooseTemplatePlacement(
+                    {[directionConfig.opposite] = true},
+                    {templateIds = {endTemplateId}},
+                    x,
+                    y,
+                    occupiedCells
+                )
+
+                if placement then
+                    local room = createGeneratedRoom(x, y, placement)
+                    room.isEndRoom = true
+                    room.pathEnd = true
+                    room.distanceFromStart = getRoomDistanceFromStart(anchorRoom) + 1
+                    room.doors[directionConfig.opposite] = true
+                    room.doorSlotIds[directionConfig.opposite] = getDoorSlotIdForCell(room, {x = x, y = y}, directionConfig.opposite)
+                    room.neighbors[directionConfig.opposite] = anchorRoom.id
+
+                    anchorRoom.doors[direction] = true
+                    anchorRoom.doorSlotIds[direction] = getDoorSlotIdForCell(anchorRoom, anchorCell, direction)
+                    anchorRoom.neighbors[direction] = room.id
+
+                    appendGeneratedRoom(generatedRooms, roomIds, occupiedCells, room)
+                    return room
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+local function createEndRoom(generateConfig, generatedRooms, roomIds, occupiedCells)
+    if not (generateConfig and generateConfig.endRoomTemplateId) then
+        return nil
+    end
+
+    local candidates = {}
+    for _, room in ipairs(generatedRooms or {}) do
+        if not room.isShopRoom and not room.isCardRoom and not room.isEndRoom then
+            candidates[#candidates + 1] = room
+        end
+    end
+    local candidateTieBreakers = {}
+    for index, room in ipairs(candidates) do
+        candidateTieBreakers[room.id or tostring(room)] = index
+    end
+    for i = #candidates, 2, -1 do
+        local j = math.random(1, i)
+        candidates[i], candidates[j] = candidates[j], candidates[i]
+    end
+    for index, room in ipairs(candidates) do
+        candidateTieBreakers[room.id or tostring(room)] = index
+    end
+
+    table.sort(candidates, function(a, b)
+        local distanceA = getRoomDistanceFromStart(a)
+        local distanceB = getRoomDistanceFromStart(b)
+        if distanceA == distanceB then
+            local gridDistanceA = math.abs(a.gridX or 0) + math.abs(a.gridY or 0)
+            local gridDistanceB = math.abs(b.gridX or 0) + math.abs(b.gridY or 0)
+            if gridDistanceA == gridDistanceB then
+                return (candidateTieBreakers[a.id or tostring(a)] or 0) < (candidateTieBreakers[b.id or tostring(b)] or 0)
+            end
+            return gridDistanceA > gridDistanceB
+        end
+        return distanceA > distanceB
+    end)
+
+    for _, room in ipairs(candidates) do
+        local endRoom = createEndRoomFromAnchor(room, generateConfig, generatedRooms, roomIds, occupiedCells)
+        if endRoom then
+            return endRoom
+        end
+    end
+
+    for _, room in ipairs(generatedRooms or {}) do
+        if not room.isEndRoom then
+            local endRoom = createEndRoomFromAnchor(room, generateConfig, generatedRooms, roomIds, occupiedCells)
+            if endRoom then
+                return endRoom
+            end
+        end
+    end
+
+    return nil
+end
+
 local function createShopRoomFromAnchor(anchorRoom, generateConfig, generatedRooms, roomIds, occupiedCells)
     local shopTemplateId = generateConfig and generateConfig.shopRoomTemplateId
     if not (shopTemplateId and anchorRoom) then
@@ -626,7 +755,7 @@ local function createCardRooms(generateConfig, generatedRooms, roomIds, occupied
     local function getSortedCardAnchors()
         local candidates = {}
         for _, room in ipairs(generatedRooms) do
-            if not room.isShopRoom and not room.isCardRoom then
+            if not room.isShopRoom and not room.isCardRoom and not room.isEndRoom then
                 candidates[#candidates + 1] = {
                     room = room,
                     score = getSpreadScore(room),
@@ -895,11 +1024,14 @@ local function createGraphRooms(generateConfig)
         addOppositeExitsForLargeRooms(generateConfig, generatedRooms, roomIds, occupiedCells)
     end
 
+    local endRoom = createEndRoom(generateConfig, generatedRooms, roomIds, occupiedCells)
+    assert(not generateConfig.endRoomTemplateId or endRoom, "Could not place mandatory end room")
     createCardRooms(generateConfig, generatedRooms, roomIds, occupiedCells)
 
     for _, room in ipairs(generatedRooms) do
         local canAddExtraConnections = not room.isShopRoom
             and not room.isCardRoom
+            and not room.isEndRoom
             and not (room.pathEnd and getRoomConnectionCount(room) <= 1)
 
         if canAddExtraConnections then
@@ -960,11 +1092,12 @@ local function logFloor(rooms, currentRoomId)
 
         local marker = room.id == currentRoomId and " *" or ""
         print(string.format(
-            "[floor] %s%s (%d,%d) size=%dx%d grid=%dx%d variant=%s template=%s cells={%s} doors={%s}",
+            "[floor] %s%s (%d,%d) dist=%d size=%dx%d grid=%dx%d variant=%s template=%s cells={%s} doors={%s}",
             room.id,
             marker,
             room.gridX,
             room.gridY,
+            room.distanceFromStart or 0,
             room.width or 0,
             room.height or 0,
             room.gridWidth or 1,
@@ -974,6 +1107,103 @@ local function logFloor(rooms, currentRoomId)
             table.concat(cells, ", "),
             table.concat(parts, ", ")
         ))
+    end
+end
+
+local function getActiveFloorLevel(level)
+    local floorIndex = level and level.currentFloorIndex or 1
+    return level and level.floorLevels and level.floorLevels[floorIndex] or nil
+end
+
+local function roomMatchesThemeArea(room, area)
+    if not (room and area) then
+        return false
+    end
+
+    local distance = room.distanceFromStart or (math.abs(room.gridX or 0) + math.abs(room.gridY or 0))
+    if area.minDistance and distance < area.minDistance then
+        return false
+    end
+    if area.maxDistance and distance > area.maxDistance then
+        return false
+    end
+
+    return true
+end
+
+local function applyThemeArea(rooms, themeConfig, area)
+    local themeId = area and (area.theme or area.themeId)
+    if not (themeId and VisualThemes.themes[themeId]) then
+        return
+    end
+
+    local eligible = {}
+    for _, room in pairs(rooms or {}) do
+        local forcedDefault = themeConfig and themeConfig.startRoomUseDefault ~= false
+            and (room.distanceFromStart or 0) <= 0
+        if not forcedDefault and roomMatchesThemeArea(room, area) then
+            eligible[#eligible + 1] = room
+        end
+    end
+
+    if #eligible == 0 then
+        return
+    end
+
+    local seeds = {}
+    local seedChance = area.seedChance or area.chance or 0.35
+    for _, room in ipairs(eligible) do
+        if math.random() < seedChance then
+            seeds[#seeds + 1] = room
+        end
+    end
+    if #seeds == 0 then
+        seeds[1] = eligible[math.random(1, #eligible)]
+    end
+
+    local radius = math.max(0, area.radius or 1)
+    local fillChance = area.fillChance or 0.85
+    for _, seed in ipairs(seeds) do
+        local queue = {{room = seed, depth = 0}}
+        local visited = {[seed.id] = true}
+        local index = 1
+
+        while queue[index] do
+            local entry = queue[index]
+            index = index + 1
+
+            if entry.depth == 0 or math.random() < fillChance then
+                entry.room.themeId = themeId
+            end
+
+            if entry.depth < radius then
+                for _, neighborId in pairs(entry.room.neighbors or {}) do
+                    local neighbor = rooms[neighborId]
+                    if neighbor and not visited[neighbor.id] and roomMatchesThemeArea(neighbor, area) then
+                        visited[neighbor.id] = true
+                        queue[#queue + 1] = {
+                            room = neighbor,
+                            depth = entry.depth + 1,
+                        }
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function assignRoomVisualThemes(rooms, level)
+    local floorLevel = getActiveFloorLevel(level)
+    local themeConfig = floorLevel and floorLevel.visualThemes
+        or level and level.visualThemes
+        or nil
+
+    for _, room in pairs(rooms or {}) do
+        room.themeId = VisualThemes:chooseRoomTheme(room, themeConfig)
+    end
+
+    for _, area in ipairs(themeConfig and themeConfig.areas or {}) do
+        applyThemeArea(rooms, themeConfig, area)
     end
 end
 
@@ -1017,6 +1247,8 @@ function FloorManager:load(level)
         currentRoom.state.visited = true
         currentRoom.state.discovered = true
     end
+
+    assignRoomVisualThemes(self.rooms, level)
 
     logFloor(self.rooms, self.currentRoomId)
 end
@@ -1176,6 +1408,11 @@ function FloorManager:getCurrentTilemapConfig()
     end
 
     return self.level and self.level.tilemapConfig or nil
+end
+
+function FloorManager:getCurrentRoomTheme()
+    local room = self:getCurrentRoom()
+    return VisualThemes:get(room and room.themeId)
 end
 
 function FloorManager:getCurrentRoomState()

@@ -8,6 +8,7 @@ function Drop:new(x, y)
     drop.y = y
     
     drop.isAlive = true
+    drop.isXrayVisible = true
     drop.timer = 0
     drop.lifeTime = 15
     drop.lifetimeTimer = 0
@@ -64,6 +65,7 @@ function Drop:update(dt)
     addToDrawQueue((self.drawBaseY or self.y) + (self.drawPriorityOffset or 10), self)
 
     self:checkCatch()
+    self:updatePickupTutorial(dt)
     if self.isCollecting then
         if type(self.updateCollectAnimation) == "function" then
             self:updateCollectAnimation(dt)
@@ -93,8 +95,19 @@ function Drop:isPlayerInPickupRange()
     return false
 end
 
+function Drop:updatePickupTutorial(dt)
+    if not self.requirePickupKey or not self.isAlive or self.isCollecting then
+        return
+    end
+
+    if self:isPlayerInPickupRange() then
+        Game.drawtext = "Press F to pick up"
+        Game.textAlphaTarget = 1
+    end
+end
+
 function Drop:keypressed(key)
-    if key == "x" and self.requirePickupKey and self:isPlayerInPickupRange() then
+    if key == "f" and self.requirePickupKey and self:isPlayerInPickupRange() then
         if not self.isAlive or self.isCollecting then
             return
         end
@@ -134,6 +147,15 @@ function Drop:draw()
     love.graphics.circle("fill", self.x, self.y, 7)
     love.graphics.setColor(1, 1, 1)
 
+end
+
+function Drop:drawXray()
+    if not self.isAlive then
+        return
+    end
+
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.circle("fill", self.x, self.y - (self.height or 0), 4)
 end
 
 return Drop

@@ -74,23 +74,25 @@ local function markPersistedOpen(chest)
     state.openedChests[getChestKey(chest)] = true
 end
 
-local function configureChestDrop(drop, kind, key, chest)
+local function configureChestDrop(drop, kind, key, chest, dropIndex)
     drop.persistRoomDrop = true
     drop.neverExpires = true
     drop.requirePickupKey = true
     drop.pickupDistance = 24
+    drop.fromChest = true
     drop.roomDropKey = key
     drop.dropKind = kind
     drop.pickupX = chest.xWorld
     drop.pickupY = chest.yWorld
     drop.drawBaseY = chest.yWorld
-    drop.drawPriorityOffset = 12
+    drop.drawPriorityOffset = 0.35 + (dropIndex or 1) * 0.04
+    drop.drawSortOrder = dropIndex or 0
     drop.vx = drop.vx or 0
     drop.vy = drop.vy or 0
     return drop
 end
 
-local function rememberChestDrop(key, kind, x, y, chest)
+local function rememberChestDrop(key, kind, x, y, chest, chestDrop)
     local FloorManager = require("scripts/managers/floorManager")
     local state = FloorManager:getCurrentRoomState()
     if not state then
@@ -105,6 +107,8 @@ local function rememberChestDrop(key, kind, x, y, chest)
         pickupX = chest.xWorld,
         pickupY = chest.yWorld,
         drawBaseY = chest.yWorld,
+        drawPriorityOffset = chestDrop and chestDrop.drawPriorityOffset or nil,
+        drawSortOrder = chestDrop and chestDrop.drawSortOrder or nil,
         collected = false,
     }
 end
@@ -121,6 +125,8 @@ function Chest:new(x, y, chestType)
     chest.isAlive = true
     chest.isOpen = isPersistedOpen(chest)
     chest.collider = true
+    chest.isXrayOccluder = true
+    chest.isXrayBoxOccluder = true
     chest.isOpening = false
     chest.openTimer = 0
     chest.openDuration = 0.42
@@ -129,7 +135,8 @@ function Chest:new(x, y, chestType)
     chest.flashTimer = 0
     chest.flashDuration = 0.32
     chest.beamTimer = 0
-    chest.beamDuration = 0.75
+    chest.beamDuration = 1.05
+    chest.beamElapsed = 0
     chest.particleTimer = 0
     chest.particleInterval = 0.025
     chest.cardParticleTimer = math.random() * 0.2
@@ -152,14 +159,20 @@ function Chest:spawnDrop()
     DropTemplates.spawnResolvedDrops(resolvedDrops, spawnX, spawnY, Game.objects, function(drop, kind)
         dropIndex = dropIndex + 1
         local key = baseKey .. kind .. dropIndex
-        drop.popHeight = math.min(drop.popHeight or 0, 4)
-        drop.popVelocity = math.min(drop.popVelocity or 0, 28)
+        drop.baseHeight = math.max(drop.baseHeight or 0, kind == "life" and 20 or 18)
+        drop.hoverHeight = drop.baseHeight
+        drop.hoverAmplitude = kind == "life" and 2.6 or 2.2
+        drop.hoverSpeed = kind == "life" and 2.7 or 2.4
+        drop.popHeight = kind == "life" and 5 or 4
+        drop.popVelocity = kind == "life" and 30 or 26
+        drop.popGravity = 250
         drop.popMaxBounces = 0
-        drop.spawnStretchTimer = math.min(drop.spawnStretchTimer or 0, 0.12)
-        drop.spawnStretchDuration = 0.12
+        drop.spawnStretchTimer = math.max(drop.spawnStretchTimer or 0, 0.18)
+        drop.spawnStretchDuration = 0.18
         drop.height = (drop.hoverHeight or drop.baseHeight or 0) + (drop.popHeight or 0)
-        rememberChestDrop(key, kind, spawnX, spawnY, self)
-        return configureChestDrop(drop, kind, key, self)
+        configureChestDrop(drop, kind, key, self, dropIndex)
+        rememberChestDrop(key, kind, spawnX, spawnY, self, drop)
+        return drop
     end)
 end
 
@@ -204,6 +217,7 @@ function Chest:open()
     self.openTimer = 0
     self.flashTimer = self.flashDuration
     self.beamTimer = self.beamDuration
+    self.beamElapsed = 0
     self.particleTimer = 0
     DamageStretch:start(self)
     markPersistedOpen(self)
@@ -215,13 +229,18 @@ function Chest:open()
 end
 
 function Chest:keypressed(key)
-    if key == "x" and self:isPlayerNear() then
+    if key == "f" and self:isPlayerNear() then
         self:open()
     end
 end
 
 function Chest:update(dt)
     addToDrawQueue(self.yWorld, self)
+
+    if not self.isOpen and not self.isOpening and self:isPlayerNear() then
+        Game.drawtext = "Press F to open"
+        Game.textAlphaTarget = 1
+    end
 
     if self.chestType == "card" and not self.isOpen then
         self.cardParticleTimer = (self.cardParticleTimer or 0) + dt
@@ -251,6 +270,7 @@ function Chest:update(dt)
 
     if self.beamTimer > 0 then
         self.beamTimer = math.max(0, self.beamTimer - dt)
+        self.beamElapsed = math.min(self.beamDuration, (self.beamElapsed or 0) + dt)
         self.particleTimer = self.particleTimer + dt
         while self.particleTimer >= self.particleInterval do
             self.particleTimer = self.particleTimer - self.particleInterval
@@ -259,18 +279,56 @@ function Chest:update(dt)
     end
 end
 
+local function smoothStep(value)
+    value = math.max(0, math.min(1, value))
+    return value * value * (3 - 2 * value)
+end
+
+local function getBeamAlpha(chest)
+    local elapsed = chest.beamElapsed or 0
+    local remaining = chest.beamTimer or 0
+    local fadeIn = 0.16
+    local fadeOut = 0.42
+    local inAlpha = smoothStep(elapsed / fadeIn)
+    local outAlpha = smoothStep(remaining / fadeOut)
+    return math.min(inAlpha, outAlpha)
+end
+
+local function drawBeamLayer(chest, baseHalfWidth, topHalfWidth, height, color, alpha)
+    local segments = 10
+    local bottomY = chest.yWorld - 8
+    local topY = bottomY - height
+
+    for i = 0, segments - 1 do
+        local p1 = i / segments
+        local p2 = (i + 1) / segments
+        local y1 = bottomY + (topY - bottomY) * p1
+        local y2 = bottomY + (topY - bottomY) * p2
+        local half1 = baseHalfWidth + (topHalfWidth - baseHalfWidth) * p1
+        local half2 = baseHalfWidth + (topHalfWidth - baseHalfWidth) * p2
+        local topFade = (1 - p1) ^ 1.7
+        love.graphics.setColor(color[1], color[2], color[3], alpha * topFade)
+        love.graphics.polygon(
+            "fill",
+            chest.xWorld - half1, y1,
+            chest.xWorld + half1, y1,
+            chest.xWorld + half2, y2,
+            chest.xWorld - half2, y2
+        )
+    end
+end
+
 function Chest:drawBeam()
     if self.beamTimer <= 0 then
         return
     end
 
-    local alpha = self.beamTimer / self.beamDuration
-    love.graphics.setBlendMode("add")
-    love.graphics.setColor(0.35, 0.95, 1, 0.22 * alpha)
-    love.graphics.polygon("fill", self.xWorld - 3, self.yWorld - 8, self.xWorld + 3, self.yWorld - 8, self.xWorld + 10, self.yWorld - 92, self.xWorld - 10, self.yWorld - 92)
-    love.graphics.setColor(1, 0.35, 0.95, 0.14 * alpha)
-    love.graphics.polygon("fill", self.xWorld - 1, self.yWorld - 8, self.xWorld + 1, self.yWorld - 8, self.xWorld + 5, self.yWorld - 90, self.xWorld - 5, self.yWorld - 90)
-    love.graphics.setBlendMode("alpha")
+    local alpha = getBeamAlpha(self)
+    local previousBlendMode, previousAlphaMode = love.graphics.getBlendMode()
+    love.graphics.setBlendMode("add", "alphamultiply")
+    drawBeamLayer(self, 3, 11, 88, {0.35, 0.95, 1}, 0.20 * alpha)
+    drawBeamLayer(self, 1.2, 5.5, 84, {1, 0.35, 0.95}, 0.13 * alpha)
+    love.graphics.setBlendMode(previousBlendMode, previousAlphaMode)
     love.graphics.setColor(1, 1, 1, 1)
 end
 
@@ -297,6 +355,13 @@ function Chest:draw()
     love.graphics.draw(self.sprite or sprite, quad, self.xWorld, self.yWorld, 0, scaleX, scaleY, frameWidth / 2, frameHeight)
     love.graphics.setShader()
     love.graphics.setColor(1, 1, 1, 1)
+end
+
+function Chest:drawXrayOccluder()
+    local activeQuads = self.quads or quads
+    local quad = (self.isOpen and not self.isOpening) and activeQuads.open or activeQuads.closed
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.draw(self.sprite or sprite, quad, self.xWorld, self.yWorld, 0, 1, 1, frameWidth / 2, frameHeight)
 end
 
 function Chest:drawShadow()

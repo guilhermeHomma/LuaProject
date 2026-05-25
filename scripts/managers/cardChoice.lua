@@ -2,9 +2,29 @@ local CardChoice = {}
 
 local Ball = require("scripts/particles/ballParticle")
 local CardDefinitions = require("scripts/cards/cardDefinitions")
+local PlayerStatusHud = require("scripts/ui/playerStatusHud")
 
-local cardImage = love.graphics.newImage("assets/sprites/ui/cards/card.png")
-cardImage:setFilter("nearest", "nearest")
+local function loadCardImage(path)
+    local image = love.graphics.newImage(path)
+    image:setFilter("nearest", "nearest")
+    return image
+end
+
+local cardBackImages = {
+    common = loadCardImage("assets/sprites/ui/cards/common.png"),
+    rare = loadCardImage("assets/sprites/ui/cards/rare.png"),
+    epic = loadCardImage("assets/sprites/ui/cards/epic.png"),
+}
+local fallbackCardImage = cardBackImages.common or loadCardImage("assets/sprites/ui/cards/card.png")
+local cardArtImages = {
+    player = loadCardImage("assets/sprites/ui/cards/player.png"),
+    life = loadCardImage("assets/sprites/ui/cards/life.png"),
+    weapon = loadCardImage("assets/sprites/ui/cards/gun.png"),
+}
+
+local smoothCardSoundBase = love.audio.newSource("assets/sfx/ui/smooth-good-cards.mp3", "static")
+local shuffleCardSoundBase = love.audio.newSource("assets/sfx/ui/shuffle-card.mp3", "static")
+local singleCardSoundBase = love.audio.newSource("assets/sfx/ui/single-card-sound.mp3", "static")
 
 local titleFont = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 38)
 local cardNameFont = love.graphics.newFont("assets/fonts/pixelart.ttf", 26)
@@ -25,8 +45,8 @@ local colors = {
     {0.32, 0.08, 0.48, 1},
 }
 
-local cardScale = 3.1875
-local selectedCardScale = 3.5
+local cardScale = 3.825
+local selectedCardScale = 4.2
 local cardPadding = 54
 local hoverDistance = 58
 
@@ -41,6 +61,15 @@ local function shuffle(list)
     end
 end
 
+local function containsCard(cards, candidate)
+    for _, card in ipairs(cards) do
+        if card.id == candidate.id then
+            return true
+        end
+    end
+    return false
+end
+
 local function getMouseCanvasPosition()
     local mx, my = love.mouse.getPosition()
     return (mx - viewportOffsetX) / scale, (my - viewportOffsetY) / scale
@@ -50,12 +79,38 @@ local function approach(value, target, speed, dt)
     return value + (target - value) * math.min(speed * dt, 1)
 end
 
+local function round(value)
+    if value >= 0 then
+        return math.floor(value + 0.5)
+    end
+    return math.ceil(value - 0.5)
+end
+
+local function playSound(baseSource, volume, pitch)
+    local sound = baseSource:clone()
+    sound:setVolume(volume or 1)
+    sound:setPitch((pitch or 1) * (GAME_PITCH or 1))
+    sound:play()
+end
+
+local function getCardBackImage(cardDef)
+    local rarityId = cardDef and cardDef.rarity or "common"
+    return cardBackImages[rarityId] or fallbackCardImage
+end
+
+local function getCardArtImage(cardDef)
+    return cardArtImages[cardDef and cardDef.visualType] or cardArtImages.player
+end
+
 function CardChoice:load()
     self.active = false
     self.cards = {}
     self.particles = {}
     self.timer = 0
     self.phase = "idle"
+    self.previewCard = nil
+    self.selectedCardDef = nil
+    self.drawAlpha = 1
     if Dialog then
         Dialog.breakMovements = false
     end
@@ -67,6 +122,55 @@ end
 
 function CardChoice:getEligibleCards()
     return CardDefinitions:getEligibleCards()
+end
+
+function CardChoice:chooseCards(count, options)
+    options = options or {}
+    local chosen = {}
+    local fallback = self:getEligibleCards()
+    local epicIndex = nil
+    shuffle(fallback)
+
+    if options.allowRare ~= false and math.random(15) == 1 then
+        epicIndex = math.random(count)
+    end
+
+    for _ = 1, count do
+        local cardIndex = #chosen + 1
+        local rarity = options.allowRare == false and "common" or CardDefinitions:getRandomRarity()
+        if epicIndex == cardIndex then
+            rarity = "epic"
+        end
+        local pool = CardDefinitions:getEligibleCardsByRarity(rarity)
+
+        if #pool == 0 then
+            pool = CardDefinitions:getEligibleCardsByRarity("common")
+        end
+
+        shuffle(pool)
+        local picked = nil
+        for _, card in ipairs(pool) do
+            if not containsCard(chosen, card) then
+                picked = card
+                break
+            end
+        end
+
+        if not picked then
+            for _, card in ipairs(fallback) do
+                if not containsCard(chosen, card) then
+                    picked = card
+                    break
+                end
+            end
+        end
+
+        if picked then
+            chosen[#chosen + 1] = picked
+        end
+    end
+
+    return chosen
 end
 
 function CardChoice:spawnBurst(x, y, count, speed)
@@ -85,7 +189,8 @@ function CardChoice:spawnBurst(x, y, count, speed)
     end
 end
 
-function CardChoice:start(worldX, worldY)
+function CardChoice:start(worldX, worldY, options)
+    options = options or {}
     self:load()
     self.active = true
     self.phase = "choosing"
@@ -99,11 +204,9 @@ function CardChoice:start(worldX, worldY)
         self.sourceY = (screenY - viewportOffsetY) / scale
     end
 
-    local available = self:getEligibleCards()
-    shuffle(available)
-
-    local count = math.min(3, #available)
-    local cardWidth = cardImage:getWidth() * cardScale
+    local count = math.min(3, #self:getEligibleCards())
+    local available = self:chooseCards(count, options)
+    local cardWidth = fallbackCardImage:getWidth() * cardScale
     local spacing = cardWidth + cardPadding
     local firstX = baseWidth / 2 - (count - 1) * spacing / 2
 
@@ -119,8 +222,10 @@ function CardChoice:start(worldX, worldY)
             targetY = baseHeight / 2 - 66,
             timer = 0,
             delay = (i - 1) * 0.045,
+            shufflePlayed = false,
             selected = false,
             hover = 0,
+            wasHovered = false,
             tiltX = 0,
             tiltY = 0,
         }
@@ -153,15 +258,22 @@ function CardChoice:update(dt)
     self.timer = self.timer + dt
     self:updateParticles(dt)
     local mouseX, mouseY = getMouseCanvasPosition()
+    local previewCard = nil
+    local strongestHover = 0
 
     for _, card in ipairs(self.cards) do
         card.timer = card.timer + dt
         local t = math.max(0, math.min((card.timer - card.delay) / 0.32, 1))
+        if not card.shufflePlayed and t > 0 then
+            card.shufflePlayed = true
+            playSound(shuffleCardSoundBase, 0.36, 0.94 + math.random() * 0.12)
+        end
         local eased = easeOut(t)
         card.x = card.startX + (card.targetX - card.startX) * eased
         card.y = card.startY + (card.targetY - card.startY) * eased
 
         local currentScale = card.selected and selectedCardScale or cardScale
+        local cardImage = getCardBackImage(card.def)
         local halfW = cardImage:getWidth() * currentScale / 2
         local halfH = cardImage:getHeight() * currentScale / 2
         local dx = mouseX - card.x
@@ -170,14 +282,31 @@ function CardChoice:update(dt)
         local outsideY = math.max(math.abs(dy) - halfH, 0)
         local outsideDistance = math.sqrt(outsideX * outsideX + outsideY * outsideY)
         local targetHover = self.phase == "choosing" and math.max(0, 1 - outsideDistance / hoverDistance) or 0
+        local isHovered = targetHover > 0.72
+        if isHovered and not card.wasHovered then
+            playSound(singleCardSoundBase, 0.28, 1.12 + math.random() * 0.10)
+        end
+        card.wasHovered = isHovered
         card.hover = approach(card.hover or 0, targetHover, 9, dt)
+        if card.hover > strongestHover then
+            strongestHover = card.hover
+            previewCard = card.def
+        end
         card.tiltX = approach(card.tiltX or 0, clamp(dx / math.max(halfW, 1), -1, 1), 7, dt)
         card.tiltY = approach(card.tiltY or 0, clamp(dy / math.max(halfH, 1), -1, 1), 7, dt)
     end
 
-    if self.phase == "celebrate" and self.timer >= 0.48 and #self.particles == 0 then
+    if self.phase == "choosing" then
+        self.previewCard = strongestHover > 0.22 and previewCard or nil
+    elseif self.phase == "celebrate" then
+        self.previewCard = self.selectedCardDef
+    end
+
+    if self.phase == "celebrate" and self.timer >= 0.92 and #self.particles == 0 then
         self.active = false
         self.phase = "idle"
+        self.previewCard = nil
+        self.selectedCardDef = nil
         Dialog.breakMovements = false
     end
 end
@@ -192,8 +321,15 @@ function CardChoice:choose(index)
         return false
     end
 
+    self.selectedCardDef = card.def
+    self.previewCard = card.def
+
     if card.def.apply then
         card.def.apply()
+    end
+
+    if Player and Player.startCardPickupFlash then
+        Player:startCardPickupFlash()
     end
 
     self.phase = "celebrate"
@@ -207,6 +343,8 @@ function CardChoice:choose(index)
     card.delay = 0
     card.selected = true
     self:spawnBurst(card.x, card.y, 44, 125)
+    playSound(smoothCardSoundBase, 0.58, 1.22 + math.random() * 0.12)
+    playSound(singleCardSoundBase, 0.72, 0.96 + math.random() * 0.08)
 
     if Game and Game.particles and Player then
         for i = 1, 12 do
@@ -234,6 +372,7 @@ function CardChoice:mousepressed(x, y, button)
 
     for i, card in ipairs(self.cards) do
         local scale = cardScale * (1 + (card.hover or 0) * 0.08)
+        local cardImage = getCardBackImage(card.def)
         local w = cardImage:getWidth() * scale
         local h = cardImage:getHeight() * scale
         if x >= card.x - w / 2 and x <= card.x + w / 2 and y >= card.y - h / 2 and y <= card.y + h / 2 then
@@ -245,15 +384,22 @@ function CardChoice:mousepressed(x, y, button)
 end
 
 function CardChoice:drawCard(card, index)
+    local alpha = self.drawAlpha or 1
     local time = love.timer.getTime()
     local bob = math.sin(time * 1.4 + index) * 1.8
     local baseRot = math.sin(time * 0.85 + index * 0.7) * 0.025
     local hover = card.hover or 0
-    local rot = baseRot + (card.tiltX or 0) * 0.11 * hover
+    local leanX = (card.tiltX or 0) * hover
+    local leanY = (card.tiltY or 0) * hover
+    local rot = baseRot + leanX * 0.12
+    local shearX = leanX * 0.035
+    local shearY = leanY * 0.022
     local scale = (card.selected and selectedCardScale or cardScale) * (1 + hover * 0.08)
     local x = card.x
     local y = card.y + bob - hover * 8
     local def = card.def
+    local cardImage = getCardBackImage(def)
+    local artImage = getCardArtImage(def)
     local cardW = cardImage:getWidth()
     local cardH = cardImage:getHeight()
     local screenCardW = math.floor(cardW * scale + 0.5)
@@ -265,40 +411,49 @@ function CardChoice:drawCard(card, index)
     love.graphics.translate(x, y)
     love.graphics.rotate(rot)
     love.graphics.scale(scale, scale)
-    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.shear(shearX, shearY)
+    love.graphics.setColor(1, 1, 1, alpha)
     love.graphics.draw(cardImage, 0, 0, 0, 1, 1, cardW / 2, cardH / 2)
+    if artImage then
+        love.graphics.draw(artImage, 0, 0, 0, 1, 1, artImage:getWidth() / 2, artImage:getHeight() / 2)
+    end
     love.graphics.pop()
 
     local textX = math.floor(x - textW / 2 + 0.5)
-    local rarityY = math.floor(y - screenCardH * 0.40 + 0.5)
-    local nameY = math.floor(y - screenCardH * 0.11 + 0.5)
-    local amountY = math.floor(y + screenCardH * 0.22 + 0.5)
+    local textLeanX = round(leanX * 4)
+    local textLeanY = round(leanY * 2)
+    local rarityX = textX - textLeanX
+    local nameX = textX
+    local amountX = textX + textLeanX
+    local rarityY = math.floor(y - screenCardH * 0.40 + 0.5) - textLeanY
+    local nameY = math.floor(y - screenCardH * 0.08 + 0.5)
+    local amountY = math.floor(y + screenCardH * 0.22 + 0.5) + textLeanY
     local descriptionW = screenCardW
-    local descriptionX = math.floor(x - descriptionW / 2 + 0.5)
+    local descriptionX = math.floor(x - descriptionW / 2 + 0.5) + round(textLeanX * 0.5)
     local descriptionY = math.floor(y + screenCardH / 2 + 8 + 0.5)
 
     love.graphics.setFont(cardRarityFont)
-    love.graphics.setColor(0.02, 0.01, 0.035, 1)
-    love.graphics.printf(string.upper(rarity.label), textX + 1, rarityY + 1, textW, "center")
-    love.graphics.setColor(rarity.color[1], rarity.color[2], rarity.color[3], 1)
-    love.graphics.printf(string.upper(rarity.label), textX, rarityY, textW, "center")
+    love.graphics.setColor(0.02, 0.01, 0.035, alpha)
+    love.graphics.printf(string.upper(rarity.label), rarityX + 1, rarityY + 1, textW, "center")
+    love.graphics.setColor(rarity.color[1], rarity.color[2], rarity.color[3], alpha)
+    love.graphics.printf(string.upper(rarity.label), rarityX, rarityY, textW, "center")
 
     love.graphics.setFont(cardNameFont)
-    love.graphics.setColor(0.02, 0.01, 0.035, 1)
-    love.graphics.printf(def.name, textX + 1, nameY + 1, textW, "center")
-    love.graphics.setColor(0.10, 0.035, 0.13, 1)
-    love.graphics.printf(def.name, textX, nameY, textW, "center")
+    love.graphics.setColor(0.02, 0.01, 0.035, alpha)
+    love.graphics.printf(def.name, nameX + 1, nameY + 1, textW, "center")
+    love.graphics.setColor(0.10, 0.035, 0.13, alpha)
+    love.graphics.printf(def.name, nameX, nameY, textW, "center")
 
     love.graphics.setFont(cardAmountFont)
-    love.graphics.setColor(0.02, 0.01, 0.035, 1)
-    love.graphics.printf(def.amount, textX + 1, amountY + 1, textW, "center")
-    love.graphics.setColor(0.22, 0.09, 0.13, 1)
-    love.graphics.printf(def.amount, textX, amountY, textW, "center")
+    love.graphics.setColor(0.02, 0.01, 0.035, alpha)
+    love.graphics.printf(def.amount, amountX + 1, amountY + 1, textW, "center")
+    love.graphics.setColor(0.22, 0.09, 0.13, alpha)
+    love.graphics.printf(def.amount, amountX, amountY, textW, "center")
 
     love.graphics.setFont(cardDescriptionFont)
-    love.graphics.setColor(0.02, 0.01, 0.035, 1)
+    love.graphics.setColor(0.02, 0.01, 0.035, alpha)
     love.graphics.printf(def.description, descriptionX + 1, descriptionY + 1, descriptionW, "center")
-    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.setColor(1, 1, 1, alpha)
     love.graphics.printf(def.description, descriptionX, descriptionY, descriptionW, "center")
 end
 
@@ -307,22 +462,37 @@ function CardChoice:draw()
         return
     end
 
-    love.graphics.setColor(0.02, 0.01, 0.04, 0.62)
+    local fadeAlpha = 1
+    if self.phase == "celebrate" and self.timer > 0.28 then
+        fadeAlpha = math.max(0, 1 - (self.timer - 0.28) / 0.64)
+    end
+
+    love.graphics.setColor(0.02, 0.01, 0.04, 0.62 * fadeAlpha)
     love.graphics.rectangle("fill", 0, 0, baseWidth, baseHeight)
 
     for _, p in ipairs(self.particles) do
         local alpha = 1 - math.min(p.timer / p.lifeTime, 1)
-        love.graphics.setColor(p.color[1], p.color[2], p.color[3], alpha)
+        love.graphics.setColor(p.color[1], p.color[2], p.color[3], alpha * fadeAlpha)
         love.graphics.rectangle("fill", math.floor(p.x + 0.5), math.floor(p.y + 0.5), p.size, p.size)
     end
 
     love.graphics.setFont(titleFont)
-    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.setColor(1, 1, 1, fadeAlpha)
     love.graphics.printf("CHOOSE A CARD", 0, 42, baseWidth, "center")
 
+    self.drawAlpha = fadeAlpha
     for i, card in ipairs(self.cards) do
         self:drawCard(card, i)
     end
+    self.drawAlpha = 1
+
+    PlayerStatusHud:draw(baseWidth / 2 - 435, baseHeight - 220, {
+        width = 870,
+        height = 200,
+        alpha = fadeAlpha,
+        previewCard = self.phase == "choosing" and self.previewCard or nil,
+        highlightCard = self.phase == "celebrate" and self.selectedCardDef or nil,
+    })
 
     love.graphics.setColor(1, 1, 1, 1)
 end

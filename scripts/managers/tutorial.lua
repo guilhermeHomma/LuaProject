@@ -7,12 +7,12 @@ tutorialGunActive = false
 function Tutorial:load()
    
     self.keyWalkImage = love.graphics.newImage("assets/sprites/ui/keys1.png")
-    self.keyXImage = love.graphics.newImage("assets/sprites/ui/keys2.png")
     self.keyMouseImage = love.graphics.newImage("assets/sprites/ui/keys3.png")
+    self.keyInteractFont = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 28)
 
     self.keyWalkImage:setFilter("nearest", "nearest")
-    self.keyXImage:setFilter("nearest", "nearest")
     self.keyMouseImage:setFilter("nearest", "nearest")
+    self.keyInteractFont:setFilter("nearest", "nearest")
     self.timer = 0
 
     self.startTutorialTime = 10
@@ -20,14 +20,14 @@ function Tutorial:load()
 
     self.drawWalk = FirstTutorial
     self.drawmouse = false
-    self.drawX = false
+    self.drawInteract = false
 
     self._blinkWasActive = false
 end
 
 
 function Tutorial:playSound()
-    if (self.drawWalk or self.drawmouse or self.drawX) and self.tutorialTimer > self.startTutorialTime then
+    if (self.drawWalk or self.drawmouse or self.drawInteract) and self.tutorialTimer > self.startTutorialTime then
         local sound = love.audio.newSource("assets/sfx/logo/madewith.mp3", "static")
         sound:setVolume(0.03)
         sound:setPitch(0.7)
@@ -48,7 +48,7 @@ function Tutorial:update(dt)
 
     local blinkActive = t < activeTime
 
-    if (self.drawWalk or self.drawmouse or (self.drawX and PlayerCloseStore)) and self.tutorialTimer > self.startTutorialTime then
+    if (self.drawWalk or self.drawmouse or (self.drawInteract and PlayerCloseStore)) and self.tutorialTimer > self.startTutorialTime then
         -- toca o som quando o blink volta (transição true -> false)
         if (blinkActive and not self._blinkWasActive) then
 
@@ -61,7 +61,7 @@ function Tutorial:update(dt)
     end
 
     self._blinkWasActive = blinkActive
-    tutorialGunActive = self.drawX and self.tutorialTimer > self.startTutorialTime
+    tutorialGunActive = self.drawInteract and self.tutorialTimer > self.startTutorialTime
 end
 
 function Tutorial:draw()
@@ -87,11 +87,19 @@ function Tutorial:draw()
         love.graphics.draw(self.keyWalkImage, x , y, 0 , 3, 3)
     end
 
-    if self.drawX and PlayerCloseStore then 
-        local y = getScreenHeight() - 100* 3
-        local x = getScreenWidth() -110 *3 
-
-        love.graphics.draw(self.keyXImage, x , y, 0 , 3, 3)
+    if self.drawInteract and PlayerCloseStore then
+        local margin = 12
+        local width = 44
+        local height = 38
+        local x = getScreenWidth() - width - margin
+        local y = getScreenHeight() - height - margin
+        love.graphics.setFont(self.keyInteractFont)
+        love.graphics.setColor(0.02, 0.015, 0.025, 0.72)
+        love.graphics.rectangle("fill", x, y, width, height)
+        love.graphics.setColor(0.86, 0.84, 0.76, 0.95)
+        love.graphics.rectangle("line", x, y, width, height)
+        love.graphics.setColor(1, 1, 1, 0.92)
+        love.graphics.printf("F", x, y + 3, width, "center")
     end
 
     if self.drawmouse then 

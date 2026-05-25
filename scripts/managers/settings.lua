@@ -1,4 +1,5 @@
 local Settings = {}
+local SettingsStorage = require("scripts/managers/settingsStorage")
 
 local function containsResolution(presets, width, height)
     for _, preset in ipairs(presets) do
@@ -60,14 +61,86 @@ function Settings:buildResolutionPresets()
     end
 end
 
+function Settings:save()
+    if self.loading then
+        return
+    end
+
+    local preset = self.resolutionPresets and self.resolutionPresets[self.resolutionIndex] or {}
+    SettingsStorage:write(SettingsStorage:encode(SettingsStorage:serialize({
+        width = preset.width,
+        height = preset.height,
+        fullscreen = self.fullscreen,
+        vsyncEnabled = self.vsyncEnabled,
+        crtEnabled = self.crtEnabled,
+        cameraShakeEnabled = self.cameraShakeEnabled,
+        masterVolume = self.masterVolume,
+        musicVolume = self.musicVolume,
+    })))
+end
+
+function Settings:loadSavedSettings()
+    local saved = SettingsStorage:loadSaved()
+    if not saved then
+        return
+    end
+
+    self.masterVolume = clamp(tonumber(saved.master) or self.masterVolume, 0, 1)
+    self.musicVolume = clamp(tonumber(saved.music) or self.musicVolume, 0, 1)
+    self.fullscreen = saved.fs == "1"
+    self.vsyncEnabled = saved.vs == "1"
+    self.crtEnabled = saved.crt == "1"
+    self.cameraShakeEnabled = saved.shake ~= "0"
+
+    local width = tonumber(saved.w)
+    local height = tonumber(saved.h)
+    if width and height then
+        for i, preset in ipairs(self.resolutionPresets or {}) do
+            if preset.width == width and preset.height == height then
+                self.resolutionIndex = i
+                break
+            end
+        end
+    end
+end
+
+function Settings:needsWindowModeApply()
+    local preset = self.resolutionPresets and self.resolutionPresets[self.resolutionIndex]
+    if not preset then
+        return false
+    end
+
+    local width, height = love.graphics.getDimensions()
+    local fullscreen = love.window.getFullscreen()
+    if fullscreen ~= (self.fullscreen == true) then
+        return true
+    end
+
+    if fullscreen then
+        return false
+    end
+
+    return width ~= preset.width or height ~= preset.height
+end
+
 function Settings:load()
+    self.loading = true
     self.masterVolume = SOUND_VOLUME or 1
     self.musicVolume = MUSIC_VOLUME or 0.6
     self.fullscreen = love.window.getFullscreen()
+    self.crtEnabled = GAME_FLAGS and GAME_FLAGS.crt and GAME_FLAGS.crt.enabled == true
+    self.cameraShakeEnabled = not (GAME_FLAGS and GAME_FLAGS.cameraShake == false)
+    self.vsyncEnabled = GAME_FLAGS and GAME_FLAGS.vsync == true
     self:buildResolutionPresets()
     self.resolutionIndex = 1
     self:syncResolutionIndex()
+    self:loadSavedSettings()
     self:applyAudio()
+    self:applyVideoEffects()
+    if self:needsWindowModeApply() then
+        self:applyWindowMode()
+    end
+    self.loading = false
 end
 
 function Settings:syncResolutionIndex()
@@ -95,6 +168,18 @@ function Settings:getFullscreenLabel()
     return self.fullscreen and "on" or "off"
 end
 
+function Settings:getCrtLabel()
+    return self.crtEnabled and "on" or "off"
+end
+
+function Settings:getCameraShakeLabel()
+    return self.cameraShakeEnabled and "on" or "off"
+end
+
+function Settings:getVsyncLabel()
+    return self.vsyncEnabled and "on" or "off"
+end
+
 function Settings:getMasterPercent()
     return math.floor(self.masterVolume * 100 + 0.5)
 end
@@ -114,6 +199,7 @@ function Settings:setResolutionIndex(index)
 
     self.resolutionIndex = index
     self:applyWindowMode()
+    self:save()
 end
 
 function Settings:applyWindowMode()
@@ -123,7 +209,7 @@ function Settings:applyWindowMode()
         resizable = false,
         fullscreen = self.fullscreen,
         fullscreentype = "desktop",
-        vsync = 0,
+        vsync = self.vsyncEnabled and 1 or 0,
     })
 
     local width, height = love.graphics.getDimensions()
@@ -145,15 +231,62 @@ end
 function Settings:setFullscreen(enabled)
     self.fullscreen = enabled == true
     self:applyWindowMode()
+    self:save()
 end
 
 function Settings:toggleFullscreen()
     self:setFullscreen(not self.fullscreen)
 end
 
+function Settings:applyVideoEffects()
+    GAME_FLAGS = GAME_FLAGS or {}
+    GAME_FLAGS.crt = GAME_FLAGS.crt or {}
+    GAME_FLAGS.crt.enabled = self.crtEnabled == true
+    GAME_FLAGS.cameraShake = self.cameraShakeEnabled ~= false
+    GAME_FLAGS.vsync = self.vsyncEnabled == true
+
+    if GAME_FLAGS.cameraShake == false and camera then
+        camera.shakeIntensity = 0
+        camera.shakeOffsetX = 0
+        camera.shakeOffsetY = 0
+    end
+end
+
+function Settings:setCrtEnabled(enabled)
+    self.crtEnabled = enabled == true
+    self:applyVideoEffects()
+    self:save()
+end
+
+function Settings:toggleCrt()
+    self:setCrtEnabled(not self.crtEnabled)
+end
+
+function Settings:setCameraShakeEnabled(enabled)
+    self.cameraShakeEnabled = enabled == true
+    self:applyVideoEffects()
+    self:save()
+end
+
+function Settings:toggleCameraShake()
+    self:setCameraShakeEnabled(not self.cameraShakeEnabled)
+end
+
+function Settings:setVsyncEnabled(enabled)
+    self.vsyncEnabled = enabled == true
+    self:applyVideoEffects()
+    self:applyWindowMode()
+    self:save()
+end
+
+function Settings:toggleVsync()
+    self:setVsyncEnabled(not self.vsyncEnabled)
+end
+
 function Settings:setMasterVolume(value)
     self.masterVolume = clamp(value, 0, 1)
     self:applyAudio()
+    self:save()
 end
 
 function Settings:adjustMasterVolume(step)
@@ -163,6 +296,7 @@ end
 function Settings:setMusicVolume(value)
     self.musicVolume = clamp(value, 0, 1)
     self:applyAudio()
+    self:save()
 end
 
 function Settings:adjustMusicVolume(step)

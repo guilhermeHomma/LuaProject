@@ -1,7 +1,12 @@
 param(
     [string]$GameName = "mobize",
     [string]$LoveWinDir = "love-win",
-    [string]$OutDir = "dist-windows"
+    [string]$OutDir = "dist-windows",
+    [string]$CertificateThumbprint = "",
+    [string]$CertificatePath = "",
+    [string]$CertificatePassword = "",
+    [string]$TimestampServer = "http://timestamp.digicert.com",
+    [string]$SignToolPath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -16,6 +21,61 @@ $loveFilePath = Join-Path $projectRoot "$GameName.love"
 $exePath = Join-Path $outPath "$GameName.exe"
 $loveExePath = Join-Path $loveWinPath "love.exe"
 
+function Get-SignToolPath {
+    if ($SignToolPath -and (Test-Path $SignToolPath)) {
+        return $SignToolPath
+    }
+
+    $command = Get-Command signtool.exe -ErrorAction SilentlyContinue
+    if ($command) {
+        return $command.Source
+    }
+
+    $windowsKits = "${env:ProgramFiles(x86)}\Windows Kits\10\bin"
+    if (Test-Path $windowsKits) {
+        $candidate = Get-ChildItem -Path $windowsKits -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match "\\x64\\signtool\.exe$" } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+        if ($candidate) {
+            return $candidate.FullName
+        }
+    }
+
+    return $null
+}
+
+function Invoke-CodeSigning {
+    param([string]$TargetPath)
+
+    if (-not $CertificateThumbprint -and -not $CertificatePath) {
+        Write-Host "Assinatura ignorada: informe -CertificateThumbprint ou -CertificatePath para assinar a build."
+        return
+    }
+
+    $resolvedSignTool = Get-SignToolPath
+    if (-not $resolvedSignTool) {
+        throw "signtool.exe nao encontrado. Instale o Windows SDK ou informe -SignToolPath."
+    }
+
+    $arguments = @("sign", "/fd", "SHA256", "/tr", $TimestampServer, "/td", "SHA256")
+    if ($CertificateThumbprint) {
+        $arguments += @("/sha1", $CertificateThumbprint)
+    }
+    else {
+        $arguments += @("/f", $CertificatePath)
+        if ($CertificatePassword) {
+            $arguments += @("/p", $CertificatePassword)
+        }
+    }
+    $arguments += $TargetPath
+
+    & $resolvedSignTool @arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Falha ao assinar $TargetPath"
+    }
+}
+
 if (-not (Test-Path $loveWinPath)) {
     throw "Diretorio do LÖVE nao encontrado: $loveWinPath"
 }
@@ -24,39 +84,41 @@ if (-not (Test-Path $loveExePath)) {
     throw "Arquivo nao encontrado: $loveExePath"
 }
 
-$excludePatterns = @(
-    '.git\',
-    '.git/',
-    'node_modules\',
-    'node_modules/',
-    '__pycache__\',
-    '__pycache__/',
-    'dist-windows\',
-    'dist-windows/',
-    'love-win\',
-    'love-win/'
+$includeRootFiles = @(
+    'main.lua',
+    'conf.lua'
 )
 
-$excludeExtensions = @('.love', '.zip', '.aseprite', '.jpeg', '.jpg')
+$includeDirectories = @(
+    'scripts/',
+    'jumperj/',
+    'assets/'
+)
+
+$allowedExtensionsByDirectory = @{
+    'scripts/' = @('.lua', '.glsl')
+    'jumperj/' = @('.lua')
+    'assets/' = @('.png', '.mp3', '.ogg', '.wav', '.ttf', '.otf')
+}
 
 function Test-ShouldIncludeFile {
     param([string]$RelativePath)
 
     $normalized = $RelativePath -replace '\\', '/'
+    $extension = [System.IO.Path]::GetExtension($normalized).ToLowerInvariant()
 
-    foreach ($pattern in $excludePatterns) {
-        $normalizedPattern = $pattern -replace '\\', '/'
-        if ($normalized.StartsWith($normalizedPattern)) {
-            return $false
+    if ($includeRootFiles -contains $normalized) {
+        return $true
+    }
+
+    foreach ($directory in $includeDirectories) {
+        if ($normalized.StartsWith($directory)) {
+            $allowedExtensions = $allowedExtensionsByDirectory[$directory]
+            return $allowedExtensions -contains $extension
         }
     }
 
-    $extension = [System.IO.Path]::GetExtension($normalized)
-    if ($excludeExtensions -contains $extension) {
-        return $false
-    }
-
-    return $true
+    return $false
 }
 
 function Get-RelativePath {
@@ -117,6 +179,8 @@ $mergedBytes = New-Object byte[] ($loveExeBytes.Length + $loveFileBytes.Length)
 [System.Buffer]::BlockCopy($loveExeBytes, 0, $mergedBytes, 0, $loveExeBytes.Length)
 [System.Buffer]::BlockCopy($loveFileBytes, 0, $mergedBytes, $loveExeBytes.Length, $loveFileBytes.Length)
 [System.IO.File]::WriteAllBytes($exePath, $mergedBytes)
+
+Invoke-CodeSigning -TargetPath $exePath
 
 Get-ChildItem -Path $loveWinPath -File | Where-Object {
     $_.Extension -ieq ".dll" -or $_.Name -in @("license.txt", "LICENSE.txt", "changes.txt", "readme.txt")

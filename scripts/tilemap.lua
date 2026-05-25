@@ -46,31 +46,31 @@ function Tilemap:keypressed(key)
     return getSystem():keypressed(key)
 end
 
-function Tilemap:setDoorOpen(direction, open, animate)
+function Tilemap:setDoorOpen(direction, open, animate, options)
     local system = getSystem()
     if system.setDoorOpen then
-        return system:setDoorOpen(direction, open, animate)
+        return system:setDoorOpen(direction, open, animate, options)
     end
 end
 
-function Tilemap:setAllRoomDoorsOpen(open, animate)
+function Tilemap:setAllRoomDoorsOpen(open, animate, options)
     local system = getSystem()
     if system.setAllRoomDoorsOpen then
-        return system:setAllRoomDoorsOpen(open, animate)
+        return system:setAllRoomDoorsOpen(open, animate, options)
     end
 end
 
-function Tilemap:getRandomSpawnPosition(reference, minDistance)
-    return getSystem():getRandomSpawnPosition(reference, minDistance)
+function Tilemap:getRandomSpawnPosition(reference, minDistance, avoidPoints)
+    return getSystem():getRandomSpawnPosition(reference, minDistance, avoidPoints)
 end
 
-function Tilemap:getRandomReachableSpawnPosition(reference, minDistance)
+function Tilemap:getRandomReachableSpawnPosition(reference, minDistance, avoidPoints)
     local system = getSystem()
     if system.getRandomReachableSpawnPosition then
-        return system:getRandomReachableSpawnPosition(reference, minDistance)
+        return system:getRandomReachableSpawnPosition(reference, minDistance, avoidPoints)
     end
 
-    return system:getRandomSpawnPosition(reference, minDistance)
+    return system:getRandomSpawnPosition(reference, minDistance, avoidPoints)
 end
 
 function Tilemap:getPathBetweenWorldPoints(startX, startY, endX, endY)

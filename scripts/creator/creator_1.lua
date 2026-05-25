@@ -85,7 +85,7 @@ function FirstCreatorInteraction:update(dt)
 end
 
 function FirstCreatorInteraction:keypressed(key)
-    -- key X
+    -- key F
     if Dialog.PassDialog then
         self.timer = 0
 

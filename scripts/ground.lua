@@ -1,10 +1,13 @@
 local LightConfig = require("scripts/config/lightConfig")
 local Tilemap = require("scripts/tilemap")
+local FloorManager = require("scripts/managers/floorManager")
+local VisualThemes = require("scripts/config/visualThemes")
 local unpackValues = table.unpack or unpack
 local MAX_GROUND_LIGHTS = 32
 local MAX_GROUND_LIGHT_OCCLUDERS = 96
 
 local Ground = {}
+local DEFAULT_GROUND = "assets/sprites/florest/ground.png"
 
 local function getScreenLightCenter(source)
     return {
@@ -113,15 +116,27 @@ local function collectGroundLightOccluders(maxOccluders, lightCenters)
     return rects, occluderCount
 end
 
-function Ground:load(target)
-    self.image = love.graphics.newImage("assets/sprites/florest/ground.png")
+function Ground:setTheme(theme)
+    local imagePath = theme and theme.ground or DEFAULT_GROUND
+    if self.image and self.imagePath == imagePath then
+        return
+    end
+
+    self.imagePath = imagePath
+    self.image = love.graphics.newImage(imagePath)
     self.image:setFilter("nearest", "nearest")
     self.width = self.image:getWidth()
     self.height = self.image:getHeight()
+end
+
+function Ground:load(target)
+    self:setTheme(VisualThemes:getDefault())
     self.lightShader = love.graphics.newShader("scripts/shaders/groundLight.glsl")
 end
 
 function Ground:draw(player)
+    self:setTheme(FloorManager:getCurrentRoomTheme())
+
     local screenWidth = love.graphics.getWidth()
     local screenHeight = love.graphics.getHeight()
 
@@ -141,6 +156,7 @@ function Ground:draw(player)
     local innerRadii = {}
     local outerRadii = {}
     local maxBrightnesses = {}
+    local additiveStrengths = {}
     local lightCount = 0
 
     if camera and self.lightShader then
@@ -174,6 +190,7 @@ function Ground:draw(player)
             innerRadii[lightCount] = groundLight.innerRadius or 95
             outerRadii[lightCount] = groundLight.outerRadius or 360
             maxBrightnesses[lightCount] = groundLight.maxBrightness or 1
+            additiveStrengths[lightCount] = groundLight.additive and (groundLight.additiveStrength or 0.12) or 0
         end
 
         for i = lightCount + 1, maxLights do
@@ -181,6 +198,7 @@ function Ground:draw(player)
             innerRadii[i] = 0
             outerRadii[i] = 1
             maxBrightnesses[i] = 1
+            additiveStrengths[i] = 0
         end
 
         self.lightShader:send("u_lightCount", lightCount)
@@ -188,6 +206,7 @@ function Ground:draw(player)
         self.lightShader:send("u_innerRadii", unpackValues(innerRadii, 1, maxLights))
         self.lightShader:send("u_outerRadii", unpackValues(outerRadii, 1, maxLights))
         self.lightShader:send("u_maxBrightnesses", unpackValues(maxBrightnesses, 1, maxLights))
+        self.lightShader:send("u_additiveStrengths", unpackValues(additiveStrengths, 1, maxLights))
         self.lightShader:send("u_generalShadowMinBrightness", generalShadow.minBrightness or 1)
         self.lightShader:send("u_generalShadowColor", generalShadow.color or {0, 0, 0})
         local lightCenters = {}

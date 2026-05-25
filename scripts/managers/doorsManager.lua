@@ -28,7 +28,7 @@ function DoorsManager:getSouthText()
     end
 
     if WaveManager.wave >= WaveManager.openSouthWave then
-        return "Click X to open this passage"
+        return "Get close to open this passage"
     end
 
     local waveNumber = tostring(WaveManager.openSouthWave)
@@ -42,7 +42,7 @@ function DoorsManager:getNorthText()
     end
 
     if WaveManager.wave >= WaveManager.openNorthWave then
-        return "Click X to open this passage"
+        return "Get close to open this passage"
     end
 
     return "You need to reach wave " .. WaveManager.openNorthWave .. " to open this passage"

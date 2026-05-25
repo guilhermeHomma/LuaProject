@@ -7,6 +7,7 @@ babyZombie.enemyTypeId = "babyZombie"
 local damageBase = love.audio.newSource("assets/sfx/enemyDamage.mp3", "static")
 local DamageStretch = require("scripts/effects/damageStretch")
 local BloodPixel = require("scripts/particles/bloodPixel")
+local BloodDecal = require("scripts/particles/bloodDecal")
 
 local function playClonedSound(baseSource, volume, pitch)
     local sound = baseSource:clone()
@@ -25,6 +26,8 @@ function babyZombie:new(x, y)
     zombie.life = zombie.totalLife
     zombie.mouthVariant = "babyZombie"
     zombie.roamAroundPlayer = false
+    zombie.pathUpdateInterval = 0.45
+    zombie.pathUpdateCounter = love.math.random() * zombie.pathUpdateInterval
     return zombie
 end
 
@@ -38,8 +41,19 @@ end
 
 
 function babyZombie:takeDamage(damage, dx, dy)
+    self.lastDamageDx = dx
+    self.lastDamageDy = dy
     self.life = self.life - damage
     BloodPixel.spawnBurst(self.x, self.y - 2, dx, dy, 4, 6)
+    if self.life > 0 then
+        BloodDecal.spawn(self.x, self.y, dx, dy, {
+            scaleMultiplier = 0.5,
+            volumeMultiplier = 0.5,
+            pitchMultiplier = 0.72,
+        })
+    else
+        self:spawnDeathBloodDecal()
+    end
 
     if self:canStartDamageAnimation() then
         DamageStretch:start(self)
@@ -80,12 +94,11 @@ function babyZombie:stateManager(dt, animationDuration)
         if self.state == babyZombie.states.idle then
             self.walkDuration = math.random(4, 6)
             self.state = babyZombie.states.walk
-            if not Player.isAlive then
-                self.state = babyZombie.states.idle
-                self.stateTimer = 0
-            end
         elseif Player.isAlive then
             self.idleDuration = math.random(15, 20) / 100
+            self.state = Zombie.states.idle
+        else
+            self.idleDuration = math.random(8, 14) / 10
             self.state = Zombie.states.idle
         end
         self.stateTimer = 0

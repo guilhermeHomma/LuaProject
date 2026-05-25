@@ -1,5 +1,11 @@
 
+local FloorManager = require("scripts/managers/floorManager")
 local windSound = love.audio.newSource("assets/sfx/ambience/wind-leaves.mp3", "stream")
+
+local function isCurrentRoomCave()
+    local theme = FloorManager.getCurrentRoomTheme and FloorManager:getCurrentRoomTheme() or nil
+    return theme and theme.id == "cave"
+end
 
 AmbienceSound = {}
 
@@ -17,6 +23,12 @@ end
 
 function AmbienceSound:startGame()
     windSound:play()
+end
+
+function AmbienceSound:silence()
+    self.targetVolume = 0
+    self.volume = 0
+    windSound:setVolume(0)
 end
 
 
@@ -53,11 +65,11 @@ function AmbienceSound:playCrowSound()
 end
 
 function AmbienceSound:update(dt)
-    if state == STATES.game or state == STATES.gameDead or state == STATES.mainMenu or state == STATES.gameIntro then
-        self.targetPitch = 1
+    if state == STATES.game or state == STATES.gameDead or state == STATES.floorIntro or state == STATES.mainMenu or state == STATES.gameIntro then
+        self.targetPitch = (state == STATES.game or state == STATES.gameDead or state == STATES.floorIntro) and isCurrentRoomCave() and 0.72 or 1
         self.targetVolume = 0.1
     elseif state == STATES.gamePause then
-        self.targetPitch = 0.6
+        self.targetPitch = isCurrentRoomCave() and 0.52 or 0.6
         self.targetVolume = 0.1
     else
         self.targetVolume = 0.0

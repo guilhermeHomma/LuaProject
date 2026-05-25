@@ -60,7 +60,7 @@ function CardDrop:onCatch()
     end
 
     if Game and Game.startCardChoice then
-        Game:startCardChoice(self.x, self.y - 16)
+        Game:startCardChoice(self.x, self.y - 16, { allowRare = false })
     end
 end
 
@@ -100,6 +100,21 @@ function CardDrop:draw()
     love.graphics.draw(sheetImage, self.sprite, self.x, drawY, 0, scaleX, scaleY, 8, 16)
     love.graphics.setShader()
     love.graphics.setColor(1, 1, 1, 1)
+end
+
+function CardDrop:drawXray()
+    if not self.isAlive then
+        return
+    end
+
+    local scaleX, scaleY = self:getDrawScale()
+    local drawY = self.y - self.height
+    if self.isCollecting then
+        drawY = drawY + 4 * ((self.drawScaleY or 1.35) - scaleY)
+    end
+
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.draw(sheetImage, self.sprite, self.x, drawY, 0, scaleX, scaleY, 8, 16)
 end
 
 return CardDrop

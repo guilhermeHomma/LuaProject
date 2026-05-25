@@ -5,10 +5,12 @@ local whiteShader = love.graphics.newShader("scripts/shaders/whiteShader.glsl")
 local WalkParticle = require("scripts/particles/walkParticle")
 local ShellParticle = require("scripts/particles/shellParticle")
 local GunStarDraw = require("scripts/effects/gunStarDraw")
+local errorSoundBase = love.audio.newSource("assets/sfx/error/error.mp3", "static")
 local bulletModules = {
     particle = require("scripts/player/bullets/particleBullet"),
     line = require("scripts/player/bullets/lineBullet")
 }
+local DEFAULT_BULLET_LIFETIME = 0.35
 
 local soundCache = {}
 
@@ -94,6 +96,13 @@ local function playSound(path, volume, pitchMin, pitchMax)
     return playClonedSound(source, volume or 0.3, pitch)
 end
 
+local function playErrorSound(volume, pitch)
+    local sound = errorSoundBase:clone()
+    sound:setVolume(volume)
+    sound:setPitch((pitch or 1) * GAME_PITCH)
+    sound:play()
+end
+
 local function resolveWeaponSoundPath(weaponConfig, soundKey)
     local audio = weaponConfig.audio or {}
     local file = audio[soundKey]
@@ -113,6 +122,28 @@ end
 
 local function resolveBulletConfig(weaponConfig, bulletOverrides)
     return mergeTables(weaponConfig.initialBullet or {}, bulletOverrides or {})
+end
+
+local function getBaseProjectileRange(weaponConfig, bulletConfig)
+    return bulletConfig.range
+        or weaponConfig.range
+        or ((weaponConfig.bulletSpeed or 0) * (bulletConfig.lifeTime or weaponConfig.lifeTime or DEFAULT_BULLET_LIFETIME))
+end
+
+local function getProjectileLifetimeForRange(weaponConfig, bulletConfig)
+    local bulletSpeed = weaponConfig.bulletSpeed or 0
+    local range = getBaseProjectileRange(weaponConfig, bulletConfig) * (weaponConfig.rangeMultiplier or 1)
+
+    if bulletSpeed > 0 and range > 0 then
+        return range / bulletSpeed
+    end
+
+    local lifeTime = bulletConfig.lifeTime or weaponConfig.lifeTime
+    if lifeTime then
+        return lifeTime * (weaponConfig.rangeMultiplier or 1)
+    end
+
+    return nil
 end
 
 local function resolveBulletSoundPath(bulletConfig)
@@ -192,8 +223,8 @@ function Gun:load()
     self.squareAngle = 0
     self.primary_weapon = createWeaponSlot(1, self:getWeaponConfig(1), true)
     self.secondary_weapon = nil
-    self.primaryUpgradeState = { damageBonus = 0, rangeMultiplier = 1 }
-    self.secondaryUpgradeState = { damageBonus = 0, rangeMultiplier = 1 }
+    self.primaryUpgradeState = { damageBonus = 0, rangeMultiplier = 1, reloadMultiplier = 1 }
+    self.secondaryUpgradeState = { damageBonus = 0, rangeMultiplier = 1, reloadMultiplier = 1 }
     self.selected_slot = 1
     self.current_weapon = self.primary_weapon
     self.gunIndex = self.current_weapon and self.current_weapon.index or 0
@@ -224,6 +255,17 @@ function Gun:load()
     self.reloadFillCount = 0
     self.reloadLoadedCount = 0
     self.reloadMagazineConsumed = false
+    self.reloadStartMagCapacity = 0
+    self.secondaryReloadFeedbackTimer = 0
+    self.secondaryReloadFeedbackDuration = 0.42
+    self.ammoNegativeFeedbackTimer = 0
+    self.ammoNegativeFeedbackDuration = 0.34
+    self.emptyErrorLocked = false
+    self.emptyErrorInvisibleTimer = 0
+    self.emptyErrorCooldown = 4
+    self.lastEmptyErrorTime = -math.huge
+    self.lastReloadSwitchErrorTime = -math.huge
+    self.secondaryEmptyErrorPlayed = false
 
     self.font = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 32)
     self.font:setFilter("nearest", "nearest")
@@ -243,6 +285,7 @@ function Gun:applyUpgradeStateToSlot(slot, state)
 
     slot.damageBonus = state.damageBonus or 0
     slot.rangeMultiplier = state.rangeMultiplier or 1
+    slot.reloadMultiplier = state.reloadMultiplier or 1
 end
 
 function Gun:getEffectiveWeaponConfig(slot)
@@ -254,6 +297,8 @@ function Gun:getEffectiveWeaponConfig(slot)
     local config = copyTable(slot.config)
     config.damage = (config.damage or 0) + (slot.damageBonus or 0)
     config.rangeMultiplier = slot.rangeMultiplier or 1
+    config.reloadDuration = (config.reloadDuration or self.defaultReloadDuration) * (slot.reloadMultiplier or 1)
+    config.reloadSpinDuration = (config.reloadSpinDuration or self.defaultReloadSpinDuration) * (slot.reloadMultiplier or 1)
     return config
 end
 
@@ -279,6 +324,9 @@ function Gun:syncCurrentWeaponState()
     self.gunIndex = self.current_weapon and self.current_weapon.index or 0
     self.currentMagCapacity = self.current_weapon and self.current_weapon.currentMagCapacity or 0
     self.currentMagCount = self.current_weapon and self.current_weapon.currentMagCount or 0
+    if self.secondary_weapon and (self.secondary_weapon.currentMagCapacity or 0) > 0 then
+        self.secondaryEmptyErrorPlayed = false
+    end
 end
 
 function Gun:syncSelectedSlotAmmo()
@@ -295,6 +343,13 @@ end
 
 function Gun:cancelReload()
     if self.reloadingSlot then
+        local slot = self:getReloadingWeaponSlot()
+        if slot then
+            slot.currentMagCapacity = self.reloadStartMagCapacity or slot.currentMagCapacity or 0
+            if self.reloadingSlot == self.selected_slot then
+                self.currentMagCapacity = slot.currentMagCapacity
+            end
+        end
         self.reloadTimer = 0
         self.reloadingSlot = nil
         self.reloadSpinTimer = 0
@@ -305,7 +360,20 @@ function Gun:cancelReload()
         self.reloadFillCount = 0
         self.reloadLoadedCount = 0
         self.reloadMagazineConsumed = false
+        self.reloadStartMagCapacity = 0
+        self:syncCurrentWeaponState()
     end
+end
+
+function Gun:playReloadSwitchError()
+    local now = love.timer.getTime()
+    if now - (self.lastReloadSwitchErrorTime or -math.huge) < 0.25 then
+        return
+    end
+
+    self.lastReloadSwitchErrorTime = now
+    self.ammoNegativeFeedbackTimer = self.ammoNegativeFeedbackDuration or 0.34
+    playErrorSound(0.18, 1.06)
 end
 
 function Gun:getWeaponReloadDurations(weaponConfig)
@@ -320,6 +388,14 @@ function Gun:getReloadingWeaponSlot()
     end
 
     return self.reloadingSlot == 2 and self.secondary_weapon or self.primary_weapon
+end
+
+function Gun:getReloadProgress()
+    if not self.reloadingSlot or not self.reloadDuration or self.reloadDuration <= 0 then
+        return nil
+    end
+
+    return math.max(0, math.min(1, 1 - (self.reloadTimer or 0) / self.reloadDuration))
 end
 
 function Gun:consumeReloadMagazine(slot)
@@ -422,6 +498,7 @@ function Gun:startReload(slot, weaponConfig)
     self.reloadFillTimer = 0
     self.reloadFillCount = missingBullets
     self.reloadLoadedCount = 0
+    self.reloadStartMagCapacity = slot.currentMagCapacity or 0
     self.reloadMagazineConsumed = slot.infiniteAmmo == true
     self.reloadFillInterval = self.reloadFillDuration > 0 and (self.reloadFillDuration / missingBullets) or 0
     self.showGun = true
@@ -442,6 +519,7 @@ function Gun:finishReload()
     self:finishReloadFill(false)
 
     local slot = self:getReloadingWeaponSlot()
+    local finishedSlotIndex = self.reloadingSlot
     self.reloadingSlot = nil
     self.reloadTimer = 0
     self.reloadSpinTimer = 0
@@ -452,6 +530,10 @@ function Gun:finishReload()
     self.reloadFillCount = 0
     self.reloadLoadedCount = 0
     self.reloadMagazineConsumed = false
+    self.reloadStartMagCapacity = 0
+    if finishedSlotIndex == 2 then
+        self.secondaryReloadFeedbackTimer = self.secondaryReloadFeedbackDuration
+    end
 
     if not slot then
         self:syncCurrentWeaponState()
@@ -501,7 +583,10 @@ function Gun:selectSlot(slot)
         return true
     end
 
-    self:cancelReload()
+    if self.reloadingSlot then
+        self:playReloadSwitchError()
+        self:cancelReload()
+    end
     self.selected_slot = slot
     self.showGun = true
     self.shootTimer = 0.15 - math.random() * 0.08
@@ -521,6 +606,16 @@ function Gun:toggleWeaponSlot()
     return self:selectSlot(1)
 end
 
+function Gun:reloadSelectedWeapon()
+    local weaponConfig = self:getCurrentWeapon()
+    local slot = self:getSelectedWeaponSlot()
+    if not weaponConfig or not slot then
+        return false
+    end
+
+    return self:startReload(slot, weaponConfig)
+end
+
 function Gun:equipSecondaryWeapon(index)
     if self.primary_weapon and index == self.primary_weapon.index then
         self:selectSlot(1)
@@ -532,7 +627,7 @@ function Gun:equipSecondaryWeapon(index)
         return false
     end
 
-    DisableXTutorial()
+    DisableInteractTutorial()
 
     self:cancelReload()
     self.secondary_weapon = createWeaponSlot(index, weaponConfig, false)
@@ -564,6 +659,11 @@ function Gun:applyCardUpgrade(upgradeId)
         self:applyUpgradeStateToSlot(self.primary_weapon, self.primaryUpgradeState)
         self:syncCurrentWeaponState()
         return true
+    elseif upgradeId == "primary_reload" then
+        self.primaryUpgradeState.reloadMultiplier = (self.primaryUpgradeState.reloadMultiplier or 1) * 0.9
+        self:applyUpgradeStateToSlot(self.primary_weapon, self.primaryUpgradeState)
+        self:syncCurrentWeaponState()
+        return true
     elseif upgradeId == "secondary_fill" then
         return self:fillSecondaryWeaponToMax()
     end
@@ -591,6 +691,8 @@ end
 function Gun:update(dt, playerX, playerY)
     self.x = playerX
     self.y = playerY
+    self.secondaryReloadFeedbackTimer = math.max(0, (self.secondaryReloadFeedbackTimer or 0) - dt)
+    self.ammoNegativeFeedbackTimer = math.max(0, (self.ammoNegativeFeedbackTimer or 0) - dt)
     self.angle = math.floor(mouseAngle() * 6) / 6
     self.squareAngle = self.squareAngle + 0.8 * dt
     self.shootTimer = self.shootTimer + dt
@@ -636,6 +738,15 @@ function Gun:update(dt, playerX, playerY)
         self.showGun = false
     end
 
+    if self.showGun then
+        self.emptyErrorInvisibleTimer = 0
+    else
+        self.emptyErrorInvisibleTimer = (self.emptyErrorInvisibleTimer or 0) + dt
+        if self.emptyErrorInvisibleTimer >= 2 then
+            self.emptyErrorLocked = false
+        end
+    end
+
     if not Dialog.breakMovements then
         if love.mouse.isDown(2) then
             self:aim()
@@ -669,11 +780,7 @@ end
 
 function Gun:createBullet(spawnX, spawnY, angle, height, weaponConfig, bulletOverrides)
     local bulletConfig = resolveBulletConfig(weaponConfig, bulletOverrides)
-    local rangeMultiplier = weaponConfig.rangeMultiplier or 1
-    local lifeTime = bulletConfig.lifeTime
-    if lifeTime then
-        lifeTime = lifeTime * rangeMultiplier
-    end
+    local lifeTime = getProjectileLifetimeForRange(weaponConfig, bulletConfig)
     local bulletModule = bulletModules[bulletConfig.module or weaponConfig.bulletModule or "particle"]
     local bullet = bulletModule:new(
         spawnX,
@@ -860,6 +967,24 @@ function Gun:playEmptyClickSound(weaponConfig)
     )
 end
 
+function Gun:triggerAmmoNegativeFeedback(weaponConfig)
+    self.ammoNegativeFeedbackTimer = self.ammoNegativeFeedbackDuration or 0.34
+    self:playEmptyClickSound(weaponConfig)
+
+    if self.selected_slot ~= 2 then
+        return
+    end
+
+    if self.secondaryEmptyErrorPlayed then
+        return
+    end
+
+    playErrorSound(0.16, 1.12)
+    self.lastEmptyErrorTime = love.timer.getTime()
+    self.secondaryEmptyErrorPlayed = true
+    self.emptyErrorLocked = true
+end
+
 function Gun:shoot()
     DisableMouseTutorial()
 
@@ -878,9 +1003,12 @@ function Gun:shoot()
         self:applyWeaponShake(weaponConfig)
         self:showshootParticles()
     elseif selectedWeapon and self:startReload(selectedWeapon, weaponConfig) then
+        if self.selected_slot == 2 then
+            self:triggerAmmoNegativeFeedback(weaponConfig)
+        end
         self.shootTimer = self.shootTimer + self.reloadDuration
     else
-        self:playEmptyClickSound(weaponConfig)
+        self:triggerAmmoNegativeFeedback(weaponConfig)
         self:emitWeaponEvent("secondary_empty_ammo", { slot = self.selected_slot, weapon = weaponConfig })
     end
 end
@@ -1053,7 +1181,49 @@ function Gun:drawUI()
     local currentSlot = self:getSelectedWeaponSlot()
     if not (currentSlot and currentSlot.infiniteAmmo) then
         local text = self.currentMagCount .. "/" .. weaponConfig.magCount
-        love.graphics.print(text, 130, 27)
+        local textX = 130
+        local textY = 27
+        local isLastMagazine = self.selected_slot == 2 and (self.currentMagCount or 0) <= 0
+        local feedbackProgress = 0
+        if self.selected_slot == 2 and (self.secondaryReloadFeedbackTimer or 0) > 0 then
+            feedbackProgress = self.secondaryReloadFeedbackTimer / (self.secondaryReloadFeedbackDuration or 0.42)
+        end
+        local ammoNegativeProgress = math.min((self.ammoNegativeFeedbackTimer or 0) / (self.ammoNegativeFeedbackDuration or 0.34), 1)
+        local ammoShakeX = ammoNegativeProgress > 0 and math.sin(ammoNegativeProgress * math.pi * 10) * (isLastMagazine and 2 or 0.8) or 0
+        textX = textX + ammoShakeX
+
+        love.graphics.setColor(0, 0, 0, 0.82)
+        love.graphics.print(text, textX + 2, textY + 2)
+        love.graphics.setColor(0, 0, 0, 0.45)
+        love.graphics.print(text, textX + 1, textY + 1)
+
+        if ammoNegativeProgress > 0 then
+            local scale = 1 + math.sin(ammoNegativeProgress * math.pi) * (isLastMagazine and 0.18 or 0.06)
+            love.graphics.push()
+            love.graphics.translate(textX, textY)
+            love.graphics.scale(scale, scale)
+            if isLastMagazine then
+                love.graphics.setColor(1, 0.24, 0.18, 1)
+            else
+                love.graphics.setColor(1, 0.82, 0.76, 1)
+            end
+            love.graphics.print(text, 0, 0)
+            love.graphics.pop()
+        elseif feedbackProgress > 0 then
+            local pulse = math.sin((1 - feedbackProgress) * math.pi)
+            local scale = 1 + pulse * 0.34
+            love.graphics.push()
+            love.graphics.translate(textX, textY)
+            love.graphics.scale(scale, scale)
+            love.graphics.setColor(1, 0.96, 0.72, 0.55 * feedbackProgress)
+            love.graphics.print(text, -1, -1)
+            love.graphics.setColor(1, 1, 1, 1)
+            love.graphics.print(text, 0, 0)
+            love.graphics.pop()
+        else
+            love.graphics.setColor(1, 1, 1, 1)
+            love.graphics.print(text, textX, textY)
+        end
     end
 
     local bulletUIX = 12
@@ -1061,12 +1231,23 @@ function Gun:drawUI()
 
     local fullQuad = love.graphics.newQuad(0, 0, self.size, self.size, self.bulletSheet:getDimensions())
     local emptyQuad = love.graphics.newQuad(self.size, 0, self.size, self.size, self.bulletSheet:getDimensions())
+    local ammoNegativeProgress = math.min((self.ammoNegativeFeedbackTimer or 0) / (self.ammoNegativeFeedbackDuration or 0.34), 1)
+    local isLastMagazine = self.selected_slot == 2 and (self.currentMagCount or 0) <= 0
 
     for i = 1, weaponConfig.magCapacity do
-        love.graphics.draw(self.bulletSheet, emptyQuad, bulletUIX, bulletUIY + i * 18, 0, 3, 3, 0, 0)
+        local bulletShakeX = ammoNegativeProgress > 0 and math.sin((ammoNegativeProgress * 12 + i) * math.pi) * (isLastMagazine and 1.2 or 0.4) or 0
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.draw(self.bulletSheet, emptyQuad, bulletUIX + bulletShakeX, bulletUIY + i * 18, 0, 3, 3, 0, 0)
 
         if i <= self.currentMagCapacity then
-            love.graphics.draw(self.bulletSheet, fullQuad, bulletUIX, bulletUIY + i * 18, 0, 3, 3, 0, 0)
+            if ammoNegativeProgress > 0 then
+                if isLastMagazine then
+                    love.graphics.setColor(1, 0.56, 0.50, 1)
+                else
+                    love.graphics.setColor(1, 0.88, 0.82, 1)
+                end
+            end
+            love.graphics.draw(self.bulletSheet, fullQuad, bulletUIX + bulletShakeX, bulletUIY + i * 18, 0, 3, 3, 0, 0)
         end
     end
 

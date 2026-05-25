@@ -5,7 +5,7 @@ local EncounterWaves = {
         chance = 8,
         count = {
             min = 2,
-            max = 3,
+            max = 2,
             perDifficulty = 1,
         },
         enemyTypes = {
@@ -20,14 +20,13 @@ local EncounterWaves = {
         chance = 7,
         count = {
             min = 2,
-            max = 4,
+            max = 2,
             perDifficulty = 1,
         },
         enemyTypes = {
             { id = "zombie", weight = 5 },
             { id = "babyZombie", weight = 3 },
             { id = "noHead", weight = 4 },
-            { id = "bigZombie", weight = 2, minDifficulty = 2 },
         },
     },
     {
@@ -36,14 +35,12 @@ local EncounterWaves = {
         chance = 3,
         count = {
             min = 2,
-            max = 4,
+            max = 2,
             perDifficulty = 1,
         },
         enemyTypes = {
-            { id = "zombie", weight = 2 },
             { id = "babyZombie", weight = 3 },
-            { id = "bigZombie", weight = 4 },
-            { id = "noHead", weight = 2 },
+            { id = "bigZombie", weight = 2 },
         },
         maxPerWave = {
             bigZombie = 2,

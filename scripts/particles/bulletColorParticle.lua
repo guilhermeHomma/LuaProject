@@ -81,6 +81,8 @@ function BulletColorParticle:new(x, y, height, palette, options)
     particle.palette = palette
     particle.colorOffset = math.random(0, math.max(#palette - 1, 0))
     particle.wobblePhase = math.random() * math.pi * 2
+    particle.fadeOut = options.fadeOut == true
+    particle.alpha = options.alpha or 1
     particle.isAlive = true
     return particle
 end
@@ -108,8 +110,13 @@ end
 function BulletColorParticle:draw()
     local index = (math.floor(self.timer * 12 + self.colorOffset) % #self.palette) + 1
     local color = self.palette[index]
+    local alpha = self.alpha or 1
+    if self.fadeOut then
+        local progress = math.min(self.timer / math.max(self.lifeTime, 0.001), 1)
+        alpha = alpha * (1 - progress * progress)
+    end
 
-    love.graphics.setColor(color[1], color[2], color[3], 1)
+    love.graphics.setColor(color[1], color[2], color[3], alpha)
     love.graphics.rectangle("fill", math.floor(self.x + 0.5), math.floor(self.y - self.height + 0.5), self.size, self.size)
     love.graphics.setColor(1, 1, 1, 1)
 end

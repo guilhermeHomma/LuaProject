@@ -171,7 +171,11 @@ function Camera:update(dt)
     self.x = self.x + (targetX - self.x) * self.smoothSpeed * dt
     self.y = self.y + (targetY -40- self.y) * self.smoothSpeed * dt
 
-    if self.shakeIntensity > 0 then
+    if GAME_FLAGS and GAME_FLAGS.cameraShake == false then
+        self.shakeIntensity = 0
+        self.shakeOffsetX = 0
+        self.shakeOffsetY = 0
+    elseif self.shakeIntensity > 0 then
         self.shakeOffsetX = love.math.randomNormal(self.shakeIntensity, 0)
         self.shakeOffsetY = love.math.randomNormal(self.shakeIntensity, 0)
         self.shakeIntensity = self.shakeIntensity * (self.shakeDecay ^ (dt * 60))
@@ -250,8 +254,22 @@ function Camera:worldToScreen(wx, wy)
 end
 
 function Camera:shake(intensity, decay)
-    self.shakeIntensity = intensity or 50
-    self.shakeDecay = decay or 0.4
+    if GAME_FLAGS and GAME_FLAGS.cameraShake == false then
+        self.shakeIntensity = 0
+        self.shakeOffsetX = 0
+        self.shakeOffsetY = 0
+        return
+    end
+
+    intensity = intensity or 50
+    decay = decay or 0.4
+
+    if intensity <= (self.shakeIntensity or 0) then
+        return
+    end
+
+    self.shakeIntensity = intensity
+    self.shakeDecay = decay
 end
 
 function Camera:detach()

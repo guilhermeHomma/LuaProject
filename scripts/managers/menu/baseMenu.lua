@@ -3,12 +3,16 @@ local baseMenu = {}
 local navigateSound = love.audio.newSource("assets/sfx/menu/menu-button.mp3", "static")
 local confirmSound = love.audio.newSource("assets/sfx/menu/menu-selected.mp3", "static")
 
+local function clampValue(value, minValue, maxValue)
+    return math.max(minValue, math.min(maxValue, value))
+end
+
 function baseMenu:load()
     self.menuOptions = {}
     self.selectedOption = 1
     self.optionBounds = {}
     self.MenuTItle = "MENU BASE - make a new menu"
-    self.fontTitle = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 48)
+    self.fontTitle = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 56)
     self.fontTitle:setFilter("nearest", "nearest")
 
     self.fontOptions = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 32)
@@ -61,47 +65,64 @@ function baseMenu:drawSelectSprite(text, y)
     love.graphics.draw(self.selectSprite, spriteX, y+ 3, 0, 3, 3)
 end
 
-function baseMenu:drawTitle()
-    love.graphics.setFont(self.fontTitle)
+function baseMenu:getCanvasMousePosition()
+    return (love.mouse.getX() - viewportOffsetX) / scale,
+        (love.mouse.getY() - viewportOffsetY) / scale
+end
 
+function baseMenu:getMouseLean(bounds)
+    if not bounds then
+        return 0, 0
+    end
 
-    local titleX, titleY = 01, self:getHeight() / 2 - 60
-    --drawOutline(self.MenuTItle, titleX, titleY, self:getWidth(), "center")
+    local mouseX, mouseY = self:getCanvasMousePosition()
+    local centerX = bounds.left + bounds.width / 2
+    local centerY = bounds.top + bounds.height / 2
+    local halfW = math.max(bounds.width / 2, 1)
+    local halfH = math.max(bounds.height / 2, 1)
 
-    love.graphics.setColor(hexToRGB("fbfaf7"))  
-    love.graphics.printf(self.MenuTItle, titleX, titleY, self:getWidth(), "center")
-    love.graphics.setColor(hexToRGB("ffffff"))
-
+    return clampValue((mouseX - centerX) / halfW, -1, 1),
+        clampValue((mouseY - centerY) / halfH, -1, 1)
 end
 
 local hoverPalette = {
-    "b8bd99",
-    "9ab7ad",
-    "aa99bb",
-    "b6a49a",
-    "97a983",
-    "afa0b4",
+    "c6cbaa",
+    "abc8bd",
+    "f2f0df",
+    "b8aac8",
+    "c7b5ab",
+    "a9ba95",
+    "bfb0c5",
 }
 
-function baseMenu:drawHoverText(text, y)
+local function drawWavyMenuText(self, text, y, font, config)
     local time = love.timer.getTime()
-    local font = self.fontOptions
     local textWidth = font:getWidth(text)
     local x = self:getWidth() / 2 - textWidth / 2
-    local paletteShift = math.floor(time * 3.2)
+    local centerX = x + textWidth / 2
+    local halfTextWidth = math.max(textWidth / 2, 1)
+    local paletteShift = math.floor(time * config.paletteSpeed)
+    local leanX = config.leanX or 0
+    local leanY = config.leanY or 0
+    local leanTiltY = config.leanTiltY or 0
+    local leanTiltX = config.leanTiltX or 0
 
     for i = 1, #text do
         local char = text:sub(i, i)
         local charWidth = font:getWidth(char)
-        local phase = time * 4.2 + i * 0.72
-        local runX = math.sin(phase) * 0.9 + math.sin(time * 6.5 + i * 1.3) * 0.32
-        local runY = math.cos(time * 3.1 + i * 0.58) * 0.75
-        local drawX = math.floor(x + runX)
-        local drawY = math.floor(y + runY)
-        local color = hoverPalette[((i + paletteShift - 1) % #hoverPalette) + 1]
+        local relativeX = ((x + charWidth / 2) - centerX) / halfTextWidth
+        local phase = time * config.phaseSpeed + i * config.letterPhase
+        local runX = math.sin(phase) * config.xAmplitude
+            + math.sin(time * config.secondarySpeed + i * 1.3) * config.secondaryX
+        local runY = math.cos(time * config.ySpeed + i * 0.58) * config.yAmplitude
+        runX = runX + relativeX * leanY * leanTiltX
+        runY = runY + relativeX * leanX * leanTiltY
+        local drawX = math.floor(x + runX + 0.5)
+        local drawY = math.floor(y + runY + 0.5)
+        local color = config.color or hoverPalette[((i + paletteShift - 1) % #hoverPalette) + 1]
 
         if char ~= " " then
-            love.graphics.setColor(0.02, 0.015, 0.025, 0.8)
+            love.graphics.setColor(0.02, 0.015, 0.025, config.shadowAlpha)
             love.graphics.print(char, drawX + 1, drawY + 1)
             love.graphics.setColor(hexToRGB(color))
             love.graphics.print(char, drawX, drawY)
@@ -111,6 +132,53 @@ function baseMenu:drawHoverText(text, y)
     end
 
     love.graphics.setColor(hexToRGB("fbfaf7"))
+end
+
+function baseMenu:drawTitle()
+    love.graphics.setFont(self.fontTitle)
+
+    local titleY = self:getHeight() / 2 - 72
+    drawWavyMenuText(self, self.MenuTItle, titleY, self.fontTitle, {
+        paletteSpeed = 1.55,
+        phaseSpeed = 1.65,
+        letterPhase = 0.42,
+        xAmplitude = 0.38,
+        secondarySpeed = 2.2,
+        secondaryX = 0.16,
+        ySpeed = 1.35,
+        yAmplitude = 0.28,
+        shadowAlpha = 0.62,
+        color = "fbfaf7",
+    })
+    love.graphics.setColor(hexToRGB("ffffff"))
+end
+
+function baseMenu:drawHoverText(text, y, bounds)
+    local leanX, leanY = self:getMouseLean(bounds)
+    drawWavyMenuText(self, text, y, self.fontOptions, {
+        paletteSpeed = 3.2,
+        phaseSpeed = 4.2,
+        letterPhase = 0.72,
+        xAmplitude = 0.9,
+        secondarySpeed = 6.5,
+        secondaryX = 0.32,
+        ySpeed = 3.1,
+        yAmplitude = 0.75,
+        shadowAlpha = 0.8,
+        leanX = leanX,
+        leanY = leanY,
+        leanTiltY = 3.0,
+        leanTiltX = -1.45,
+    })
+end
+
+function baseMenu:drawSelectedOptionContent(text, y, bounds)
+    local leanX, leanY = self:getMouseLean(bounds)
+    love.graphics.push()
+    love.graphics.translate(math.floor(leanY * -1 + 0.5), math.floor(leanX * 1 + 0.5))
+    self:drawSelectSprite(text, y)
+    love.graphics.pop()
+    self:drawHoverText(text, y, bounds)
 end
 
 function baseMenu:drawOption(text, x, y, def, isSelected, isInactive, bounds)
@@ -129,8 +197,7 @@ function baseMenu:drawOption(text, x, y, def, isSelected, isInactive, bounds)
         return
     end
 
-    self:drawSelectSprite(text, y)
-    self:drawHoverText(text, y)
+    self:drawSelectedOptionContent(text, y, bounds)
 
 end
 
@@ -163,13 +230,19 @@ function baseMenu:draw()
         local y = (centerHeight) + (i * 30)
         local textWidth = self.fontOptions:getWidth(optionText)
         local left = math.floor(self:getWidth() / 2 - textWidth / 2 - 36)
-        self.optionBounds[i] = {
+        local bounds = {
             left = left,
             top = y,
             width = textWidth + 72,
             height = self.fontOptions:getHeight() + 10,
         }
+        if type(self.getOptionBounds) == "function" then
+            bounds = self:getOptionBounds(i, optionText, y, bounds) or bounds
+        end
+        self.optionBounds[i] = bounds
+        self.currentDrawIndex = i
         self:drawOption(optionText, 0, y, "center", isSelected, isInactive, self.optionBounds[i])
+        self.currentDrawIndex = nil
         self.scale = 1
         love.graphics.pop()
 

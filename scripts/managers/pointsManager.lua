@@ -4,7 +4,7 @@ PointsManager = {}
 function PointsManager:load()
     self.font = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 32)
     self.font:setFilter("nearest", "nearest")
-    self.points = (GAME_FLAGS and GAME_FLAGS.weaponTestLevel) and 10000 or 100
+    self.points = (GAME_FLAGS and GAME_FLAGS.weaponTestLevel) and 2000 or 100
     self.displayPoints = self.points
     self.targetPoints = self.points
     self.animationStartPoints = self.points
@@ -13,6 +13,8 @@ function PointsManager:load()
     self.animationMode = "idle"
     self.popTimer = 1
     self.popDuration = 0.18
+    self.negativeFeedbackTimer = 0
+    self.negativeFeedbackDuration = 0.38
 
     self.animationColor = "c7c093"
     self.animationTimer = 10
@@ -33,6 +35,7 @@ end
 function PointsManager:update(dt)
     self.animationTimer = self.animationTimer + dt
     self.popTimer = self.popTimer + dt
+    self.negativeFeedbackTimer = math.max(0, (self.negativeFeedbackTimer or 0) - dt)
 
     if self.displayPoints ~= self.targetPoints then
         self.valueAnimationTimer = math.min(
@@ -56,6 +59,11 @@ end
 function PointsManager:getPoints()
     return self.points
 end 
+
+function PointsManager:triggerNegativeFeedback()
+    self.negativeFeedbackTimer = self.negativeFeedbackDuration or 0.38
+    self.popTimer = 0
+end
 
 function PointsManager:decreasePoints(points)
     self.animationTimer = 0
@@ -113,12 +121,15 @@ function PointsManager:draw()
     local y = 6
     local popProgress = math.min((self.popTimer or 1) / (self.popDuration or 0.18), 1)
     local popWave = math.sin(popProgress * math.pi)
-    local isLoss = self.animationMode == "loss" and (self.animationTimer <= 0.35 or self.displayPoints ~= self.targetPoints)
+    local negativeProgress = math.min((self.negativeFeedbackTimer or 0) / (self.negativeFeedbackDuration or 0.38), 1)
+    local isNegativeFeedback = negativeProgress > 0
+    local isLoss = (self.animationMode == "loss" and (self.animationTimer <= 0.35 or self.displayPoints ~= self.targetPoints)) or isNegativeFeedback
     local scaleX = isLoss and (1 - popWave * 0.025) or (1 + popWave * 0.05)
     local scaleY = isLoss and (1 + popWave * 0.025) or (1 - popWave * 0.035)
     local originAdjustX = textWidth * (scaleX - 1) / 2
     local originAdjustY = self.font:getHeight() * (scaleY - 1) / 2
-    local drawX = math.floor(x - originAdjustX + 0.5)
+    local shakeX = isNegativeFeedback and math.sin(negativeProgress * math.pi * 10) * 2 or 0
+    local drawX = math.floor(x - originAdjustX + shakeX + 0.5)
     local drawY = math.floor(y - originAdjustY + 0.5)
     
     love.graphics.setFont(self.font)
@@ -127,8 +138,13 @@ function PointsManager:draw()
     love.graphics.print(text, drawX + 3, drawY + 3, 0, scaleX, scaleY)
     
     love.graphics.setColor(1, 1, 1)
-    local colorize = self.animationTimer <= 0.35 or self.displayPoints ~= self.targetPoints
-    self:drawText(text, drawX, drawY, scaleX, scaleY, colorize)
+    local colorize = self.animationTimer <= 0.35 or self.displayPoints ~= self.targetPoints or isNegativeFeedback
+    if isNegativeFeedback then
+        love.graphics.setColor(1, 0.28, 0.22, 1)
+        love.graphics.print(text, drawX, drawY, 0, scaleX, scaleY)
+    else
+        self:drawText(text, drawX, drawY, scaleX, scaleY, colorize)
+    end
     love.graphics.setColor(1, 1, 1)
 end
 

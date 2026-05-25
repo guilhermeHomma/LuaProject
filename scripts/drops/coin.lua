@@ -35,7 +35,15 @@ function Coin:new(x, y)
     return coin
 end
 
-function Coin:changeHeight()
+function Coin:changeHeight(dt)
+    if self.fromChest then
+        local speed = self.hoverSpeed or 2.7
+        local amplitude = self.hoverAmplitude or 3.4
+        self.oscillator = (self.oscillator or 0) + (dt or 0) * speed
+        self.hoverHeight = (self.baseHeight or 22) + math.sin(self.oscillator) * amplitude
+        return
+    end
+
     self.hoverHeight = 0
 end 
 
@@ -88,6 +96,22 @@ function Coin:draw()
     DropShine.draw(sheetImage, self.sprite, self.x, drawY, 0, scaleX, scaleY, 4, 8)
     love.graphics.setColor(1, 1, 1, 1)
 
+end
+
+function Coin:drawXray()
+    if not self.isAlive then
+        return
+    end
+
+    local scaleX, scaleY = self:getDrawScale()
+    local drawY = self.y - self.height
+    if self.isCollecting then
+        local baseScaleY = self.drawScaleY or 1.25
+        drawY = drawY + 4 * (baseScaleY - scaleY)
+    end
+
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.draw(sheetImage, self.sprite, self.x, drawY, 0, scaleX, scaleY, 4, 8)
 end
 
 return Coin

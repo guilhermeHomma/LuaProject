@@ -99,6 +99,7 @@ local defaultWeapon = {
     },
     reloadDuration = 1,
     reloadSpinDuration = 0.25,
+    defaultBulletLifeTime = 0.35,
     shotShockwave = {
         enabled = true,
         duration = 0.38,
@@ -128,6 +129,9 @@ function Shared.createWeapon(overrides)
     weapon.audio.folder = weapon.audio.folder or weapon.name
     weapon.bulletModule = weapon.bulletModule or weapon.initialBullet.module
     weapon.projectileSprite = weapon.projectileSprite or weapon.initialBullet.sprite
+    weapon.range = weapon.range
+        or weapon.initialBullet.range
+        or ((weapon.bulletSpeed or 0) * (weapon.initialBullet.lifeTime or weapon.defaultBulletLifeTime))
     return weapon
 end
 
