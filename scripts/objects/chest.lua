@@ -150,7 +150,7 @@ end
 
 function Chest:spawnDrop()
     local spawnX = self.xWorld
-    local spawnY = self.yWorld - 10
+    local spawnY = self.yWorld
     local baseKey = getChestKey(self) .. ":drop:"
     local config = DropTemplates.getObjectConfig(self.chestType == "card" and "cardChest" or "chest")
     local resolvedDrops = DropTemplates.resolve(config, { player = Player, source = self })
@@ -159,13 +159,21 @@ function Chest:spawnDrop()
     DropTemplates.spawnResolvedDrops(resolvedDrops, spawnX, spawnY, Game.objects, function(drop, kind)
         dropIndex = dropIndex + 1
         local key = baseKey .. kind .. dropIndex
-        drop.baseHeight = math.max(drop.baseHeight or 0, kind == "life" and 20 or 18)
+        local spawnBaseHeight = 8
+        local idleBaseHeight = 24
+        local popGravity = 250
+        local popPeakHeight = idleBaseHeight + 3
+
+        drop.baseHeight = spawnBaseHeight
+        drop.idleBaseHeight = idleBaseHeight
+        drop.raiseBaseHeightAfterPop = true
+        drop.baseHeightRiseSpeed = 18
         drop.hoverHeight = drop.baseHeight
         drop.hoverAmplitude = kind == "life" and 2.6 or 2.2
         drop.hoverSpeed = kind == "life" and 2.7 or 2.4
-        drop.popHeight = kind == "life" and 5 or 4
-        drop.popVelocity = kind == "life" and 30 or 26
-        drop.popGravity = 250
+        drop.popHeight = 0
+        drop.popVelocity = math.sqrt(math.max(0, 2 * popGravity * (popPeakHeight - spawnBaseHeight)))
+        drop.popGravity = popGravity
         drop.popMaxBounces = 0
         drop.spawnStretchTimer = math.max(drop.spawnStretchTimer or 0, 0.18)
         drop.spawnStretchDuration = 0.18

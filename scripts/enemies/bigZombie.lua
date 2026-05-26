@@ -22,7 +22,7 @@ local rushConfig = {
     stunDuration = 1.12,
     maxDistanceMin = tileSize * 13,
     maxDistanceMax = tileSize * 15,
-    speed = 155,
+    speed = 135,
     coastDistance = tileSize,
     coastDuration = 0.26,
     cooldown = 5,
@@ -33,7 +33,7 @@ local rushConfig = {
     facingLockTime = 0.16,
     impactShotCount = 5,
     impactShotSpread = math.rad(150),
-    impactShotSpeed = 110,
+    impactShotSpeed = 125,
     impactShotDamage = 1,
     impactShotTileDamage = 8,
     impactShotLifeTime = 2.9,
@@ -92,7 +92,7 @@ end
 function BigZombie:new(x, y)
     local zombie = Zombie.new(self, x, y)
     zombie.speed = math.random(57, 68)
-    zombie.damageTimer = 0.14
+    zombie.damageTimer = 0.1
     zombie.totalLife = 65
     zombie.life = zombie.totalLife
     zombie.footStepAlpha = 0.7

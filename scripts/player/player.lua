@@ -37,12 +37,12 @@ end
 function Player:load(camera, spawnX, spawnY)
     self.x = spawnX or 30
     self.y = spawnY or 340
-    self.baseSpeed = 85
+    self.baseSpeed = 90
     self.speed = self.baseSpeed
     self.velocityX = 0
     self.velocityY = 0
-    self.acceleration = 12
-    self.friction = 7
+    self.acceleration = 10
+    self.friction = 6
     self.size = 40
     self.gun = require("scripts/player/gun")
     self.spriteSize = 40

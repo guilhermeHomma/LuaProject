@@ -1,35 +1,26 @@
 local MusicList = {
-    love.audio.newSource("assets/sfx/musics/intro/stairway.mp3", "stream"),
-    love.audio.newSource("assets/sfx/musics/horror/midnight.mp3", "stream"),
-    --love.audio.newSource("assets/sfx/musics/horror/a_horror_theme.mp3", "stream"),
-    love.audio.newSource("assets/sfx/musics/default/late-song.mp3", "stream"),
+    stairway = love.audio.newSource("assets/sfx/musics/intro/stairway.mp3", "stream"),
+    horror = love.audio.newSource("assets/sfx/musics/horror/midnight.mp3", "stream"),
+    death = love.audio.newSource("assets/sfx/musics/default/late-song.mp3", "stream"),
 }
 
-local MusicPlayer = MusicList[1]
-local BattleMusicPlayer = love.audio.newSource("assets/sfx/musics/enemies/enemiesbeat.mp3", "stream")
+local MusicPlayer = MusicList.stairway
 Music = {}
 
 function Music:load()
     self.targetPitch = 1
     self.pitch = 1
-    self.musicIndex = 1
+    self.currentTrack = "stairway"
     
     self.targetVolume = 0.8
     self.volume = 1
-    self.battleVolume = 0
-    self.battleTargetVolume = 0
     self.battleActive = false
-    self.defaultBattleVolume = 0.05
     self.defaultFadeInSpeed = 0.65
-    self.battleMaxVolume = 0.72
-    self.battleFadeInSpeed = 4.5
-    self.battleFadeOutSpeed = 2.2
     self.fadeSpeedOverride = nil
+    self.startDelayTimer = 0
 
-    MusicPlayer:setLooping(false)
+    MusicPlayer:setLooping(true)
     MusicPlayer:setVolume(self.volume * MUSIC_VOLUME)
-    BattleMusicPlayer:setLooping(true)
-    BattleMusicPlayer:setVolume(0)
 end
 
 function Music:death()
@@ -38,8 +29,7 @@ function Music:death()
     self.targetVolume = 1
     self.targetPitch = 1
     self.pitch = 1
-    self.musicIndex = #MusicList
-    self:startMusic()
+    self:startMusic("death")
 end
 
 function Music:startGame()
@@ -49,49 +39,48 @@ function Music:startGame()
     self.targetVolume = 1 
     self.targetPitch = 1
     self.pitch = 1
-    self.musicIndex = 1
-    self:startMusic()
+    self.startDelayTimer = 1
+    self.currentTrack = "stairway"
+    if MusicPlayer:isPlaying() then
+        MusicPlayer:stop()
+    end
     GAME_PITCH = 1
 end
 
-function Music:startMusic()
+function Music:startMusic(trackName)
+    trackName = trackName or "stairway"
+    if self.currentTrack == trackName and MusicPlayer:isPlaying() then
+        return
+    end
+
     MusicPlayer:stop()
-    MusicPlayer = MusicList[self.musicIndex]
-    MusicPlayer:setLooping(false)
+    self.currentTrack = trackName
+    MusicPlayer = MusicList[trackName] or MusicList.stairway
+    MusicPlayer:setLooping(true)
     MusicPlayer:setVolume((self.volume or 1) * MUSIC_VOLUME)
     MusicPlayer:setPitch((self.pitch or 1) * GAME_PITCH)
     MusicPlayer:play()
 end
 
 function Music:setBattleActive(active, immediate)
-    active = active == true
-    self.battleVolume = self.battleVolume or 0
-    self.battleMaxVolume = self.battleMaxVolume or 0.72
-    local target = active and self.battleMaxVolume or 0
-    self.battleActive = active
-    self.battleTargetVolume = target
-    self.targetVolume = active and (self.defaultBattleVolume or 0.05) or 1
+    self.battleActive = false
 
-    if active and not BattleMusicPlayer:isPlaying() then
-        BattleMusicPlayer:setLooping(true)
-        BattleMusicPlayer:setVolume(0)
-        BattleMusicPlayer:setPitch((self.pitch or 1) * GAME_PITCH)
-        BattleMusicPlayer:play()
-    end
-
-    if not active and state == STATES.game and Player and Player.isAlive and not MusicPlayer:isPlaying() then
-        self:startMusic()
+    if state == STATES.game and Player and Player.isAlive and not MusicPlayer:isPlaying() and (self.startDelayTimer or 0) <= 0 then
+        self:startMusic(self.currentTrack or "stairway")
     end
 
     if immediate then
-        self.battleVolume = target
-        self.volume = active and (self.defaultBattleVolume or 0.05) or (self.targetVolume or 1)
+        self.volume = self.targetVolume or 1
         MusicPlayer:setVolume(self.volume * MUSIC_VOLUME)
-        BattleMusicPlayer:setVolume(self.battleVolume * MUSIC_VOLUME)
-        if target <= 0 and BattleMusicPlayer:isPlaying() then
-            BattleMusicPlayer:stop()
-        end
     end
+end
+
+function Music:setShopOrChestRoomActive(active)
+    if not (state == STATES.game and Player and Player.isAlive) then
+        return
+    end
+
+    self:startMusic(active and "horror" or "stairway")
 end
 
 function Music:changePause(isPaused)
@@ -115,7 +104,7 @@ function Music:closeGame()
 end
 
 function Music:closeForFloorIntro()
-    self.fadeSpeedOverride = 18
+    self.fadeSpeedOverride = 5
     self:setBattleActive(false, true)
     self.targetVolume = 0
     GAME_PITCH = 1
@@ -134,11 +123,15 @@ function Music:finishFloorIntroFade()
 end
 
 function Music:update(dt)
+    if (self.startDelayTimer or 0) > 0 then
+        self.startDelayTimer = math.max(0, self.startDelayTimer - dt)
+        if self.startDelayTimer == 0 and state == STATES.game and Player and Player.isAlive then
+            self:startMusic(self.currentTrack or "stairway")
+        end
+    end
 
     if state == STATES.game then
-        if self.battleActive then
-            self.targetVolume = self.defaultBattleVolume or 0.05
-        elseif Player.isAlive then
+        if Player.isAlive then
             if Player.life <= 1 then
                 self.targetVolume = 0.5
             else 
@@ -151,7 +144,7 @@ function Music:update(dt)
         self.targetVolume = 0.1
     end
 
-    local volumeSpeed = self.fadeSpeedOverride or ((not self.battleActive and self.volume < self.targetVolume) and (self.defaultFadeInSpeed or 0.65) or 2)
+    local volumeSpeed = self.fadeSpeedOverride or ((self.volume < self.targetVolume) and (self.defaultFadeInSpeed or 0.65) or 2)
     local pitchSpeed = self.fadeSpeedOverride or 2
     self.pitch = self.pitch + (self.targetPitch - self.pitch) * dt * pitchSpeed
     self.volume = self.volume + (self.targetVolume - self.volume) * dt * volumeSpeed
@@ -162,11 +155,7 @@ function Music:update(dt)
 
     if state ~= STATES.game then
         self.battleActive = false
-        self.battleTargetVolume = 0
     end
-
-    local battleFadeSpeed = self.battleTargetVolume > self.battleVolume and self.battleFadeInSpeed or self.battleFadeOutSpeed
-    self.battleVolume = self.battleVolume + (self.battleTargetVolume - self.battleVolume) * dt * battleFadeSpeed
 
     local keepGameMusicAlive = state == STATES.game and Player and Player.isAlive
     if self.volume <= 0.05 and MusicPlayer:isPlaying() and not keepGameMusicAlive then
@@ -176,23 +165,9 @@ function Music:update(dt)
     MusicPlayer:setVolume(self.volume * MUSIC_VOLUME)
     MusicPlayer:setPitch(self.pitch  * GAME_PITCH)
 
-    if self.battleVolume > 0.01 or self.battleTargetVolume > 0 then
-        if not BattleMusicPlayer:isPlaying() then
-            BattleMusicPlayer:play()
-        end
-        BattleMusicPlayer:setVolume(self.battleVolume * MUSIC_VOLUME)
-        BattleMusicPlayer:setPitch(self.pitch * GAME_PITCH)
-    elseif BattleMusicPlayer:isPlaying() then
-        BattleMusicPlayer:stop()
-    end
-
-    if not MusicPlayer:isPlaying() and state == STATES.game and not self.battleActive then
-        self.musicIndex = self.musicIndex + 1
-        if self.musicIndex > #MusicList-1 then
-            self.musicIndex = 1
-        end
+    if not MusicPlayer:isPlaying() and state == STATES.game and (self.startDelayTimer or 0) <= 0 then
         if Player.isAlive then
-            self:startMusic()
+            self:startMusic(self.currentTrack or "stairway")
         end
     end
 

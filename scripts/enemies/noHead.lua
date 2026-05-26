@@ -90,6 +90,31 @@ local function isBreakableTile(tile)
     return tile.quadIndex == 14 or tile.quadIndex == 18
 end
 
+local function getObjectLineOfSightBox(object)
+    if object.isAlive == false or not (object.collider == true or object.blocksPlayer == true) then
+        return nil
+    end
+
+    if type(object.collisionBox) == "function" then
+        return object:collisionBox()
+    end
+
+    if type(object.getBox) == "function" then
+        return object:getBox()
+    end
+
+    if object.collider and object.xWorld and object.yWorld and object.size then
+        return {
+            x = object.xWorld - object.size / 2,
+            y = object.yWorld - object.size,
+            width = object.size,
+            height = object.size,
+        }
+    end
+
+    return nil
+end
+
 function NoHead:new(x, y)
     local enemy = Zombie.new(self, x, y, math.random(52, 60))
     enemy.totalLife = 30
@@ -99,7 +124,7 @@ function NoHead:new(x, y)
     enemy.shootCancelDistance = enemy.shootDistance + 72
     enemy.shootCooldown = math.random(75, 100) / 100
     enemy.shootTimer = math.random() * 0.6
-    enemy.bulletSpeed = 96
+    enemy.bulletSpeed = 125
     enemy.aimAngle = 0
     enemy.aimWindupTimer = 0
     enemy.reloadTickDelays = {0.12, 0.1, 0.07, 0.07}
@@ -112,9 +137,9 @@ function NoHead:new(x, y)
     enemy.shotFlashTimer = 0
     enemy.shotFlashDuration = 0.16
     enemy.postShotRecoilTimer = 0
-    enemy.postShotRecoilDurationMin = 0.14
-    enemy.postShotRecoilDurationMax = 0.22
-    enemy.postShotRecoilSpeed = 46
+    enemy.postShotRecoilDurationMin = 1
+    enemy.postShotRecoilDurationMax = 1
+    enemy.postShotRecoilSpeed = enemy.speed
     enemy.cooldownDustTimer = 0
     enemy.postShotMoveX = 0
     enemy.postShotMoveY = 0
@@ -325,10 +350,26 @@ function NoHead:hasLineOfSightToPlayer()
     local padding = 4
 
     for _, tile in ipairs(Tilemap.tiles or {}) do
-        if tile.collider and not tile.isWater and not isBreakableTile(tile) then
+        if tile.isAlive ~= false and tile.collider and not tile.isWater then
             local tileBox = getExpandedTileBox(tile, padding)
 
             if segmentIntersectsRect(shotX, shotY, targetX, targetY, tileBox) then
+                return false
+            end
+        end
+    end
+
+    for _, object in ipairs((Game and Game.objects) or {}) do
+        local objectBox = getObjectLineOfSightBox(object)
+        if objectBox and segmentIntersectsRect(shotX, shotY, targetX, targetY, objectBox) then
+            return false
+        end
+    end
+
+    for _, enemy in ipairs((Game and Game.enemies) or {}) do
+        if enemy ~= self and enemy.blocksPlayer and enemy.isAlive ~= false then
+            local enemyBox = getObjectLineOfSightBox(enemy)
+            if enemyBox and segmentIntersectsRect(shotX, shotY, targetX, targetY, enemyBox) then
                 return false
             end
         end
@@ -353,57 +394,28 @@ function NoHead:updateFacing(targetX, dt)
 end
 
 function NoHead:pickPostShotMove()
-    local awayX = self.x - Player.x
-    local awayY = self.y - Player.y
-    local length = math.sqrt(awayX * awayX + awayY * awayY)
+    if Player.isAlive and math.random() < 0.5 then
+        local toPlayerX = Player.x - self.x
+        local toPlayerY = Player.y - self.y
+        local length = math.sqrt(toPlayerX * toPlayerX + toPlayerY * toPlayerY)
 
-    if length <= 0 then
-        awayX = math.random() > 0.5 and 1 or -1
-        awayY = 0
-        length = 1
+        if length > 0 then
+            return toPlayerX / length, toPlayerY / length
+        end
     end
 
-    awayX = awayX / length
-    awayY = awayY / length
-
-    local playerDistance = distance(Player, self)
-    local retreatChance = playerDistance <= self.retreatDistance and self.closeRetreatChance or self.retreatChance
-    local moveX, moveY
-
-    if math.random() < retreatChance then
-        local strafe = math.random() > 0.5 and 1 or -1
-        moveX = awayX + (-awayY * strafe * 0.45)
-        moveY = awayY + (awayX * strafe * 0.45)
-    else
-        local strafe = math.random() > 0.5 and 1 or -1
-        moveX = -awayY * strafe
-        moveY = awayX * strafe
-    end
-
-    local moveLength = math.sqrt(moveX * moveX + moveY * moveY)
-    if moveLength <= 0 then
-        return awayX, awayY
-    end
-
-    return moveX / moveLength, moveY / moveLength
+    local angle = math.random() * math.pi * 2
+    return math.cos(angle), math.sin(angle)
 end
 
 function NoHead:startPostShotRecoil()
     local minDuration = self.postShotRecoilDurationMin or 0.26
     local maxDuration = self.postShotRecoilDurationMax or minDuration
-    local awayX = self.x - Player.x
-    local awayY = self.y - Player.y
-    local length = math.sqrt(awayX * awayX + awayY * awayY)
-
-    if length <= 0 then
-        awayX = self.flipH and -1 or 1
-        awayY = 0
-        length = 1
-    end
+    local moveX, moveY = self:pickPostShotMove()
 
     self.postShotRecoilTimer = minDuration + math.random() * (maxDuration - minDuration)
-    self.postShotMoveX = awayX / length
-    self.postShotMoveY = awayY / length
+    self.postShotMoveX = moveX
+    self.postShotMoveY = moveY
     self.cooldownDustTimer = 0
     self.path = nil
 end
@@ -421,8 +433,9 @@ end
 
 function NoHead:updatePostShotRecoil(dt)
     self.postShotRecoilTimer = math.max(0, (self.postShotRecoilTimer or 0) - dt)
-    self.state = Zombie.states.idle
-    self:animate(1, 2, dt)
+    self.state = Zombie.states.walk
+    self:animate(3, 6, dt)
+    self:updateFacing(self.x + (self.postShotMoveX or 0) * 24, dt)
     self:spawnCooldownDust(dt)
 
     local moveX = (self.postShotMoveX or 0) * (self.postShotRecoilSpeed or 46) * dt
@@ -641,8 +654,14 @@ function NoHead:update(dt)
 
         if self.aimWindupTimer == 0 then
             self.shootTimer = 0
-            if Player.isAlive and playerDistance <= self.shootCancelDistance and self:hasLineOfSightToPlayer() and self:shootAtPlayer() then
-                self:startPostShotRecoil()
+            local playerInShotRange = Player.isAlive and playerDistance <= self.shootCancelDistance
+            if playerInShotRange then
+                if self:hasLineOfSightToPlayer() and self:shootAtPlayer() then
+                    self:startPostShotRecoil()
+                else
+                    self.gunVisibleTimer = 0
+                    self:startPostShotRecoil()
+                end
             else
                 self.gunVisibleTimer = 0
             end

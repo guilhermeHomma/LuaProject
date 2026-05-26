@@ -119,7 +119,7 @@ function Tile:new(x, y, quadIndex, collider)
     tile.breakTimer = 0
     tile.breakDuration = 0.1
     if tile.quadIndex == 14 or tile.quadIndex == 18 then
-        tile.life = 20
+        tile.life = math.random(14, 20)
         tile.hitFlashTimer = 0
         tile.hitFlashDuration = 0.08
         DamageStretch:init(tile, 0.12, 0.08)

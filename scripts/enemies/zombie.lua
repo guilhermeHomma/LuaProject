@@ -775,7 +775,8 @@ function Zombie:animate(startFrame, endFrame, dt)
     self.animationTimer = self.animationTimer + dt
 
     self.footStepTimer = self.footStepTimer + dt
-    if self.footStepTimer > 0.12 and (self.state == Zombie.states.damage or self.state == Zombie.states.walk) and distance(self, Player) < 200 then
+    local footStepVisualInterval = self.footStepVisualInterval or 0.12
+    if self.footStepTimer > footStepVisualInterval and (self.state == Zombie.states.damage or self.state == Zombie.states.walk) and distance(self, Player) < 200 then
         self.footStepTimer = 0
         local randx = math.random(-2,2)
         local randy = math.random(-2,2)
@@ -793,7 +794,7 @@ function Zombie:animate(startFrame, endFrame, dt)
         end
         advancedFrames = advancedFrames + 1
 
-        if self.state == Zombie.states.walk and self.currentFrame % 2 == 0 then --ok
+        if self.state == Zombie.states.walk and (self.footstepEveryWalkFrame or self.currentFrame % 2 == 0) then --ok
 
             local playerDistance = self:playerDistance()
             if playerDistance <= 150 then
@@ -805,7 +806,7 @@ function Zombie:animate(startFrame, endFrame, dt)
                     playClonedSound(footstepBase, 0.4, (0.4 + math.random() * 0.4) * GAME_PITCH)
                 end
 
-                if math.random() > 0.6 then
+                if not self.skipWalkParticles and math.random() > 0.6 then
                     local lifetime = math.random(45, 55) / 100
                     local particle = WalkParticle:new(self.x, self.y, lifetime)
                     table.insert(Game.particles, particle)

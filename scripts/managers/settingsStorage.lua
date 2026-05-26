@@ -1,8 +1,6 @@
 local SettingsStorage = {}
 
-local settingsFileName = "pak02.bin"
-local settingsKey = "mobize-runtime-cache-v2"
-local bitXor = bit and bit.bxor or bit32 and bit32.bxor
+local settingsFileName = "settings.txt"
 
 local function getDirectory(path)
     if not path or path == "" then
@@ -56,53 +54,12 @@ function SettingsStorage:getPathCandidates()
     return candidates
 end
 
-local function encodeByte(value)
-    return string.format("%02x", value)
-end
-
-local function decodeByte(hex)
-    return tonumber(hex, 16) or 0
-end
-
-local function crypt(data)
-    if not bitXor then
-        return data
-    end
-
-    local output = {}
-    local keyLength = #settingsKey
-
-    for i = 1, #data do
-        local dataByte = data:byte(i)
-        local keyByte = settingsKey:byte(((i - 1) % keyLength) + 1)
-        output[i] = string.char(bitXor(dataByte, keyByte))
-    end
-
-    return table.concat(output)
-end
-
 function SettingsStorage:encode(data)
-    local encrypted = crypt(data)
-    local output = {}
-
-    for i = 1, #encrypted do
-        output[i] = encodeByte(encrypted:byte(i))
-    end
-
-    return table.concat(output)
+    return data or ""
 end
 
 function SettingsStorage:decode(data)
-    if not data or #data < 2 then
-        return nil
-    end
-
-    local bytes = {}
-    for i = 1, #data - 1, 2 do
-        bytes[#bytes + 1] = string.char(decodeByte(data:sub(i, i + 1)))
-    end
-
-    return crypt(table.concat(bytes))
+    return data
 end
 
 function SettingsStorage:serialize(settings)

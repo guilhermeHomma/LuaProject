@@ -51,6 +51,16 @@ DropTemplates.enemies = {
             { id = "life", amount = 1, chance = 0.004 },
         },
     },
+    spider = {
+        points = 0,
+        drops = {
+            { id = "coins", amount = 1, weight = 3 },
+            { id = "none", weight = 14 },
+        },
+        extraDrops = {
+            { id = "life", amount = 1, chance = 0.002 },
+        },
+    },
 }
 
 DropTemplates.objects = {

@@ -6,6 +6,43 @@ require("scripts/utils")
 local bloodSpritePath = "assets/sprites/enemy/blood"
 local bloodSprites = {}
 local splatBase = love.audio.newSource("assets/sfx/enemies/splat.mp3", "static")
+local bloodPixelSize = 1
+local centerFillRadius = 0.22
+
+local function createBloodSprite(path)
+    local imageData = love.image.newImageData(path)
+    local image = love.graphics.newImage(imageData)
+    image:setFilter("nearest", "nearest")
+
+    local bloodSprite = {
+        image = image,
+        width = imageData:getWidth(),
+        height = imageData:getHeight(),
+        pixels = {},
+    }
+
+    local originX = bloodSprite.width / 2
+    local originY = bloodSprite.height / 2
+    for y = 0, bloodSprite.height - 1 do
+        for x = 0, bloodSprite.width - 1 do
+            local r, g, b, a = imageData:getPixel(x, y)
+            if a > 0.05 then
+                bloodSprite.pixels[#bloodSprite.pixels + 1] = {
+                    x = x - originX + 0.5,
+                    y = y - originY + 0.5,
+                    u = (x + 0.5) / bloodSprite.width,
+                    v = (y + 0.5) / bloodSprite.height,
+                    r = r,
+                    g = g,
+                    b = b,
+                    a = a,
+                }
+            end
+        end
+    end
+
+    return bloodSprite
+end
 
 local function loadBloodSprites()
     local files = love.filesystem.getDirectoryItems(bloodSpritePath)
@@ -13,38 +50,16 @@ local function loadBloodSprites()
 
     for _, fileName in ipairs(files) do
         if fileName:lower():match("%.png$") then
-            local sprite = love.graphics.newImage(bloodSpritePath .. "/" .. fileName)
-            sprite:setFilter("nearest", "nearest")
-            bloodSprites[#bloodSprites + 1] = sprite
+            bloodSprites[#bloodSprites + 1] = createBloodSprite(bloodSpritePath .. "/" .. fileName)
         end
     end
 
     if #bloodSprites == 0 then
-        local sprite = love.graphics.newImage(bloodSpritePath .. "/blood.png")
-        sprite:setFilter("nearest", "nearest")
-        bloodSprites[1] = sprite
+        bloodSprites[1] = createBloodSprite(bloodSpritePath .. "/blood.png")
     end
 end
 
 loadBloodSprites()
-
-local revealShader = love.graphics.newShader([[
-extern number revealRadius;
-extern number flash;
-
-vec4 effect(vec4 color, Image texture, vec2 textureCoords, vec2 screenCoords)
-{
-    vec4 pixel = Texel(texture, textureCoords) * color;
-    vec2 centered = textureCoords - vec2(0.5, 0.5);
-    number distanceFromCenter = length(centered);
-    number mask = 1.0 - smoothstep(revealRadius - 0.025, revealRadius + 0.045, distanceFromCenter);
-
-    pixel.a *= mask;
-    pixel.rgb = mix(pixel.rgb, min(pixel.rgb + vec3(0.46, 0.20, 0.12), vec3(1.0)), flash * pixel.a);
-
-    return pixel;
-}
-]])
 
 local function clamp(value, minValue, maxValue)
     return math.max(minValue, math.min(maxValue, value))
@@ -97,10 +112,10 @@ function BloodDecal:new(x, y, damageDx, damageDy, options)
     decal.y = y
     decal.sprite = bloodSprites[math.random(1, #bloodSprites)]
     decal.rotation = getSourceAngle(x, y, damageDx, damageDy)
-    decal.scale = randomRange(1, 1.5) * (options.scaleMultiplier or 1)
+    decal.scale = randomRange(1.1, 1.4) * (options.scaleMultiplier or 1)
     decal.timer = 0
-    decal.lifeTime = 15
-    decal.revealDuration = 0.28
+    decal.lifeTime = 35
+    decal.revealDuration = 0.33
     decal.flashDuration = 0.24
     decal.fadeStart = 1.25
     decal.alpha = 1
@@ -134,21 +149,51 @@ function BloodDecal:draw()
     local flash = 1 - smoothstep(0, self.flashDuration, self.timer)
     local r, g, b, a = love.graphics.getColor()
 
-    love.graphics.setShader(revealShader)
-    revealShader:send("revealRadius", revealRadius)
-    revealShader:send("flash", flash)
-    love.graphics.setColor(r, g, b, a * alpha)
-    love.graphics.draw(
-        self.sprite,
-        self.x,
-        self.y,
-        self.rotation,
-        self.scale,
-        self.scale,
-        self.sprite:getWidth() / 2,
-        self.sprite:getHeight() / 2
-    )
-    love.graphics.setShader()
+    local cosA = math.cos(self.rotation)
+    local sinA = math.sin(self.rotation)
+    local drawnPixels = {}
+
+    local function drawBloodPixel(drawX, drawY, pixel, pixelAlpha, flash)
+        local key = drawX .. ":" .. drawY
+        if drawnPixels[key] then
+            return
+        end
+
+        drawnPixels[key] = true
+        local flashR = math.min(pixel.r + 0.46, 1)
+        local flashG = math.min(pixel.g + 0.20, 1)
+        local flashB = math.min(pixel.b + 0.12, 1)
+
+        love.graphics.setColor(
+            pixel.r + (flashR - pixel.r) * flash,
+            pixel.g + (flashG - pixel.g) * flash,
+            pixel.b + (flashB - pixel.b) * flash,
+            pixelAlpha
+        )
+        love.graphics.rectangle("fill", drawX, drawY, bloodPixelSize, bloodPixelSize)
+    end
+
+    for _, pixel in ipairs(self.sprite.pixels or {}) do
+        local centeredU = pixel.u - 0.5
+        local centeredV = pixel.v - 0.5
+        local distanceFromCenter = math.sqrt(centeredU * centeredU + centeredV * centeredV)
+        local mask = 1 - smoothstep(revealRadius - 0.025, revealRadius + 0.045, distanceFromCenter)
+
+        if mask > 0.01 then
+            local localX = pixel.x * self.scale
+            local localY = pixel.y * self.scale
+            local drawX = math.floor(self.x + localX * cosA - localY * sinA + 0.5)
+            local drawY = math.floor(self.y + localX * sinA + localY * cosA + 0.5)
+            local pixelAlpha = a * alpha * pixel.a * mask
+
+            drawBloodPixel(drawX, drawY, pixel, pixelAlpha, flash)
+            if distanceFromCenter <= centerFillRadius and self.scale > 1 then
+                drawBloodPixel(drawX + 1, drawY, pixel, pixelAlpha * 0.92, flash)
+                drawBloodPixel(drawX, drawY + 1, pixel, pixelAlpha * 0.92, flash)
+            end
+        end
+    end
+
     love.graphics.setColor(r, g, b, a)
 end
 

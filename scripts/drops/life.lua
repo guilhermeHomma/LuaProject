@@ -101,6 +101,25 @@ function Life:changeHeight(dt)
     self.hoverHeight = (self.baseHeight or 10) + math.sin(self.oscillator) * amplitude
 end 
 
+function Life:updateBaseHeight(dt)
+    if not self.targetBaseHeight then
+        return
+    end
+
+    local current = self.baseHeight or self.targetBaseHeight
+    local target = self.targetBaseHeight
+    local speed = self.baseHeightRiseSpeed or 18
+    local step = speed * dt
+
+    if math.abs(target - current) <= step then
+        self.baseHeight = target
+        self.targetBaseHeight = nil
+        return
+    end
+
+    self.baseHeight = current + (target > current and step or -step)
+end
+
 function Life:updateSpawnMotion(dt)
     if self.spawnStretchTimer and self.spawnStretchTimer > 0 then
         self.spawnStretchTimer = math.max(0, self.spawnStretchTimer - dt)
@@ -118,6 +137,10 @@ function Life:updateSpawnMotion(dt)
                 self.spawnStretchTimer = math.max(self.spawnStretchTimer or 0, 0.12)
             else
                 self.popVelocity = 0
+                if self.raiseBaseHeightAfterPop and self.idleBaseHeight then
+                    self.targetBaseHeight = self.idleBaseHeight
+                    self.raiseBaseHeightAfterPop = false
+                end
             end
         end
     end
@@ -154,6 +177,7 @@ function Life:update(dt)
     end
 
 
+    self:updateBaseHeight(dt)
     self:changeHeight(dt)
     self:updateSpawnMotion(dt)
 

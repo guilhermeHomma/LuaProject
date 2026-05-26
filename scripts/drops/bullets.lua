@@ -7,6 +7,7 @@ local DropShine = require("scripts/drops/dropShine")
 local Ball = require("scripts/particles/ballParticle")
 
 local sheetImage = love.graphics.newImage("assets/sprites/objects/bulletsDrop.png")
+local pickupSoundBase = love.audio.newSource("assets/sfx/gun/pistol/load.mp3", "static")
 
 sheetImage:setFilter("nearest", "nearest")
 local quads = {}
@@ -70,6 +71,11 @@ function Bullets:onCatch()
     if Player and Player.gun and Player.gun.fillCurrentMagazine then
         Player.gun:fillCurrentMagazine()
     end
+
+    local pickupSound = pickupSoundBase:clone()
+    pickupSound:setVolume(0.55)
+    pickupSound:setPitch((1.32 + math.random() * 0.08) * (GAME_PITCH or 1))
+    pickupSound:play()
 
     self:catchParticles()
 end

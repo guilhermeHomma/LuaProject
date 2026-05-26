@@ -48,4 +48,18 @@ local EncounterWaves = {
     },
 }
 
+EncounterWaves.additional = {
+    {
+        id = "little_spider",
+        minDifficulty = 1,
+        count = {
+            min = 2,
+            max = 3,
+        },
+        enemyTypes = {
+            { id = "spider", weight = 1 },
+        },
+    },
+}
+
 return EncounterWaves

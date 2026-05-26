@@ -9,7 +9,7 @@ DefaultRoomConfig.floorLevels = {
         difficulty = 1,
         roomCount = {min = 8, max = 12},
         cardRoomChance = 1.0,
-        cardRoomCount = {min = 3, max = 4},
+        cardRoomCount = {min = 3, max = 3},
         visualThemes = {
             default = "florest",
             startRoomUseDefault = true,
@@ -48,18 +48,18 @@ DefaultRoomConfig.roomEncounterConfig = {
     templateOverrides = {
         basic_32x32 = {
             emptyChance = 0.02,
-            countMultiplier = 0.75,
+            countMultiplier = 0.7,
         },
         wide_48x32 = {
-            countMultiplier = 0.8,
+            countMultiplier = 0.85,
             countAdd = 0,
         },
         tall_32x48 = {
-            countMultiplier = 0.8,
+            countMultiplier = 0.85,
             countAdd = 0,
         },
         large_48x48 = {
-            countMultiplier = 0.75,
+            countMultiplier = 1.1,
             countAdd = 0,
         },
     },

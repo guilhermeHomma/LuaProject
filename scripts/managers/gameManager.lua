@@ -21,6 +21,7 @@ local Zombie = require("scripts/enemies/zombie")
 local BabyZombie = require("scripts/enemies/babyZombie")
 local BigZombie = require("scripts/enemies/bigZombie")
 local NoHead = require("scripts/enemies/noHead")
+local Spider = require("scripts/enemies/spider")
 local Scarecrow = require("scripts/enemies/scarecrow")
 local CardChoice = require("scripts/managers/cardChoice")
 local Hollow = require("scripts/objects/hollow")
@@ -103,18 +104,19 @@ local gridDirectionVectors = {
     east = {x = 1, y = 0},
 }
 local TILE_WORLD_SIZE = 16
-local ENTRY_MOVE_DISTANCE = TILE_WORLD_SIZE * 1.5
+local ENTRY_MOVE_DISTANCE = TILE_WORLD_SIZE * 1.45
 local ENTRY_MOVE_DURATION = 0.24
-local ENTRY_DOOR_CLOSE_WAIT = 0.18
-local ENTRY_DOOR_CLOSE_SPEED = 28
-local EXIT_RUN_DISTANCE = TILE_WORLD_SIZE * 3
-local ROOM_FADE_OUT_DURATION = 0.6
-local ROOM_FADE_IN_DURATION = 0.4
+local ENTRY_DOOR_CLOSE_WAIT = 0.1
+local ENTRY_DOOR_CLOSE_SPEED = 42
+local EXIT_RUN_DISTANCE = TILE_WORLD_SIZE * 2.1
+local ROOM_FADE_OUT_DURATION = 0.38
+local ROOM_FADE_IN_DURATION = 0.24
 local EnemyFactories = {
     zombie = Zombie,
     babyZombie = BabyZombie,
     bigZombie = BigZombie,
     noHead = NoHead,
+    spider = Spider,
     scarecrow = Scarecrow,
 }
 
@@ -571,6 +573,53 @@ local function chooseEnemyType(config, waveConfig, spawnedCounts)
     return "zombie"
 end
 
+local function getAdditionalEncounterWaves(config)
+    return config and (config.additionalWaveTemplates or config.extraWaveTemplates) or {}
+end
+
+local function chooseAdditionalEncounterWave(config, room)
+    local waves = getAdditionalEncounterWaves(config)
+    local difficulty = getEncounterDifficulty(config, room)
+    local candidates = {}
+    local totalChance = 0
+
+    for _, waveConfig in ipairs(waves) do
+        if difficulty >= (waveConfig.minDifficulty or 1) then
+            local chance = waveConfig.chance or waveConfig.weight or 1
+            if chance > 0 then
+                candidates[#candidates + 1] = waveConfig
+                totalChance = totalChance + chance
+            end
+        end
+    end
+
+    if totalChance <= 0 then
+        return nil
+    end
+
+    local roll = math.random() * totalChance
+    for _, waveConfig in ipairs(candidates) do
+        roll = roll - (waveConfig.chance or waveConfig.weight or 1)
+        if roll <= 0 then
+            return waveConfig
+        end
+    end
+
+    return candidates[#candidates]
+end
+
+local function getAdditionalEncounterChance(state, normalEnemyCount)
+    local baseChance = (state.encounterTotalWaves or 1) <= 1 and 0.9 or 0.5
+
+    if normalEnemyCount <= 2 then
+        baseChance = baseChance + 0.2
+    elseif normalEnemyCount <= 3 then
+        baseChance = baseChance + 0.1
+    end
+
+    return math.min(baseChance, 0.95)
+end
+
 local earlyCombatRoomWaves = {
     {
         { id = "early_room_1", enemies = {"zombie"} },
@@ -792,6 +841,13 @@ end
 local function setBattleMusicActive(active)
     if Music and Music.setBattleActive then
         Music:setBattleActive(active == true)
+    end
+end
+
+local function updateRoomMusicContext(room)
+    if Music and Music.setShopOrChestRoomActive then
+        local isShopOrChestRoom = room and (room.isShopRoom == true or room.isCardRoom == true)
+        Music:setShopOrChestRoomActive(isShopOrChestRoom == true)
     end
 end
 
@@ -1309,11 +1365,14 @@ function Game:spawnCurrentRoomWave(currentRoom, encounterConfig)
     local spawnedCounts = {}
     local waveId = (state.encounterWaveSerial or 0) + 1
     local spawnedAny = false
+    local spawnedEnemyCount = 0
 
     state.encounterWaveSerial = waveId
     state.encounterSpawnedWaves = waveIndex
     state.activeEncounterWaves = state.activeEncounterWaves or {}
     state.activeEncounterWaves[waveId] = true
+    state.normalEncounterWaves = state.normalEncounterWaves or {}
+    state.normalEncounterWaves[waveId] = true
 
     state.encounterSpawned = true
     for spawnIndex = 1, enemyCount do
@@ -1329,6 +1388,7 @@ function Game:spawnCurrentRoomWave(currentRoom, encounterConfig)
             spawnedPositions[#spawnedPositions + 1] = { x = x, y = y }
             spawnedCounts[enemyId] = (spawnedCounts[enemyId] or 0) + 1
             spawnedAny = true
+            spawnedEnemyCount = spawnedEnemyCount + 1
         end
     end
 
@@ -1337,9 +1397,63 @@ function Game:spawnCurrentRoomWave(currentRoom, encounterConfig)
         return false
     end
 
+    state.normalEncounterEnemyTotal = (state.normalEncounterEnemyTotal or 0) + spawnedEnemyCount
+    self:spawnAdditionalEncounterWave(currentRoom, encounterConfig, spawnedEnemyCount, spawnedPositions)
+
     Game.drawtext = "Wave " .. waveIndex
     Game.textAlphaTarget = 1
     return true
+end
+
+function Game:spawnAdditionalEncounterWave(currentRoom, encounterConfig, normalEnemyCount, spawnedPositions)
+    local state = currentRoom and currentRoom.state
+    if not state or state.additionalEncounterWaveRolled then
+        return false
+    end
+
+    spawnedPositions = spawnedPositions or {}
+    state.additionalEncounterWaveRolled = true
+    local waveConfig = chooseAdditionalEncounterWave(encounterConfig, currentRoom)
+    if not waveConfig then
+        return false
+    end
+
+    local chance = getAdditionalEncounterChance(state, normalEnemyCount or 0)
+    if math.random() > chance then
+        return false
+    end
+
+    local enemyCount = getEncounterEnemyCount(encounterConfig, waveConfig)
+    local waveId = (state.encounterWaveSerial or 0) + 1
+    local spawnMinDistance = getEncounterSpawnMinDistanceForWave(encounterConfig, 1)
+    local spawnedCounts = {}
+    local spawnedAny = false
+
+    state.encounterWaveSerial = waveId
+    state.activeEncounterWaves = state.activeEncounterWaves or {}
+
+    for _ = 1, enemyCount do
+        local enemyId = chooseEnemyType(encounterConfig, waveConfig, spawnedCounts)
+        local factory = EnemyFactories[enemyId] or EnemyFactories.zombie
+        local spawnAvoidPoints = getEncounterSpawnAvoidPoints(encounterConfig, 1, spawnedPositions)
+        local x, y = Tilemap:getRandomReachableSpawnPosition(Player, spawnMinDistance, spawnAvoidPoints)
+
+        if x and y then
+            local enemy = factory:new(x, y)
+            enemy.encounterWaveId = waveId
+            enemy.isAdditionalEncounterEnemy = true
+            self.enemies[#self.enemies + 1] = enemy
+            spawnedPositions[#spawnedPositions + 1] = { x = x, y = y }
+            spawnedCounts[enemyId] = (spawnedCounts[enemyId] or 0) + 1
+            spawnedAny = true
+        end
+    end
+
+    if spawnedAny then
+        state.activeEncounterWaves[waveId] = true
+    end
+
+    return spawnedAny
 end
 
 local function getActiveEncounterWaveCount(state)
@@ -1352,10 +1466,25 @@ local function getActiveEncounterWaveCount(state)
     return count
 end
 
+local function getActiveNormalEncounterWaveCount(state)
+    local count = 0
+    local activeWaves = state and state.activeEncounterWaves or {}
+
+    for waveId, active in pairs(state and state.normalEncounterWaves or {}) do
+        if active and activeWaves[waveId] then
+            count = count + 1
+        end
+    end
+
+    return count
+end
+
 function Game:updateBattleMusicForCurrentRoom()
     local currentRoom = FloorManager:getCurrentRoom()
     local roomState = currentRoom and currentRoom.state
     local battleActive = false
+
+    updateRoomMusicContext(currentRoom)
 
     if roomState
         and roomState.encounterSpawned == true
@@ -1385,7 +1514,7 @@ function Game:spawnEncounterWavesUntilFull(currentRoom, encounterConfig)
         or (getEarlyCombatRoomWaveCount(currentRoom) and 1)
         or getRoomSimultaneousWaves(encounterConfig, currentRoom)
 
-    while getActiveEncounterWaveCount(state) < state.encounterSimultaneousWaves do
+    while getActiveNormalEncounterWaveCount(state) < state.encounterSimultaneousWaves do
         if not self:spawnCurrentRoomWave(currentRoom, encounterConfig) then
             break
         end
@@ -1439,6 +1568,9 @@ function Game:checkCurrentRoomClear()
 
             if not hasAliveEnemy then
                 activeWaves[waveId] = nil
+                if state.normalEncounterWaves then
+                    state.normalEncounterWaves[waveId] = nil
+                end
             end
         end
     end
@@ -1503,10 +1635,9 @@ function Game:updateEntryMove(dt)
 
     move.timer = math.min(move.duration, move.timer + dt)
     local t = move.timer / move.duration
-    local eased = 1 - (1 - t) * (1 - t)
 
-    Player.x = move.startX + (move.targetX - move.startX) * eased
-    Player.y = move.startY + (move.targetY - move.startY) * eased
+    Player.x = move.startX + (move.targetX - move.startX) * t
+    Player.y = move.startY + (move.targetY - move.startY) * t
     Player.velocityX = 0
     Player.velocityY = 0
     Player.moveX = move.vectorX
@@ -1567,7 +1698,7 @@ function Game:loadRoomFromDirection(direction)
         camera:snapToCurrentMode()
     end
 
-    self.roomTransitionCooldown = 0.45
+    self.roomTransitionCooldown = 0.28
     self:startEntryMove(entryDirection)
     self:setupCurrentRoom({ keepEntryDoorOpen = true })
     self:restoreCurrentRoomDrops()
@@ -1621,9 +1752,8 @@ function Game:updateRoomExitTransition(dt)
         transition.timer = math.min(transition.duration, transition.timer + dt)
         self.roomFadeAlpha = transition.timer / transition.duration
         local t = transition.timer / transition.duration
-        local eased = t * t * (3 - 2 * t)
-        Player.x = transition.startX + (transition.targetX - transition.startX) * eased
-        Player.y = transition.startY + (transition.targetY - transition.startY) * eased
+        Player.x = transition.startX + (transition.targetX - transition.startX) * t
+        Player.y = transition.startY + (transition.targetY - transition.startY) * t
         Player.velocityX = 0
         Player.velocityY = 0
         Player.moveX = transition.vectorX
@@ -1704,7 +1834,7 @@ function Game:loadFloor(floorIndex, onIntroComplete)
     self.lightSources = {}
     self.weaponShockwaves = {}
     self.footsteps = {}
-    self.roomTransitionCooldown = 0.45
+    self.roomTransitionCooldown = 0.28
     self.playerRoomEntryMove = nil
     self.playerRoomExitTransition = nil
     self.currentEntryDoorAvoidPoint = nil

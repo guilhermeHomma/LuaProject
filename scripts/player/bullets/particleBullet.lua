@@ -34,9 +34,9 @@ local defaultShadow = {
 
 local defaultColorParticles = {
     enabled = true,
-    count = 2,
+    count = 1,
     trailCount = 1,
-    spawnInterval = 0.07,
+    spawnInterval = 0.1,
     lifeTime = 0.35,
     size = 1,
 }
@@ -81,6 +81,12 @@ local function setGlowColor(color)
     love.graphics.setColor(color[1], color[2], color[3], color[4] or 1)
 end
 
+local function isPointInCircleSq(px, py, cx, cy, radius)
+    local dx = px - cx
+    local dy = py - cy
+    return dx * dx + dy * dy < radius * radius
+end
+
 function Bullet:new(x, y, angle, height, speed, damage, options)
     if type(options) ~= "table" then
         options = { level = options }
@@ -105,11 +111,11 @@ function Bullet:new(x, y, angle, height, speed, damage, options)
     bullet.glow = mergeTables(defaultGlow, options.glow)
     bullet.shadow = mergeTables(defaultShadow, options.shadow)
     bullet.projectileSprite = options.projectileSprite
-    bullet.spriteTrailDistance = options.spriteTrailDistance or 8
+    bullet.spriteTrailDistance = math.max(options.spriteTrailDistance or 8, 8)
     bullet.spriteTrailLifetime = options.spriteTrailLifetime or 0.13
     bullet.spriteTrailScale = options.spriteTrailScale or 0.75
     bullet.spriteTrailRemainder = 0
-    bullet.spriteTrailMaxPerUpdate = options.spriteTrailMaxPerUpdate or 5
+    bullet.spriteTrailMaxPerUpdate = math.min(options.spriteTrailMaxPerUpdate or 3, 3)
     bullet.impactFlashSprite = options.impactFlashSprite
     bullet.impactShockwave = options.impactShockwave
     bullet.colorParticles = mergeTables(defaultColorParticles, options.colorParticles)
@@ -183,31 +189,42 @@ function Bullet:spawnSpriteTrail(previousX, previousY)
 end
 
 function Bullet:checkCollisionWithEnemy(enemy)
-    local dist = distance(self, enemy)
-    local dist2 = distance({x = enemy.x, y = enemy.y - 6}, self)
-    local dist3 = distance({x = enemy.x, y = enemy.y - 12}, self)
+    if enemy.checkShotCollision then
+        return enemy:checkShotCollision(self)
+    end
 
-    return dist < (self.radius + 6)
-        or dist2 < (self.radius + 6)
-        or dist3 < (self.radius + 8)
+    if enemy.getShotCollisionCircles then
+        for _, circle in ipairs(enemy:getShotCollisionCircles()) do
+            if isPointInCircleSq(self.x, self.y, circle.x, circle.y, self.radius + (circle.radius or 6)) then
+                return true
+            end
+        end
+
+        return false
+    end
+
+    return isPointInCircleSq(self.x, self.y, enemy.x, enemy.y, self.radius + 6)
+        or isPointInCircleSq(self.x, self.y, enemy.x, enemy.y - 6, self.radius + 6)
+        or isPointInCircleSq(self.x, self.y, enemy.x, enemy.y - 12, self.radius + 8)
 end
 
 function Bullet:isColliding(size)
     size = size or 4
-
-    local box = { x = self.x - size / 2, y = self.y - size / 2, width = size, height = size }
+    local halfSize = size / 2
+    local left = self.x - halfSize
+    local right = self.x + halfSize
+    local top = self.y - halfSize
+    local bottom = self.y + halfSize
 
     local nearbyTiles = Tilemap.getNearbyTiles and Tilemap:getNearbyTiles(self.x, self.y) or Tilemap.tiles
     for _, tile in ipairs(nearbyTiles or {}) do
         if tile.collider and not tile.isWater then
-            local tileBox = {
-                x = tile.xWorld - tile.size / 2,
-                y = tile.yWorld - tile.size,
-                width = tile.size,
-                height = tile.size
-            }
-
-            if checkCollision(box, tileBox) then
+            local tileLeft = tile.xWorld - tile.size / 2
+            local tileTop = tile.yWorld - tile.size
+            if left < tileLeft + tile.size
+                and right > tileLeft
+                and top < tileTop + tile.size
+                and bottom > tileTop then
                 self.hitTileOnDeath = true
                 local damaged = false
                 if type(tile.onshoot) == "function" then
@@ -257,13 +274,13 @@ function Bullet:update(dt)
     end
 
     self.lastParticle = self.lastParticle + dt
-    if not self.projectileSprite and self.lastParticle > 0.005 then
+    if not self.projectileSprite and self.lastParticle > 0.015 then
         self.lastParticle = 0
         table.insert(Game.particles, Particle:new(self.x, self.y, self.height - 2, 1.2, 0.07))
     end
 
     for _, enemy in ipairs(Game.enemies) do
-        if self:checkCollisionWithEnemy(enemy) and self.isAlive and enemy.isAlive then
+        if self.isAlive and enemy.isAlive and self:checkCollisionWithEnemy(enemy) then
             self.isAlive = false
             DamageNumber.spawn(self.x, self.y, self.height, self.damage)
             enemy:takeDamage(self.damage, self.dx, self.dy)

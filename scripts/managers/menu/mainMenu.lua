@@ -11,8 +11,10 @@ local animationTimer = 0
 local currentFrame = 1
 local frameDuration = 0.3
 local animationQuads = {}
+local versionFont = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 28)
 
 sheetImage:setFilter("nearest", "nearest")
+versionFont:setFilter("nearest", "nearest")
 
 for i = 0, math.floor(sheetWidth / frameWidth) - 1 do
     table.insert(animationQuads, love.graphics.newQuad(i * frameWidth, 0, frameWidth, frameHeight, sheetWidth, sheetHeight))
@@ -52,6 +54,9 @@ function MainMenu:draw()
 
 
     baseMenu.draw(self)
+    love.graphics.setFont(versionFont)
+    love.graphics.setColor(1, 1, 1, 0.22)
+    love.graphics.print("v" .. tostring(GAME_VERSION or "0.1.0a"), 6, baseHeight - 32)
     love.graphics.setColor(hexToRGB("ffffff"))
 
 end

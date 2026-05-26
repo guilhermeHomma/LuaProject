@@ -12,14 +12,14 @@ local wallImpactSoundBase = love.audio.newSource("assets/sfx/gun/empty.mp3", "st
 
 local defaultTrail = {
     enabled = true,
-    trailMaxPoints = 36,
-    sampleDistance = 10,
-    spawnInterval = 0.02,
-    pointLifetime = 1.0,
+    trailMaxPoints = 24,
+    sampleDistance = 14,
+    spawnInterval = 0.03,
+    pointLifetime = 0.75,
     fadeDelay = 0.12,
     headDelay = 0.04,
     lineWidth = 1.4,
-    glowLineWidth = 8,
+    glowLineWidth = 6,
     glowAlpha = 0.08,
     headGlowAlpha = 0.18,
     mainAlpha = 0.28,
@@ -57,9 +57,9 @@ local defaultShadow = {
 
 local defaultColorParticles = {
     enabled = true,
-    count = 2,
+    count = 1,
     trailCount = 1,
-    spawnInterval = 0.07,
+    spawnInterval = 0.1,
     lifeTime = 0.5,
     size = 1,
 }
@@ -115,6 +115,12 @@ end
 
 local function addPoint(points, point)
     table.insert(points, 1, point)
+end
+
+local function isPointInCircleSq(px, py, cx, cy, radius)
+    local dx = px - cx
+    local dy = py - cy
+    return dx * dx + dy * dy < radius * radius
 end
 
 function Bullet:new(x, y, angle, height, speed, damage, options)
@@ -190,30 +196,42 @@ function Bullet:spawnColorParticles(count)
 end
 
 function Bullet:checkCollisionWithEnemy(enemy)
-    local dist = distance(self, enemy)
-    local dist2 = distance({x = enemy.x, y = enemy.y - 6}, self)
-    local dist3 = distance({x = enemy.x, y = enemy.y - 12}, self)
+    if enemy.checkShotCollision then
+        return enemy:checkShotCollision(self)
+    end
 
-    return dist < (self.radius + 6)
-        or dist2 < (self.radius + 6)
-        or dist3 < (self.radius + 8)
+    if enemy.getShotCollisionCircles then
+        for _, circle in ipairs(enemy:getShotCollisionCircles()) do
+            if isPointInCircleSq(self.x, self.y, circle.x, circle.y, self.radius + (circle.radius or 6)) then
+                return true
+            end
+        end
+
+        return false
+    end
+
+    return isPointInCircleSq(self.x, self.y, enemy.x, enemy.y, self.radius + 6)
+        or isPointInCircleSq(self.x, self.y, enemy.x, enemy.y - 6, self.radius + 6)
+        or isPointInCircleSq(self.x, self.y, enemy.x, enemy.y - 12, self.radius + 8)
 end
 
 function Bullet:isColliding(size)
     size = size or 4
-    local box = { x = self.x - size / 2, y = self.y - size / 2, width = size, height = size }
+    local halfSize = size / 2
+    local left = self.x - halfSize
+    local right = self.x + halfSize
+    local top = self.y - halfSize
+    local bottom = self.y + halfSize
 
     local nearbyTiles = Tilemap.getNearbyTiles and Tilemap:getNearbyTiles(self.x, self.y) or Tilemap.tiles
     for _, tile in ipairs(nearbyTiles or {}) do
         if tile.collider and not tile.isWater then
-            local tileBox = {
-                x = tile.xWorld - tile.size / 2,
-                y = tile.yWorld - tile.size,
-                width = tile.size,
-                height = tile.size
-            }
-
-            if checkCollision(box, tileBox) then
+            local tileLeft = tile.xWorld - tile.size / 2
+            local tileTop = tile.yWorld - tile.size
+            if left < tileLeft + tile.size
+                and right > tileLeft
+                and top < tileTop + tile.size
+                and bottom > tileTop then
                 self.hitTileOnDeath = true
                 local damaged = false
                 if type(tile.onshoot) == "function" then
@@ -261,7 +279,7 @@ end
 function Bullet:recordTrailPoint()
     local dx = self.x - self.lastTrailX
     local dy = self.y - self.lastTrailY
-    if self.trailSpawnTimer < self.trail.spawnInterval or math.sqrt(dx * dx + dy * dy) < self.trail.sampleDistance then
+    if self.trailSpawnTimer < self.trail.spawnInterval or dx * dx + dy * dy < self.trail.sampleDistance * self.trail.sampleDistance then
         return
     end
 
@@ -365,7 +383,7 @@ function Bullet:update(dt)
         self:recordTrailPoint()
 
         for _, enemy in ipairs(Game.enemies) do
-            if self:checkCollisionWithEnemy(enemy) and self.isActive and enemy.isAlive then
+            if self.isActive and enemy.isAlive and self:checkCollisionWithEnemy(enemy) then
                 self:deactivate()
                 DamageNumber.spawn(self.x, self.y, self.height, self.damage)
                 enemy:takeDamage(self.damage, self.dx, self.dy)

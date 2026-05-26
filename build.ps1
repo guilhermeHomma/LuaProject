@@ -17,6 +17,7 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $loveWinPath = Join-Path $projectRoot $LoveWinDir
 $outPath = Join-Path $projectRoot $OutDir
+$buildPath = Join-Path $projectRoot "build"
 $loveFilePath = Join-Path $projectRoot "$GameName.love"
 $exePath = Join-Path $outPath "$GameName.exe"
 $loveExePath = Join-Path $loveWinPath "love.exe"
@@ -76,6 +77,27 @@ function Invoke-CodeSigning {
     }
 }
 
+function Update-GameVersion {
+    $confPath = Join-Path $projectRoot "conf.lua"
+    $content = Get-Content -LiteralPath $confPath -Raw
+    $pattern = 'GAME_VERSION\s*=\s*"(\d+)\.(\d+)\.(\d+)([A-Za-z]*)"'
+    $match = [regex]::Match($content, $pattern)
+
+    if (-not $match.Success) {
+        throw "GAME_VERSION nao encontrado em conf.lua"
+    }
+
+    $major = [int]$match.Groups[1].Value
+    $minor = [int]$match.Groups[2].Value
+    $patch = [int]$match.Groups[3].Value + 1
+    $suffix = $match.Groups[4].Value
+    $newVersion = "$major.$minor.$patch$suffix"
+    $newEntry = "GAME_VERSION = `"$newVersion`""
+    $newContent = $content.Remove($match.Index, $match.Length).Insert($match.Index, $newEntry)
+    Set-Content -LiteralPath $confPath -Value $newContent -NoNewline
+    Write-Host "Versao da build: $newVersion"
+}
+
 if (-not (Test-Path $loveWinPath)) {
     throw "Diretorio do LÖVE nao encontrado: $loveWinPath"
 }
@@ -83,6 +105,12 @@ if (-not (Test-Path $loveWinPath)) {
 if (-not (Test-Path $loveExePath)) {
     throw "Arquivo nao encontrado: $loveExePath"
 }
+
+if (Test-Path $buildPath) {
+    Remove-Item -LiteralPath $buildPath -Recurse -Force
+}
+
+Update-GameVersion
 
 $includeRootFiles = @(
     'main.lua',
@@ -188,6 +216,9 @@ Get-ChildItem -Path $loveWinPath -File | Where-Object {
     Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $outPath $_.Name) -Force
 }
 
+if (Test-Path $loveFilePath) {
+    Remove-Item -LiteralPath $loveFilePath -Force
+}
+
 Write-Host "Build pronto em $outPath"
-Write-Host "Arquivo .love: $loveFilePath"
 Write-Host "Executavel: $exePath"
