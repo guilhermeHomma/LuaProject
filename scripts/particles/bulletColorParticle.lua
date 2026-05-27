@@ -1,5 +1,6 @@
 local BulletColorParticle = {}
 BulletColorParticle.__index = BulletColorParticle
+BulletColorParticle.castsShadow = false
 
 local paletteCache = {}
 
@@ -108,6 +109,13 @@ function BulletColorParticle:drawShadow()
 end
 
 function BulletColorParticle:draw()
+    local x, y, size, r, g, b, alpha = self:getBatchDrawInfo()
+    love.graphics.setColor(r, g, b, alpha)
+    love.graphics.rectangle("fill", x, y, size, size)
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
+function BulletColorParticle:getBatchDrawInfo()
     local index = (math.floor(self.timer * 12 + self.colorOffset) % #self.palette) + 1
     local color = self.palette[index]
     local alpha = self.alpha or 1
@@ -116,9 +124,7 @@ function BulletColorParticle:draw()
         alpha = alpha * (1 - progress * progress)
     end
 
-    love.graphics.setColor(color[1], color[2], color[3], alpha)
-    love.graphics.rectangle("fill", math.floor(self.x + 0.5), math.floor(self.y - self.height + 0.5), self.size, self.size)
-    love.graphics.setColor(1, 1, 1, 1)
+    return math.floor(self.x + 0.5), math.floor(self.y - self.height + 0.5), self.size, color[1], color[2], color[3], alpha
 end
 
 function BulletColorParticle.spawnBurst(x, y, height, palette, count, options)
@@ -126,7 +132,15 @@ function BulletColorParticle.spawnBurst(x, y, height, palette, count, options)
         return
     end
 
-    for _ = 1, count or 1 do
+    local maxPerFrame = 48
+    local currentCount = Game.bulletColorParticleCount or 0
+    local spawnCount = math.min(count or 1, maxPerFrame - currentCount)
+    if spawnCount <= 0 then
+        return
+    end
+
+    Game.bulletColorParticleCount = currentCount + spawnCount
+    for _ = 1, spawnCount do
         table.insert(Game.particles, BulletColorParticle:new(x, y, height, palette, options))
     end
 end

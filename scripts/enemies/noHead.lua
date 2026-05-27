@@ -1,5 +1,6 @@
 local Zombie = require("scripts/enemies/zombie")
 local Tilemap = require("scripts/tilemap")
+local EnemyDirector = require("scripts/enemies/enemyDirector")
 local NoHeadBullet = require("scripts/enemies/noHeadBullet")
 local GunStarParticle = require("scripts/particles/gunStarParticle")
 local WalkParticle = require("scripts/particles/walkParticle")
@@ -43,6 +44,35 @@ local function getLightTint(enemy)
     local brightness = enemy and enemy.lightBrightness or 1
     brightness = math.max(brightness, 0.8)
     return brightness, brightness, brightness
+end
+
+local function distanceSqToPoint(x1, y1, x2, y2)
+    local dx = x1 - x2
+    local dy = y1 - y2
+    return dx * dx + dy * dy
+end
+
+local function getScaledPathUpdateInterval(enemy)
+    local interval = enemy.pathUpdateInterval or 1
+    local enemyCount = #(Game and Game.enemies or {})
+
+    if enemyCount >= 42 then
+        return interval * 2.2
+    elseif enemyCount >= 26 then
+        return interval * 1.55
+    end
+
+    return interval
+end
+
+local function getRoamTargetAttempts()
+    local enemyCount = #(Game and Game.enemies or {})
+    if enemyCount >= 28 then
+        return 3
+    elseif enemyCount >= 16 then
+        return 4
+    end
+    return 6
 end
 
 local function segmentIntersectsRect(x1, y1, x2, y2, rect)
@@ -124,8 +154,16 @@ function NoHead:new(x, y)
     enemy.shootCancelDistance = enemy.shootDistance + 72
     enemy.shootCooldown = math.random(75, 100) / 100
     enemy.shootTimer = math.random() * 0.6
+    enemy.shootDisabledTimer = 0
+    enemy.shootDisabledMin = 1.6
+    enemy.shootDisabledMax = 2.0
     enemy.bulletSpeed = 125
     enemy.aimAngle = 0
+    enemy.lockedAimAngle = nil
+    enemy.lockedAimTargetX = nil
+    enemy.lockedAimTargetY = nil
+    enemy.aimLockLeadTime = 0.5
+    enemy.aimLocked = false
     enemy.aimWindupTimer = 0
     enemy.reloadTickDelays = {0.12, 0.1, 0.07, 0.07}
     enemy.postTickShotDelay = 0.2
@@ -176,6 +214,25 @@ end
 
 function NoHead:drawMouth()
     Zombie.drawMouth(self)
+end
+
+function NoHead:disableShootingAfterDamage()
+    local minTimer = self.shootDisabledMin or 1.6
+    local maxTimer = self.shootDisabledMax or 2.0
+    self.shootDisabledTimer = minTimer + math.random() * (maxTimer - minTimer)
+    self.aimWindupTimer = 0
+    self.gunVisibleTimer = 0
+    self.aimLocked = false
+    self.lockedAimAngle = nil
+    self.lockedAimTargetX = nil
+    self.lockedAimTargetY = nil
+end
+
+function NoHead:takeDamage(damage, dx, dy)
+    Zombie.takeDamage(self, damage, dx, dy)
+    if self.isAlive ~= false then
+        self:disableShootingAfterDamage()
+    end
 end
 
 function NoHead:getShotPosition()
@@ -294,7 +351,7 @@ end
 
 function NoHead:shootAtPlayer()
     local shotX, shotY = self:getShotPosition()
-    local angle = self.aimAngle or math.atan2((Player.y - 10) - shotY, Player.x - shotX)
+    local angle = self.lockedAimAngle or self.aimAngle or math.atan2((Player.y - 10) - shotY, Player.x - shotX)
     local spawnX = shotX + math.cos(angle) * 8
     local spawnY = shotY + math.sin(angle) * 8 + 14
     local bullet = NoHeadBullet:new(spawnX, spawnY, angle, self.bulletSpeed, 1, 10)
@@ -337,23 +394,60 @@ function NoHead:startAiming()
     self.aimWindupDuration = self:getAimWindupDuration()
     self.aimWindupTimer = self.aimWindupDuration
     self.gunVisibleTimer = self.aimWindupDuration
+    self.aimLocked = false
+    self.lockedAimAngle = nil
+    self.lockedAimTargetX = nil
+    self.lockedAimTargetY = nil
     self.reloadTickIndex = 1
     self.reloadTickElapsed = 0
     self.state = Zombie.states.idle
     self.animationTimer = 0
 end
 
-function NoHead:hasLineOfSightToPlayer()
+function NoHead:updateAimAtPlayer()
     local shotX, shotY = self:getShotPosition()
-    local targetX = Player.x
-    local targetY = Player.y - 10
-    local padding = 4
+    self.aimAngle = math.atan2((Player.y - 10) - shotY, Player.x - shotX)
+end
 
-    for _, tile in ipairs(Tilemap.tiles or {}) do
+function NoHead:lockAimTarget()
+    if self.aimLocked then
+        return
+    end
+
+    local shotX, shotY = self:getShotPosition()
+    self.lockedAimTargetX = Player.x
+    self.lockedAimTargetY = Player.y - 10
+    self.lockedAimAngle = math.atan2(self.lockedAimTargetY - shotY, self.lockedAimTargetX - shotX)
+    self.aimAngle = self.lockedAimAngle
+    self.aimLocked = true
+end
+
+function NoHead:hasLineOfSightToPlayer()
+    local now = love.timer.getTime()
+    if self.lineOfSightCacheTime and now - self.lineOfSightCacheTime < 0.12 then
+        return self.lineOfSightCache == true
+    end
+
+    local shotX, shotY = self:getShotPosition()
+    local targetX = self.aimLocked and self.lockedAimTargetX or Player.x
+    local targetY = self.aimLocked and self.lockedAimTargetY or Player.y - 10
+    if not (targetX and targetY) then
+        return false
+    end
+    local padding = 4
+    local minX = math.min(shotX, targetX) - padding
+    local maxX = math.max(shotX, targetX) + padding
+    local minY = math.min(shotY, targetY) - padding
+    local maxY = math.max(shotY, targetY) + padding
+    local tiles = Tilemap.getTilesInWorldBox and Tilemap:getTilesInWorldBox(minX, minY, maxX, maxY) or Tilemap.tiles or {}
+
+    for _, tile in ipairs(tiles) do
         if tile.isAlive ~= false and tile.collider and not tile.isWater then
             local tileBox = getExpandedTileBox(tile, padding)
 
             if segmentIntersectsRect(shotX, shotY, targetX, targetY, tileBox) then
+                self.lineOfSightCacheTime = now
+                self.lineOfSightCache = false
                 return false
             end
         end
@@ -362,19 +456,28 @@ function NoHead:hasLineOfSightToPlayer()
     for _, object in ipairs((Game and Game.objects) or {}) do
         local objectBox = getObjectLineOfSightBox(object)
         if objectBox and segmentIntersectsRect(shotX, shotY, targetX, targetY, objectBox) then
+            self.lineOfSightCacheTime = now
+            self.lineOfSightCache = false
             return false
         end
     end
 
-    for _, enemy in ipairs((Game and Game.enemies) or {}) do
+    local lineBox = {x = minX, y = minY, width = maxX - minX, height = maxY - minY}
+    local enemies = Game and Game.getEnemiesNearBox and Game:getEnemiesNearBox(lineBox, padding)
+        or (Game and Game.enemies) or {}
+    for _, enemy in ipairs(enemies) do
         if enemy ~= self and enemy.blocksPlayer and enemy.isAlive ~= false then
             local enemyBox = getObjectLineOfSightBox(enemy)
             if enemyBox and segmentIntersectsRect(shotX, shotY, targetX, targetY, enemyBox) then
+                self.lineOfSightCacheTime = now
+                self.lineOfSightCache = false
                 return false
             end
         end
     end
 
+    self.lineOfSightCacheTime = now
+    self.lineOfSightCache = true
     return true
 end
 
@@ -480,7 +583,7 @@ function NoHead:moveWithVelocity(velocityX, velocityY, dt, targetX, targetY)
     local moveX = velocityX * self.speed * dt
     local moveY = velocityY * self.speed * dt
     if targetX and targetY then
-        local remainingDistance = distance({x = targetX, y = targetY}, self)
+        local remainingDistance = math.sqrt(distanceSqToPoint(targetX, targetY, self.x, self.y))
         local moveDistance = math.sqrt(moveX * moveX + moveY * moveY)
         if remainingDistance > 0 and moveDistance > remainingDistance then
             local scale = remainingDistance / moveDistance
@@ -494,7 +597,7 @@ function NoHead:moveWithVelocity(velocityX, velocityY, dt, targetX, targetY)
     if not collidedX then self.x = self.x + moveX end
     if not collidedY then self.y = self.y + moveY end
 
-    if (collidedX or collidedY) and distance({x = previousX, y = previousY}, self) < 0.2 then
+    if (collidedX or collidedY) and distanceSqToPoint(previousX, previousY, self.x, self.y) < 0.2 * 0.2 then
         if not Player.isAlive then
             self:startDeathRoamPause()
         else
@@ -513,7 +616,7 @@ function NoHead:pickRoamTarget()
         return
     end
 
-    local targetX, targetY = self:chooseSeparatedPlayerRoamTarget(8)
+    local targetX, targetY = self:chooseSeparatedPlayerRoamTarget(getRoamTargetAttempts())
     self:setRoamTarget(targetX, targetY, self.roamTargetDuration)
 end
 
@@ -549,8 +652,8 @@ function NoHead:ensureRoamTarget(dt)
     local needsTarget = not self.roamTargetX
         or not self.roamTargetY
         or self.roamTargetTimer <= 0
-        or distance({x = self.roamTargetX, y = self.roamTargetY}, self) < 10
-        or (Player.isAlive and distance({x = self.roamTargetX, y = self.roamTargetY}, Player) > self.roamRadiusMax + 36)
+        or distanceSqToPoint(self.roamTargetX or self.x, self.roamTargetY or self.y, self.x, self.y) < 10 * 10
+        or (Player.isAlive and distanceSqToPoint(self.roamTargetX or Player.x, self.roamTargetY or Player.y, Player.x, Player.y) > (self.roamRadiusMax + 36) * (self.roamRadiusMax + 36))
 
     if needsTarget then
         self:pickRoamTarget()
@@ -606,6 +709,7 @@ function NoHead:update(dt)
     self.whiteFlashTimer = math.max(0, self.whiteFlashTimer - dt)
     self.shotFlashTimer = math.max(0, (self.shotFlashTimer or 0) - dt)
     self.gunVisibleTimer = math.max(0, (self.gunVisibleTimer or 0) - dt)
+    self.shootDisabledTimer = math.max(0, (self.shootDisabledTimer or 0) - dt)
     self.shootTimer = self.shootTimer + dt
 
     self:noiseCheck(dt)
@@ -619,8 +723,9 @@ function NoHead:update(dt)
     end
 
     local playerDistance = distance(Player, self)
-    local shotX, shotY = self:getShotPosition()
-    self.aimAngle = math.atan2((Player.y - 10) - shotY, Player.x - shotX)
+    if not self.aimLocked then
+        self:updateAimAtPlayer()
+    end
 
     if self.state == Zombie.states.damage then
         self.stateTimer = self.stateTimer + dt
@@ -646,16 +751,35 @@ function NoHead:update(dt)
     end
 
     if self.aimWindupTimer > 0 then
+        if (self.shootDisabledTimer or 0) > 0 then
+            self.aimWindupTimer = 0
+            self.gunVisibleTimer = 0
+            self.aimLocked = false
+            return
+        end
+
         self.aimWindupTimer = math.max(0, self.aimWindupTimer - dt)
+        if self.aimWindupTimer <= (self.aimLockLeadTime or 0.5) then
+            self:lockAimTarget()
+        elseif not self.aimLocked then
+            self:updateAimAtPlayer()
+        end
+
         self.state = Zombie.states.idle
-        self:updateFacing(Player.x, dt)
+        self:updateFacing((self.aimLocked and self.lockedAimTargetX) or Player.x, dt)
         self:animate(1, 2, dt)
         self:updateReloadTicks(dt)
 
         if self.aimWindupTimer == 0 then
             self.shootTimer = 0
-            local playerInShotRange = Player.isAlive and playerDistance <= self.shootCancelDistance
-            if playerInShotRange then
+            local targetDistance = playerDistance
+            if self.aimLocked and self.lockedAimTargetX and self.lockedAimTargetY then
+                local dx = self.lockedAimTargetX - self.x
+                local dy = self.lockedAimTargetY - self.y
+                targetDistance = math.sqrt(dx * dx + dy * dy)
+            end
+            local targetInShotRange = Player.isAlive and targetDistance <= self.shootCancelDistance
+            if targetInShotRange then
                 if self:hasLineOfSightToPlayer() and self:shootAtPlayer() then
                     self:startPostShotRecoil()
                 else
@@ -665,11 +789,18 @@ function NoHead:update(dt)
             else
                 self.gunVisibleTimer = 0
             end
+            self.aimLocked = false
+            self.lockedAimAngle = nil
+            self.lockedAimTargetX = nil
+            self.lockedAimTargetY = nil
         end
         return
     end
 
-    if Player.isAlive and playerDistance <= self.shootDistance and self:hasLineOfSightToPlayer() then
+    if Player.isAlive
+        and (self.shootDisabledTimer or 0) <= 0
+        and playerDistance <= self.shootDistance
+        and self:hasLineOfSightToPlayer() then
         self.state = Zombie.states.idle
         self:updateFacing(Player.x, dt)
         self:animate(1, 2, dt)
@@ -683,20 +814,36 @@ function NoHead:update(dt)
     local targetX, targetY = self:getMoveTarget(dt, playerDistance)
 
     self.pathUpdateCounter = self.pathUpdateCounter + dt
-    if self.pathUpdateCounter >= self.pathUpdateInterval or self.path == nil or #self.path < 2 then
+    local usePathfinding = EnemyDirector:shouldUsePathfinding(self)
+    if not usePathfinding then
+        self.roamTargetTimer = math.max(0, (self.roamTargetTimer or 0) - dt)
+        local needsRandomTarget = not self.roamTargetX
+            or not self.roamTargetY
+            or self.roamTargetTimer <= 0
+            or distanceSqToPoint(self.roamTargetX or self.x, self.roamTargetY or self.y, self.x, self.y) < 10 * 10
+        if needsRandomTarget then
+            EnemyDirector:configureRandomRoam(self, Player.isAlive and self.roamTargetDuration or (1.8 + math.random() * 2.4))
+        end
+        targetX = self.roamTargetX or targetX
+        targetY = self.roamTargetY or targetY
+        self.path = nil
+    elseif self.pathUpdateCounter >= getScaledPathUpdateInterval(self) or self.path == nil or #self.path < 2 then
         self.pathUpdateCounter = 0
-        self.path = Tilemap:getPathBetweenWorldPoints(self.x, self.y, targetX, targetY)
+        local path, requested = EnemyDirector:requestPath(self.x, self.y, targetX, targetY)
+        if requested then
+            self.path = path
+        end
     end
 
     local velocityX = 0
     local velocityY = 0
     local nextTileX, nextTileY = nil, nil
-    if self.path and #self.path > 1 then
+    if usePathfinding and self.path and #self.path > 1 then
         local nextNode = self.path[2]
         nextTileX, nextTileY = Tilemap:mapToWorld(nextNode.x, nextNode.y)
         nextTileY = nextTileY - 8
 
-        if distance({x = nextTileX, y = nextTileY}, self) < 4 then
+        if distanceSqToPoint(nextTileX, nextTileY, self.x, self.y) < 4 * 4 then
             table.remove(self.path, 1)
             if #self.path > 1 then
                 nextNode = self.path[2]
@@ -714,6 +861,11 @@ function NoHead:update(dt)
 
         velocityX = nextTileX - self.x
         velocityY = nextTileY - self.y
+    elseif not usePathfinding and targetX and targetY then
+        nextTileX = targetX
+        nextTileY = targetY
+        velocityX = targetX - self.x
+        velocityY = targetY - self.y
     else
         if not Player.isAlive then
             self:startDeathRoamPause()

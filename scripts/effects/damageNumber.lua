@@ -1,10 +1,14 @@
 local DamageNumber = {}
 DamageNumber.__index = DamageNumber
+DamageNumber.castsShadow = false
 
 local DamagePixel = {}
 DamagePixel.__index = DamagePixel
+DamagePixel.castsShadow = false
+
 local PickupNumber = {}
 PickupNumber.__index = PickupNumber
+PickupNumber.castsShadow = false
 
 local Ball = require("scripts/particles/ballParticle")
 local damageEnabled = false

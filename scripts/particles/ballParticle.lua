@@ -1,6 +1,7 @@
 local Particle = require("scripts/particles/particle")
 local Ball = setmetatable({}, {__index = Particle})
 Ball.__index = Ball
+Ball.castsShadow = false
 local RgbShiftDraw = require("scripts/effects/rgbShiftDraw")
 
 local sprite = love.graphics.newImage("assets/sprites/particles/ball.png")

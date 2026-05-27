@@ -1,5 +1,6 @@
 local ShellParticle = {}
 ShellParticle.__index = ShellParticle
+ShellParticle.castsShadow = false
 
 local whiteShader = love.graphics.newShader("scripts/shaders/whiteShader.glsl")
 local bulletSheet = love.graphics.newImage("assets/sprites/player/gun-bullet.png")

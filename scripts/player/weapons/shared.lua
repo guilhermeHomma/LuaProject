@@ -102,17 +102,17 @@ local defaultWeapon = {
     defaultBulletLifeTime = 0.35,
     shotShockwave = {
         enabled = true,
-        duration = 0.38,
-        radius = 64,
-        width = 15,
+        duration = 0.43,
+        radius = 74,
+        width = 16,
         intensity = 4.2,
     },
     impactShockwave = {
         enabled = true,
-        duration = 0.26,
-        radius = 42,
-        width = 10,
-        intensity = 2.6,
+        duration = 0.3,
+        radius = 58,
+        width = 13,
+        intensity = 3.2,
     },
 }
 

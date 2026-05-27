@@ -9,6 +9,7 @@ local WaveManager = require("scripts/managers/waves")
 local Tutorial = require("scripts/managers/tutorial")
 local Clouds = require("scripts/clouds")
 local Tilemap = require("scripts/tilemap")
+local EnemyDirector = require("scripts/enemies/enemyDirector")
 local PointsManager = require("scripts/managers/pointsManager")
 local DoorsManager = require("scripts/managers/doorsManager")
 local FloorManager = require("scripts/managers/floorManager")
@@ -33,8 +34,14 @@ local xraySoftShader = love.graphics.newShader("scripts/shaders/xraySoft.glsl")
 local xrayStencilShader = love.graphics.newShader("scripts/shaders/xrayStencilAlpha.glsl")
 local playerLightImage = love.graphics.newImage("assets/sprites/effects/light.png")
 playerLightImage:setFilter("nearest", "nearest")
+local playerLightHalfWidth = playerLightImage:getWidth() / 2
+local playerLightHalfHeight = playerLightImage:getHeight() / 2
 local vignetteShader = love.graphics.newShader("scripts/shaders/vignette.glsl")
 local waveClearFeedbackSound = love.audio.newSource("assets/sfx/ambience/nextWave.mp3", "static")
+local pixelImageData = love.image.newImageData(1, 1)
+pixelImageData:setPixel(0, 0, 1, 1, 1, 1)
+local pixelImage = love.graphics.newImage(pixelImageData)
+pixelImage:setFilter("nearest", "nearest")
 local minimapSprites = {
     panel = love.graphics.newImage("assets/sprites/ui/map/map.png"),
     room32x32 = love.graphics.newImage("assets/sprites/ui/map/32x32.png"),
@@ -104,7 +111,13 @@ local gridDirectionVectors = {
     east = {x = 1, y = 0},
 }
 local TILE_WORLD_SIZE = 16
-local ENTRY_MOVE_DISTANCE = TILE_WORLD_SIZE * 1.45
+local ENEMY_SPATIAL_CELL_SIZE = 48
+local MAX_XRAY_TARGETS_PER_FRAME = 10
+local MAX_XRAY_OCCLUDERS_PER_TARGET = 8
+local XRAY_OCCLUDER_PADDING = 20
+local MAX_PLAYER_PROJECTILE_LIGHTS = 30
+local MAX_ENEMY_PROJECTILE_LIGHTS = 30
+local ENTRY_MOVE_DISTANCE = TILE_WORLD_SIZE * 1.7
 local ENTRY_MOVE_DURATION = 0.24
 local ENTRY_DOOR_CLOSE_WAIT = 0.1
 local ENTRY_DOOR_CLOSE_SPEED = 42
@@ -957,8 +970,8 @@ local function getGeneralShadow()
     return LightConfig:getGeneralShadow()
 end
 
-local function getPlayerLightBrightness(object, sources)
-    local generalShadow = getGeneralShadow()
+local function getPlayerLightBrightness(object, sources, generalShadow)
+    generalShadow = generalShadow or getGeneralShadow()
     local minBrightness = generalShadow.minBrightness or 1
     local brightness = minBrightness
     sources = sources or (Game and Game.getLightSources and Game:getLightSources()) or {}
@@ -970,14 +983,14 @@ local function getPlayerLightBrightness(object, sources)
     end
 
     for _, source in ipairs(sources) do
-        local spriteBrightness = source.config and source.config.spriteBrightness
+        local spriteBrightness = source.spriteBrightness or (source.config and source.config.spriteBrightness)
         if spriteBrightness and spriteBrightness.enabled ~= false then
-            local minDist = spriteBrightness.minDistance or 35
-            local maxDist = spriteBrightness.maxDistance or 230
-            local maxBrightness = spriteBrightness.maxBrightness or 1
+            local minDist = source.spriteMinDistance or spriteBrightness.minDistance or 35
+            local maxDist = source.spriteMaxDistance or spriteBrightness.maxDistance or 230
+            local maxBrightness = source.spriteMaxBrightness or spriteBrightness.maxBrightness or 1
             local dx = (source.x or 0) - objectX
             local dy = (source.y or 0) - objectY
-            local maxDistSq = maxDist * maxDist
+            local maxDistSq = source.spriteMaxDistanceSq or (maxDist * maxDist)
 
             if dx * dx + dy * dy <= maxDistSq then
                 local d = math.sqrt(dx * dx + dy * dy)
@@ -993,15 +1006,7 @@ local function getPlayerLightBrightness(object, sources)
     return brightness
 end
 
-local function getShadowTint(brightness)
-    local color = getGeneralShadow().color or {0, 0, 0}
-    brightness = math.min(math.max(brightness or 1, 0), 1)
 
-    return
-        (color[1] or 0) * (1 - brightness) + brightness,
-        (color[2] or 0) * (1 - brightness) + brightness,
-        (color[3] or 0) * (1 - brightness) + brightness
-end
 
 local function revealRoomConnections(room)
     if not room then
@@ -1085,13 +1090,18 @@ function Game:resetRuntimeState()
     self.sPSoundPlayedOutro = false
     self.enemies = {}
     self.drawQueue = {}
+    self.groundDecalQueue = {}
     self.lightSources = {}
+    self.lightSourcesCache = {}
+    self.playerLightSource = {}
+    self.lightSourcesCacheDirty = true
     self.weaponShockwaves = {}
     self.footsteps = {}
     self.particles = {}
     self.objects = {}
     self.purchasedWeapons = {}
     self.nearbyEnemies = {}
+    self.enemySpatialGrid = {}
     self.crowTimer = math.random(20, 50)
     self.cricketTimer = math.random(30, 40)
     self.drawtext = "init text\ninit text\nyou shouldnt see this"
@@ -1108,6 +1118,133 @@ function Game:resetRuntimeState()
     self.roomFadeAlpha = 0
     self.floorChanging = false
     Dialog.breakMovements = false
+end
+
+local function getSpatialCell(value)
+    return math.floor(value / ENEMY_SPATIAL_CELL_SIZE)
+end
+
+function Game:rebuildEnemySpatialIndex()
+    local grid = self.enemySpatialGrid or {}
+    for _, row in pairs(grid) do
+        for _, bucket in pairs(row) do
+            for i = #bucket, 1, -1 do
+                bucket[i] = nil
+            end
+        end
+    end
+
+    for i = 1, #self.enemies do
+        local enemy = self.enemies[i]
+        if enemy.isAlive ~= false and enemy.x and enemy.y then
+            local cellX = getSpatialCell(enemy.x)
+            local cellY = getSpatialCell(enemy.y)
+            local row = grid[cellY]
+            if not row then
+                row = {}
+                grid[cellY] = row
+            end
+            local bucket = row[cellX]
+            if not bucket then
+                bucket = {}
+                row[cellX] = bucket
+            end
+            bucket[#bucket + 1] = enemy
+        end
+    end
+
+    self.enemySpatialGrid = grid
+end
+
+function Game:getEnemiesNearPoint(x, y, radius)
+    local result = self.enemyQueryResult
+    if result then
+        for i = #result, 1, -1 do
+            result[i] = nil
+        end
+    else
+        result = {}
+        self.enemyQueryResult = result
+    end
+
+    local grid = self.enemySpatialGrid
+    if not grid then
+        return self.enemies or result
+    end
+
+    radius = radius or ENEMY_SPATIAL_CELL_SIZE
+    local minCellX = getSpatialCell(x - radius)
+    local maxCellX = getSpatialCell(x + radius)
+    local minCellY = getSpatialCell(y - radius)
+    local maxCellY = getSpatialCell(y + radius)
+    local radiusSq = radius * radius
+
+    for cellY = minCellY, maxCellY do
+        local row = grid[cellY]
+        if row then
+        for cellX = minCellX, maxCellX do
+            local bucket = row[cellX]
+            if bucket then
+                for i = 1, #bucket do
+                    local enemy = bucket[i]
+                    local dx = enemy.x - x
+                    local dy = enemy.y - y
+                    if dx * dx + dy * dy <= radiusSq then
+                        result[#result + 1] = enemy
+                    end
+                end
+            end
+        end
+        end
+    end
+
+    return result
+end
+
+function Game:getEnemiesNearBox(box, padding)
+    local result = self.enemyBoxQueryResult
+    if result then
+        for i = #result, 1, -1 do
+            result[i] = nil
+        end
+    else
+        result = {}
+        self.enemyBoxQueryResult = result
+    end
+
+    local grid = self.enemySpatialGrid
+    if not (grid and box) then
+        return self.enemies or result
+    end
+
+    padding = padding or 0
+    local minX = box.x - padding
+    local maxX = box.x + box.width + padding
+    local minY = box.y - padding
+    local maxY = box.y + box.height + padding
+    local minCellX = getSpatialCell(minX)
+    local maxCellX = getSpatialCell(maxX)
+    local minCellY = getSpatialCell(minY)
+    local maxCellY = getSpatialCell(maxY)
+
+    for cellY = minCellY, maxCellY do
+        local row = grid[cellY]
+        if row then
+        for cellX = minCellX, maxCellX do
+            local bucket = row[cellX]
+            if bucket then
+                for i = 1, #bucket do
+                    local enemy = bucket[i]
+                    if enemy.x >= minX and enemy.x <= maxX and enemy.y >= minY and enemy.y <= maxY then
+                        result[#result + 1] = enemy
+                    end
+                end
+            end
+        end
+        end
+    end
+
+    return result
 end
 
 function Game:restoreCurrentRoomDrops()
@@ -1831,7 +1968,11 @@ function Game:loadFloor(floorIndex, onIntroComplete)
     self.objects = {}
     self.particles = {}
     self.drawQueue = {}
+    self.groundDecalQueue = {}
     self.lightSources = {}
+    self.lightSourcesCache = {}
+    self.playerLightSource = {}
+    self.lightSourcesCacheDirty = true
     self.weaponShockwaves = {}
     self.footsteps = {}
     self.roomTransitionCooldown = 0.28
@@ -2057,8 +2198,46 @@ function Game:updateEntityList(list, dt)
     end
 end
 
+function Game:updateParticleList(dt)
+    local list = self.particles or {}
+    local i = #list
+    while i >= 1 do
+        local item = list[i]
+        if item and item.isAlive then
+            if item.queueDraw then
+                item:queueDraw()
+            end
+
+            if item.updateInterval then
+                item.updateAccumulator = (item.updateAccumulator or 0) + dt
+                if item.updateAccumulator >= item.updateInterval then
+                    local updateDt = math.min(item.updateAccumulator, item.maxUpdateDt or item.updateAccumulator)
+                    item.updateAccumulator = 0
+                    item:update(updateDt)
+                end
+            else
+                item:update(dt)
+            end
+        end
+
+        if not (item and item.isAlive) then
+            local lastIndex = #list
+            list[i] = list[lastIndex]
+            list[lastIndex] = nil
+            if i <= #list then
+                i = i + 1
+            end
+        end
+
+        i = i - 1
+    end
+end
+
 function Game:refreshNearbyEnemies()
-    self.nearbyEnemies = {}
+    self.nearbyEnemies = self.nearbyEnemies or {}
+    for i = #self.nearbyEnemies, 1, -1 do
+        self.nearbyEnemies[i] = nil
+    end
     local cameraPosition = camera:objectPosition()
     local distanceLimitSq = NEARBY_ENEMY_DISTANCE * NEARBY_ENEMY_DISTANCE
 
@@ -2068,6 +2247,18 @@ function Game:refreshNearbyEnemies()
         local dy = enemy.y - cameraPosition.y
         if dx * dx + dy * dy <= distanceLimitSq then
             self.nearbyEnemies[#self.nearbyEnemies + 1] = enemy
+        end
+    end
+end
+
+function Game:markGrassNearEnemies()
+    if not (Tilemap and Tilemap.markGrassNearPoint) then
+        return
+    end
+
+    for _, enemy in ipairs(self.nearbyEnemies or {}) do
+        if enemy.isAlive ~= false then
+            Tilemap:markGrassNearPoint(enemy.x, enemy.y, 12, enemy.x)
         end
     end
 end
@@ -2115,6 +2306,8 @@ function Game:getWeaponShockwaves()
 end
 
 function Game:updateManagers(dt)
+    local perfEnabled = PERF and PERF.enabled
+    local phaseStart = perfEnabled and love.timer.getTime() or nil
     Tutorial:update(dt)
     WaveManager:update(dt)
     Clouds:update(dt)
@@ -2135,20 +2328,53 @@ function Game:updateManagers(dt)
     elseif not self:updateEntryMove(dt) then
         Player:update(dt)
     end
+    if perfEnabled then
+        PERF.playerUpdateMs = (love.timer.getTime() - phaseStart) * 1000
+        phaseStart = love.timer.getTime()
+    end
     DoorsManager:update(dt)
     HeartSound:update(dt)
+    local tilemapStart = PERF and PERF.enabled and love.timer.getTime() or nil
     Tilemap:update(dt)
+    if tilemapStart then
+        PERF.tilemapMs = (love.timer.getTime() - tilemapStart) * 1000
+    end
     self:checkRoomTransition(dt)
     PointsManager:update(dt)
     CardChoice:update(dt)
     camera:update(dt)
+    if perfEnabled then
+        PERF.managersOtherMs = (love.timer.getTime() - phaseStart) * 1000 - (PERF.tilemapMs or 0)
+    end
 end
 
 function Game:update(dt)
+    local perfEnabled = PERF and PERF.enabled
+    local phaseStart = perfEnabled and love.timer.getTime() or nil
     ACTIVE_LIGHT_MANAGER = self
-    self.drawQueue = {}
-    self.lightSources = {}
+    self.drawQueue = self.drawQueue or {}
+    for i = #self.drawQueue, 1, -1 do
+        self.drawQueue[i] = nil
+    end
+    self.groundDecalQueue = self.groundDecalQueue or {}
+    for i = #self.groundDecalQueue, 1, -1 do
+        self.groundDecalQueue[i] = nil
+    end
+    self.lightSources = self.lightSources or {}
+    for i = #self.lightSources, 1, -1 do
+        self.lightSources[i] = nil
+    end
+    self.projectileLightCount = 0
+    self.enemyProjectileLightCount = 0
+    self.bulletColorParticleCount = 0
+    self.bulletSpriteParticleCount = 0
+    self.projectileDrawCount = 0
+    self.lightSourcesCacheDirty = true
     self.fogTime = self.fogTime + dt
+    if perfEnabled then
+        PERF.updateResetMs = (love.timer.getTime() - phaseStart) * 1000
+        phaseStart = love.timer.getTime()
+    end
 
     self:updateSpotlight(dt)
     self:updateAmbientTimers(dt)
@@ -2162,6 +2388,10 @@ function Game:update(dt)
         self.drawtext = self.bottomMessageText or self.drawtext
         self.textAlphaTarget = 1
     end
+    if perfEnabled then
+        PERF.updatePreMs = (love.timer.getTime() - phaseStart) * 1000
+        phaseStart = love.timer.getTime()
+    end
 
     local currentRoom = FloorManager:getCurrentRoom()
     if currentRoom and (currentRoom.templateId == "start_32x32" or isStartRoom(currentRoom)) then
@@ -2173,16 +2403,49 @@ function Game:update(dt)
     end
 
     if not showingThanks then
+        if EnemyDirector and EnemyDirector.beginFrame then
+            EnemyDirector:beginFrame(#(self.enemies or {}))
+        end
         self:updateEntityList(self.enemies, dt)
+        if perfEnabled then
+            PERF.enemiesUpdateMs = (love.timer.getTime() - phaseStart) * 1000
+            PERF.enemiesMs = PERF.enemiesUpdateMs
+            phaseStart = love.timer.getTime()
+        end
+        self:rebuildEnemySpatialIndex()
         self:checkCurrentRoomClear()
         self:updateBattleMusicForCurrentRoom()
         self:refreshNearbyEnemies()
+        self:markGrassNearEnemies()
         PlayerCloseStore = false
+        if perfEnabled then
+            PERF.enemyPostUpdateMs = (love.timer.getTime() - phaseStart) * 1000
+            phaseStart = love.timer.getTime()
+        end
         self:updateEntityList(self.objects, dt)
-        self:updateEntityList(self.particles, dt)
+        if perfEnabled then
+            PERF.objectsMs = (love.timer.getTime() - phaseStart) * 1000
+            PERF.objectsUpdateMs = PERF.objectsMs
+            phaseStart = love.timer.getTime()
+        end
+        self:updateParticleList(dt)
+        if perfEnabled then
+            PERF.particlesMs = (love.timer.getTime() - phaseStart) * 1000
+            phaseStart = love.timer.getTime()
+        end
         self:updateFootsteps(dt)
         self:updateWeaponShockwaves(dt)
+        if perfEnabled then
+            PERF.miscUpdateMs = (love.timer.getTime() - phaseStart) * 1000
+            phaseStart = love.timer.getTime()
+        end
         self:updateManagers(dt)
+        if perfEnabled then
+            PERF.managersMs = (love.timer.getTime() - phaseStart) * 1000
+        end
+        if perfEnabled then
+            PERF.tilemapMs = PERF.tilemapMs or 0
+        end
     end
 end
 
@@ -2196,35 +2459,79 @@ function Game:addLightSource(lightType, x, y, options)
         return
     end
 
+    if lightType == "projectile" then
+        self.projectileLightCount = (self.projectileLightCount or 0) + 1
+        if self.projectileLightCount > MAX_PLAYER_PROJECTILE_LIGHTS then
+            return
+        end
+    elseif lightType == "enemyProjectile" then
+        self.enemyProjectileLightCount = (self.enemyProjectileLightCount or 0) + 1
+        if self.enemyProjectileLightCount > MAX_ENEMY_PROJECTILE_LIGHTS then
+            return
+        end
+    end
+
     options = options or {}
+    local spriteBrightness = config.spriteBrightness
+    local spriteMaxDistance = spriteBrightness and (spriteBrightness.maxDistance or 230) or nil
     self.lightSources = self.lightSources or {}
     self.lightSources[#self.lightSources + 1] = {
         type = lightType,
         x = x,
         y = y,
         config = config,
+        visual = config.visual,
+        spriteBrightness = spriteBrightness,
+        spriteMinDistance = spriteBrightness and (spriteBrightness.minDistance or 35) or nil,
+        spriteMaxDistance = spriteMaxDistance,
+        spriteMaxDistanceSq = spriteMaxDistance and spriteMaxDistance * spriteMaxDistance or nil,
+        spriteMaxBrightness = spriteBrightness and (spriteBrightness.maxBrightness or 1) or nil,
         flicker = options.flicker or 1,
     }
+    self.lightSourcesCacheDirty = true
 end
 
 function Game:getLightSources()
-    local sources = {}
+    if not self.lightSourcesCacheDirty and self.lightSourcesCache then
+        local ps = self.playerLightSource
+        if ps and Player and Player.isAlive then
+            ps.x = Player.x
+            ps.y = Player.y
+        end
+        return self.lightSourcesCache
+    end
+
+    local sources = self.lightSourcesCache or {}
+    for i = #sources, 1, -1 do
+        sources[i] = nil
+    end
+
     local playerConfig = LightConfig:getWorldLightConfig("player")
 
     if Player and Player.isAlive and playerConfig and playerConfig.enabled ~= false then
-        sources[#sources + 1] = {
-            type = "player",
-            x = Player.x,
-            y = Player.y,
-            config = playerConfig,
-            flicker = 1,
-        }
+        local playerSource = self.playerLightSource or {}
+        playerSource.type = "player"
+        playerSource.x = Player.x
+        playerSource.y = Player.y
+        playerSource.config = playerConfig
+        playerSource.visual = playerConfig.visual
+        playerSource.spriteBrightness = playerConfig.spriteBrightness
+        playerSource.spriteMinDistance = playerConfig.spriteBrightness and (playerConfig.spriteBrightness.minDistance or 35) or nil
+        playerSource.spriteMaxDistance = playerConfig.spriteBrightness and (playerConfig.spriteBrightness.maxDistance or 230) or nil
+        playerSource.spriteMaxDistanceSq = playerSource.spriteMaxDistance and playerSource.spriteMaxDistance * playerSource.spriteMaxDistance or nil
+        playerSource.spriteMaxBrightness = playerConfig.spriteBrightness and (playerConfig.spriteBrightness.maxBrightness or 1) or nil
+        playerSource.flicker = 1
+        self.playerLightSource = playerSource
+        sources[#sources + 1] = playerSource
     end
 
     for _, source in ipairs(self.lightSources or {}) do
         sources[#sources + 1] = source
     end
 
+    self.lightSourcesCache = sources
+    self.lightSourcesCacheDirty = false
+    self.lightSourcesVersion = (self.lightSourcesVersion or 0) + 1
     return sources
 end
 
@@ -2255,11 +2562,17 @@ function Game:cricketNoise()
 end
 
 function Game:drawFootsteps()
-    local brightnessByFootstep = {}
+    local brightnessByFootstep = self.footstepBrightnessCache or {}
+    self.footstepBrightnessCache = brightnessByFootstep
+    for i = #brightnessByFootstep, 1, -1 do
+        brightnessByFootstep[i] = nil
+    end
+
     local lightSources = self:getLightSources()
+    local generalShadow = getGeneralShadow()
 
     for index, item in ipairs(self.footsteps) do
-        local brightness = getPlayerLightBrightness(item, lightSources)
+        local brightness = getPlayerLightBrightness(item, lightSources, generalShadow)
         brightnessByFootstep[index] = brightness
         item:drawLayer1(brightness)
     end
@@ -2275,42 +2588,481 @@ end
 
 function Game:drawShadows()
     Clouds:drawShadow()
-    for _, item in ipairs(self.drawQueue) do
-        if not item.object.isGroundLayer and type(item.object.drawShadow) == "function" then
-            item.object:drawShadow()
+    -- tileset objects first: all use tilesetImage → LÖVE batches into one draw call
+    for _, item in ipairs(self.tilesetShadowItems or {}) do
+        item.object:drawShadow()
+    end
+    -- entity shadows second: consecutive same-texture entities also batch
+    for _, item in ipairs(self.entityShadowItems or {}) do
+        item.object:drawShadow()
+    end
+end
+
+local _fastSrcX = {}
+local _fastSrcY = {}
+local _fastSrcMaxDistSq = {}
+local _fastSrcMinDist = {}
+local _fastSrcMaxBrightness = {}
+local _fastSrcInvRange = {}
+local _fastSrcFlicker = {}
+local _fastSrcCount = 0
+local _brightnessCellCache = {}
+local BRIGHTNESS_CACHE_CELL_SIZE = 16
+local addDrawProfile
+local _pixelBatch = love.graphics.newSpriteBatch(pixelImage, 512, "stream")
+local _pixelBatchCount = 0
+local _pixelBatchProfileObject = {particleType = "batchedPixels"}
+
+local function clearPixelBatch()
+    _pixelBatch:clear()
+    _pixelBatchCount = 0
+end
+
+local function canBatchPixelObject(object)
+    return object and type(object.getBatchDrawInfo) == "function"
+end
+
+local function addPixelBatchObject(object, tintR, tintG, tintB, tintA)
+    if _pixelBatchCount >= 512 then
+        return false
+    end
+
+    local x, y, size, r, g, b, a = object:getBatchDrawInfo()
+    _pixelBatch:setColor(
+        (r or 1) * (tintR or 1),
+        (g or 1) * (tintG or 1),
+        (b or 1) * (tintB or 1),
+        (a or 1) * (tintA or 1)
+    )
+    _pixelBatch:add(x, y, 0, size or 1, size or 1)
+    _pixelBatchCount = _pixelBatchCount + 1
+    return true
+end
+
+local function flushPixelBatch(profile)
+    if _pixelBatchCount <= 0 then
+        return
+    end
+
+    love.graphics.setColor(1, 1, 1, 1)
+    local start = profile and love.timer.getTime() or nil
+    love.graphics.draw(_pixelBatch)
+    if start then
+        addDrawProfile(profile, _pixelBatchProfileObject, love.timer.getTime() - start)
+    end
+    if PERF and PERF.enabled then
+        PERF.pixelBatchDraws = (PERF.pixelBatchDraws or 0) + 1
+        PERF.pixelBatchSprites = (PERF.pixelBatchSprites or 0) + _pixelBatchCount
+    end
+    clearPixelBatch()
+end
+
+local function buildFastLightSources(lightSources)
+    _fastSrcCount = 0
+    for key in pairs(_brightnessCellCache) do
+        _brightnessCellCache[key] = nil
+    end
+    for _, source in ipairs(lightSources) do
+        local sp = source.spriteBrightness
+        if sp and sp.enabled ~= false then
+            local i = _fastSrcCount + 1
+            _fastSrcCount = i
+            _fastSrcX[i] = source.x or 0
+            _fastSrcY[i] = source.y or 0
+            _fastSrcMaxDistSq[i] = source.spriteMaxDistanceSq or 0
+            _fastSrcMinDist[i] = source.spriteMinDistance or 35
+            _fastSrcMaxBrightness[i] = source.spriteMaxBrightness or 1
+            local rng = math.max(1, (source.spriteMaxDistance or 230) - (source.spriteMinDistance or 35))
+            _fastSrcInvRange[i] = 1 / rng
+            _fastSrcFlicker[i] = source.flicker or 1
         end
     end
+    if PERF and PERF.enabled then
+        PERF.spriteBrightnessSourceCount = _fastSrcCount
+    end
+end
+
+local function calcFastBrightness(objectX, objectY, minBrightness)
+    local brightness = minBrightness
+    for i = 1, _fastSrcCount do
+        local dx = _fastSrcX[i] - objectX
+        local dy = _fastSrcY[i] - objectY
+        local distSq = dx * dx + dy * dy
+        if distSq <= _fastSrcMaxDistSq[i] then
+            local d = math.sqrt(distSq)
+            local t = (d - _fastSrcMinDist[i]) * _fastSrcInvRange[i]
+            if t < 0 then t = 0 elseif t > 1 then t = 1 end
+            local mb = _fastSrcMaxBrightness[i]
+            local sb = mb + (minBrightness - mb) * t
+            sb = sb * _fastSrcFlicker[i]
+            if sb < minBrightness then sb = minBrightness elseif sb > mb then sb = mb end
+            if sb > brightness then brightness = sb end
+        end
+    end
+    return brightness
+end
+
+local function canCacheBrightness(object)
+    if not object then
+        return false
+    end
+    if object == Player or object.enemyTypeId or object.isXrayProjectile then
+        return false
+    end
+    return object.xWorld ~= nil or getmetatable(object) == Grass or getmetatable(object) == BigGrass
+end
+
+local function calcCachedBrightness(object, objectX, objectY, minBrightness)
+    if _fastSrcCount == 0 then
+        return minBrightness
+    end
+    if not canCacheBrightness(object) then
+        return calcFastBrightness(objectX, objectY, minBrightness)
+    end
+
+    local cellX = math.floor(objectX / BRIGHTNESS_CACHE_CELL_SIZE)
+    local cellY = math.floor(objectY / BRIGHTNESS_CACHE_CELL_SIZE)
+    local key = cellX * 65536 + cellY
+    local cached = _brightnessCellCache[key]
+    if cached then
+        return cached
+    end
+
+    local value = calcFastBrightness(
+        cellX * BRIGHTNESS_CACHE_CELL_SIZE + BRIGHTNESS_CACHE_CELL_SIZE * 0.5,
+        cellY * BRIGHTNESS_CACHE_CELL_SIZE + BRIGHTNESS_CACHE_CELL_SIZE * 0.5,
+        minBrightness
+    )
+    _brightnessCellCache[key] = value
+    return value
+end
+
+local function getDrawPerfName(object)
+    if object == Player then
+        return "player"
+    end
+    if not object then
+        return "nil"
+    end
+    if object.particleType then
+        return object.particleType
+    end
+    if object.enemyTypeId then
+        return object.enemyTypeId
+    end
+
+    local mt = getmetatable(object)
+    if mt == Grass then return "grass" end
+    if mt == BigGrass then return "bigGrass" end
+    if mt == TreeTile then return "tree" end
+    if mt == DoorTile then return "door" end
+    if mt == Tile then return "tile" end
+    if mt == Water then return "water" end
+    if mt == Pole then return "pole" end
+    if mt == Moonbeam then return "moonbeam" end
+    if mt == FloorPath then return "floorPath" end
+
+    return tostring(mt or object):match("([^: ]+)$") or "object"
+end
+
+local function getDrawPerfGroup(object)
+    if object == Player then
+        return "player"
+    end
+    if not object then
+        return "other"
+    end
+    if object.isProjectile or object.isXrayProjectile then
+        return "projectiles"
+    end
+    if object.enemyTypeId then
+        return "enemies"
+    end
+    if object.particleType then
+        return "particles"
+    end
+    if object.xWorld or getmetatable(object) == Grass or getmetatable(object) == BigGrass then
+        return "static"
+    end
+    return "other"
+end
+
+local function addStaticBreakdown(object, elapsedMs)
+    if not (PERF and PERF.enabled and PERF.drawProfileActive) then
+        return
+    end
+
+    local mt = getmetatable(object)
+    local name = "staticOther"
+    if mt == Grass then
+        name = "grass"
+    elseif mt == BigGrass then
+        name = "bigGrass"
+    elseif mt == TreeTile then
+        name = "trees"
+    elseif mt == Tile then
+        name = "tiles"
+    elseif mt == Water then
+        name = "water"
+    elseif mt == DoorTile then
+        name = "doors"
+    end
+
+    local breakdown = PERF.staticBreakdown or {}
+    PERF.staticBreakdown = breakdown
+    local entry = breakdown[name]
+    if not entry then
+        entry = {ms = 0, count = 0}
+        breakdown[name] = entry
+    end
+    entry.ms = entry.ms + elapsedMs
+    entry.count = entry.count + 1
+end
+
+local function resetDrawProfile()
+    if not (PERF and PERF.enabled) then
+        if PERF then
+            PERF.drawProfileActive = false
+        end
+        return nil
+    end
+
+    local interval = PERF.drawProfileSampleInterval or 8
+    PERF.drawProfileFrame = ((PERF.drawProfileFrame or 0) + 1) % interval
+    PERF.drawProfileActive = PERF.drawProfileFrame == 0
+    if not PERF.drawProfileActive then
+        return nil
+    end
+
+    local profile = PERF.drawProfile or {}
+    for key, entry in pairs(profile) do
+        entry.ms = 0
+        entry.count = 0
+    end
+    PERF.drawProfile = profile
+    local groups = PERF.drawProfileGroups or {}
+    for key, entry in pairs(groups) do
+        entry.ms = 0
+        entry.count = 0
+    end
+    PERF.drawProfileGroups = groups
+    local breakdown = PERF.staticBreakdown or {}
+    for key, entry in pairs(breakdown) do
+        entry.ms = 0
+        entry.count = 0
+    end
+    PERF.staticBreakdown = breakdown
+    return profile
+end
+
+function addDrawProfile(profile, object, elapsed)
+    if not profile then
+        return
+    end
+
+    local name = getDrawPerfName(object)
+    local entry = profile[name]
+    if not entry then
+        entry = {ms = 0, count = 0}
+        profile[name] = entry
+    end
+    entry.ms = entry.ms + elapsed * 1000
+    entry.count = entry.count + 1
+    if getDrawPerfGroup(object) == "static" then
+        addStaticBreakdown(object, elapsed * 1000)
+    end
+
+    local groups = PERF.drawProfileGroups
+    if groups then
+        local groupName = getDrawPerfGroup(object)
+        local group = groups[groupName]
+        if not group then
+            group = {ms = 0, count = 0}
+            groups[groupName] = group
+        end
+        group.ms = group.ms + elapsed * 1000
+        group.count = group.count + 1
+    end
+end
+
+local function updateDrawProfileTop()
+    if not (PERF and PERF.enabled and PERF.drawProfileActive and PERF.drawProfile) then
+        return
+    end
+
+    local top = PERF.drawProfileTop or {}
+    PERF.drawProfileTop = top
+    for i = #top, 1, -1 do
+        top[i] = nil
+    end
+
+    for name, entry in pairs(PERF.drawProfile) do
+        if entry.count > 0 and entry.ms > 0 then
+            top[#top + 1] = {name = name, ms = entry.ms, count = entry.count}
+        end
+    end
+
+    table.sort(top, function(a, b)
+        return a.ms > b.ms
+    end)
+
+    for i = #top, 4, -1 do
+        top[i] = nil
+    end
+
+    local groups = PERF.drawProfileGroups or {}
+    PERF.qStaticMs = groups.static and groups.static.ms or 0
+    PERF.qStaticCount = groups.static and groups.static.count or 0
+    PERF.qEnemiesMs = groups.enemies and groups.enemies.ms or 0
+    PERF.qEnemiesCount = groups.enemies and groups.enemies.count or 0
+    PERF.qProjectilesMs = groups.projectiles and groups.projectiles.ms or 0
+    PERF.qProjectilesCount = groups.projectiles and groups.projectiles.count or 0
+    PERF.qParticlesMs = groups.particles and groups.particles.ms or 0
+    PERF.qParticlesCount = groups.particles and groups.particles.count or 0
+    PERF.qPlayerMs = groups.player and groups.player.ms or 0
+    PERF.qPlayerCount = groups.player and groups.player.count or 0
+    PERF.qOtherMs = groups.other and groups.other.ms or 0
+    PERF.qOtherCount = groups.other and groups.other.count or 0
+
+    local breakdown = PERF.staticBreakdown or {}
+    PERF.qGrassMs = breakdown.grass and breakdown.grass.ms or 0
+    PERF.qGrassCount = breakdown.grass and breakdown.grass.count or 0
+    PERF.qBigGrassMs = breakdown.bigGrass and breakdown.bigGrass.ms or 0
+    PERF.qBigGrassCount = breakdown.bigGrass and breakdown.bigGrass.count or 0
+    PERF.qTreesMs = breakdown.trees and breakdown.trees.ms or 0
+    PERF.qTreesCount = breakdown.trees and breakdown.trees.count or 0
+    PERF.qTilesMs = breakdown.tiles and breakdown.tiles.ms or 0
+    PERF.qTilesCount = breakdown.tiles and breakdown.tiles.count or 0
+    PERF.qWaterMs = breakdown.water and breakdown.water.ms or 0
+    PERF.qWaterCount = breakdown.water and breakdown.water.count or 0
+    PERF.qStaticOtherMs = breakdown.staticOther and breakdown.staticOther.ms or 0
+    PERF.qStaticOtherCount = breakdown.staticOther and breakdown.staticOther.count or 0
 end
 
 function Game:drawGroundQueueObjects()
     local lightSources = self:getLightSources()
+    local generalShadow = getGeneralShadow()
+    local minBrightness = generalShadow.minBrightness or 1
+    local profile = PERF and PERF.enabled and PERF.drawProfileActive and PERF.drawProfile
 
-    for _, item in ipairs(self.drawQueue) do
-        if item.object.isGroundLayer then
-            local brightness = getPlayerLightBrightness(item.object, lightSources)
-            local r, g, b = getShadowTint(brightness)
-            love.graphics.setColor(r, g, b, 1)
-            item.object:draw()
-            love.graphics.setColor(1, 1, 1, 1)
+    local items = self.groundDrawItems or self.drawQueue
+    if minBrightness >= 1 then
+        for _, item in ipairs(items) do
+            local obj = item.object
+            if canBatchPixelObject(obj) then
+                addPixelBatchObject(obj, 1, 1, 1, 1)
+            else
+                flushPixelBatch(profile)
+                local start = profile and love.timer.getTime() or nil
+                obj:draw()
+                if start then
+                    addDrawProfile(profile, obj, love.timer.getTime() - start)
+                end
+            end
+        end
+        flushPixelBatch(profile)
+    else
+        local color = generalShadow.color or {0, 0, 0}
+        local sr, sg, sb = color[1] or 0, color[2] or 0, color[3] or 0
+        local ivr, ivg, ivb = 1 - sr, 1 - sg, 1 - sb
+        buildFastLightSources(lightSources)
+        for _, item in ipairs(items) do
+            local obj = item.object
+            local ox = obj.xWorld or obj.x
+            local oy = obj.yWorld or obj.y
+            local brt = ox and oy and calcCachedBrightness(obj, ox, oy, minBrightness) or minBrightness
+            local r = sr + ivr * brt
+            local g = sg + ivg * brt
+            local b = sb + ivb * brt
+            if canBatchPixelObject(obj) then
+                addPixelBatchObject(obj, r, g, b, 1)
+            else
+                flushPixelBatch(profile)
+                love.graphics.setColor(r, g, b, 1)
+                local start = profile and love.timer.getTime() or nil
+                obj:draw()
+                if start then
+                    addDrawProfile(profile, obj, love.timer.getTime() - start)
+                end
+            end
+        end
+        flushPixelBatch(profile)
+        love.graphics.setColor(1, 1, 1, 1)
+    end
+
+    flushPixelBatch(profile)
+    for _, object in ipairs(self.groundDecalQueue or {}) do
+        if canBatchPixelObject(object) then
+            addPixelBatchObject(object, 1, 1, 1, 1)
+        else
+            flushPixelBatch(profile)
+            local start = profile and love.timer.getTime() or nil
+            object:draw()
+            if start then
+                addDrawProfile(profile, object, love.timer.getTime() - start)
+            end
         end
     end
+    flushPixelBatch(profile)
 end
 
 function Game:drawQueueObjects()
     local lightSources = self:getLightSources()
+    local generalShadow = getGeneralShadow()
+    local minBrightness = generalShadow.minBrightness or 1
+    local profile = PERF and PERF.enabled and PERF.drawProfileActive and PERF.drawProfile
 
-    for _, item in ipairs(self.drawQueue) do
-        if not item.object.isGroundLayer then
-            local brightness = getPlayerLightBrightness(item.object, lightSources)
-            local r, g, b = getShadowTint(brightness)
-            item.object.lightBrightness = brightness
-            item.object.lightTint = {r, g, b}
-            love.graphics.setColor(r, g, b, 1)
-            item.object:draw()
-            item.object.lightBrightness = nil
-            item.object.lightTint = nil
-            love.graphics.setColor(1, 1, 1, 1)
+    local items = self.objectDrawItems or self.drawQueue
+    if minBrightness >= 1 then
+        for _, item in ipairs(items) do
+            local obj = item.object
+            if canBatchPixelObject(obj) then
+                addPixelBatchObject(obj, 1, 1, 1, 1)
+            else
+                flushPixelBatch(profile)
+                local start = profile and love.timer.getTime() or nil
+                obj:draw()
+                if start then
+                    addDrawProfile(profile, obj, love.timer.getTime() - start)
+                end
+            end
         end
+        flushPixelBatch(profile)
+    else
+        local color = generalShadow.color or {0, 0, 0}
+        local sr, sg, sb = color[1] or 0, color[2] or 0, color[3] or 0
+        local ivr, ivg, ivb = 1 - sr, 1 - sg, 1 - sb
+        buildFastLightSources(lightSources)
+        for _, item in ipairs(items) do
+            local obj = item.object
+            local ox = obj.xWorld or obj.x
+            local oy = obj.yWorld or obj.y
+            local brt = ox and oy and calcCachedBrightness(obj, ox, oy, minBrightness) or minBrightness
+            local r = sr + ivr * brt
+            local g = sg + ivg * brt
+            local b = sb + ivb * brt
+            obj.lightBrightness = brt
+            obj.lightTintR = r
+            obj.lightTintG = g
+            obj.lightTintB = b
+            if canBatchPixelObject(obj) then
+                addPixelBatchObject(obj, r, g, b, 1)
+            else
+                flushPixelBatch(profile)
+                love.graphics.setColor(r, g, b, 1)
+                local start = profile and love.timer.getTime() or nil
+                obj:draw()
+                if start then
+                    addDrawProfile(profile, obj, love.timer.getTime() - start)
+                end
+            end
+            obj.lightBrightness = nil
+            obj.lightTintR = nil
+            obj.lightTintG = nil
+            obj.lightTintB = nil
+        end
+        flushPixelBatch(profile)
+        love.graphics.setColor(1, 1, 1, 1)
     end
 end
 
@@ -2325,6 +3077,28 @@ local function canMaskXrayOccluder(object)
     return object
         and object.isXrayOccluder == true
         and object.isAlive ~= false
+end
+
+local function getXrayTargetRank(object)
+    if object == Player then
+        return 1
+    end
+    if object and object.isXrayProjectile == true then
+        return 2
+    end
+    if object and object.persistRoomDrop == true then
+        return 3
+    end
+    return 4
+end
+
+local function sortXrayTargets(a, b)
+    local rankA = getXrayTargetRank(a.object)
+    local rankB = getXrayTargetRank(b.object)
+    if rankA == rankB then
+        return a.priority < b.priority
+    end
+    return rankA < rankB
 end
 
 local function getXrayOccluderBox(object)
@@ -2346,6 +3120,43 @@ local function getXrayOccluderBox(object)
         width = width,
         height = height,
     }
+end
+
+local function getXrayTargetBox(object)
+    if object and type(object.getXrayBox) == "function" then
+        return object:getXrayBox()
+    end
+
+    local x = object and (object.xWorld or object.x)
+    local y = object and (object.yWorld or object.y)
+    if not (x and y) then
+        return nil
+    end
+
+    local width = object.xrayTargetWidth or object.xrayMaskWidth or ((object.size or 16) * 2)
+    local height = object.xrayTargetHeight or object.xrayMaskHeight or ((object.size or 16) * 3)
+    return {
+        x = x - width / 2,
+        y = y - height,
+        width = width,
+        height = height,
+    }
+end
+
+local function boxesOverlap(a, b, padding)
+    if not (a and b) then
+        return false
+    end
+
+    padding = padding or 0
+    return a.x - padding < b.x + b.width
+        and a.x + a.width + padding > b.x
+        and a.y - padding < b.y + b.height
+        and a.y + a.height + padding > b.y
+end
+
+local function boxCenter(box)
+    return box.x + box.width * 0.5, box.y + box.height * 0.5
 end
 
 local function getXraySortY(object)
@@ -2392,43 +3203,89 @@ local function shouldUseXrayOccluder(target, item)
         and item.object.isXrayTileOccluder == true
 end
 
-function Game:drawXrayTargets()
-    local targets = {}
-    for _, item in ipairs(self.drawQueue) do
-        if canDrawXrayTarget(item.object) then
-            targets[#targets + 1] = item
+local _xrayTargetOccluders = {}
+
+local function collectXrayOccludersForTarget(target, occluders)
+    for i = #_xrayTargetOccluders, 1, -1 do
+        _xrayTargetOccluders[i] = nil
+    end
+
+    local targetBox = getXrayTargetBox(target.object)
+    if not targetBox then
+        return _xrayTargetOccluders
+    end
+
+    local targetCx, targetCy = boxCenter(targetBox)
+    for _, item in ipairs(occluders) do
+        if shouldUseXrayOccluder(target, item) then
+            local box = getXrayOccluderBox(item.object)
+            if boxesOverlap(targetBox, box, XRAY_OCCLUDER_PADDING) then
+                local cx, cy = boxCenter(box)
+                item.xrayDistanceSq = (cx - targetCx) * (cx - targetCx) + (cy - targetCy) * (cy - targetCy)
+                _xrayTargetOccluders[#_xrayTargetOccluders + 1] = item
+            end
         end
     end
 
-    if #targets == 0 then
+    if #_xrayTargetOccluders > MAX_XRAY_OCCLUDERS_PER_TARGET then
+        table.sort(_xrayTargetOccluders, function(a, b)
+            return (a.xrayDistanceSq or 0) < (b.xrayDistanceSq or 0)
+        end)
+        for i = #_xrayTargetOccluders, MAX_XRAY_OCCLUDERS_PER_TARGET + 1, -1 do
+            _xrayTargetOccluders[i] = nil
+        end
+    end
+
+    return _xrayTargetOccluders
+end
+
+function Game:drawXrayTargets()
+    local targets = self.xrayTargets or {}
+    local occluders = self.xrayOccluders or {}
+    self.xrayTargets = targets
+    self.xrayOccluders = occluders
+
+    if #targets == 0 or #occluders == 0 then
+        if PERF and PERF.enabled then
+            PERF.xrayDrawnTargetCount = 0
+            PERF.xrayTestedOccluderCount = 0
+        end
         return
     end
 
     local previousShader = love.graphics.getShader()
     local previousBlendMode, previousAlphaMode = love.graphics.getBlendMode()
-    local previousColor = {love.graphics.getColor()}
+    local previousR, previousG, previousB, previousA = love.graphics.getColor()
 
     love.graphics.setBlendMode("alpha", "alphamultiply")
     xraySoftShader:send("u_time", love.timer.getTime())
     xraySoftShader:send("u_alpha", 0.72)
     love.graphics.setShader(xraySoftShader)
 
+    local drawnTargets = 0
+    local testedOccluders = 0
+
     for _, target in ipairs(targets) do
+        local targetOccluders = collectXrayOccludersForTarget(target, occluders)
+        if #targetOccluders == 0 then
+            goto continueTarget
+        end
+
+        drawnTargets = drawnTargets + 1
+        testedOccluders = testedOccluders + #targetOccluders
         love.graphics.stencil(function()
             love.graphics.setShader()
-            for _, item in ipairs(self.drawQueue) do
-                if shouldUseXrayOccluder(target, item) then
-                    if type(item.object.drawXrayOccluder) == "function" then
-                        love.graphics.setShader(xrayStencilShader)
+            for _, item in ipairs(targetOccluders) do
+                if type(item.object.drawXrayOccluder) == "function" then
+                    love.graphics.setShader(xrayStencilShader)
+                    love.graphics.setColor(1, 1, 1, 1)
+                    item.object:drawXrayOccluder()
+                    love.graphics.setShader()
+                else
+                    local box = getXrayOccluderBox(item.object)
+                    if box then
                         love.graphics.setColor(1, 1, 1, 1)
-                        item.object:drawXrayOccluder()
-                        love.graphics.setShader()
-                    else
-                        local box = getXrayOccluderBox(item.object)
-                        if box then
-                            love.graphics.setColor(1, 1, 1, 1)
-                            love.graphics.rectangle("fill", box.x, box.y, box.width, box.height)
-                        end
+                        love.graphics.rectangle("fill", box.x, box.y, box.width, box.height)
                     end
                 end
             end
@@ -2439,23 +3296,96 @@ function Game:drawXrayTargets()
         love.graphics.setColor(1, 1, 1, 1)
         target.object:drawXray()
         love.graphics.setStencilTest()
+
+        ::continueTarget::
     end
 
     love.graphics.setBlendMode(previousBlendMode, previousAlphaMode)
     love.graphics.setShader(previousShader)
-    love.graphics.setColor(previousColor[1], previousColor[2], previousColor[3], previousColor[4])
+    love.graphics.setColor(previousR, previousG, previousB, previousA)
+
+    if PERF and PERF.enabled then
+        PERF.xrayDrawnTargetCount = drawnTargets
+        PERF.xrayTestedOccluderCount = testedOccluders
+    end
+end
+
+function Game:prepareDrawQueues()
+    local groundItems = self.groundDrawItems or {}
+    local objectItems = self.objectDrawItems or {}
+    local tilesetShadowItems = self.tilesetShadowItems or {}
+    local entityShadowItems = self.entityShadowItems or {}
+    local xrayTargets = self.xrayTargets or {}
+    local xrayOccluders = self.xrayOccluders or {}
+
+    self.groundDrawItems = groundItems
+    self.objectDrawItems = objectItems
+    self.tilesetShadowItems = tilesetShadowItems
+    self.entityShadowItems = entityShadowItems
+    self.xrayTargets = xrayTargets
+    self.xrayOccluders = xrayOccluders
+
+    for i = #groundItems, 1, -1 do groundItems[i] = nil end
+    for i = #objectItems, 1, -1 do objectItems[i] = nil end
+    for i = #tilesetShadowItems, 1, -1 do tilesetShadowItems[i] = nil end
+    for i = #entityShadowItems, 1, -1 do entityShadowItems[i] = nil end
+    for i = #xrayTargets, 1, -1 do xrayTargets[i] = nil end
+    for i = #xrayOccluders, 1, -1 do xrayOccluders[i] = nil end
+
+    for i = 1, #self.drawQueue do
+        local item = self.drawQueue[i]
+        local object = item.object
+        if object.isGroundLayer then
+            groundItems[#groundItems + 1] = item
+        else
+            objectItems[#objectItems + 1] = item
+            if object.castsShadow ~= false and type(object.drawShadow) == "function" then
+                -- tileset objects (tiles, trees, static props) share tilesetImage → batch them first
+                if object.xWorld then
+                    tilesetShadowItems[#tilesetShadowItems + 1] = item
+                else
+                    entityShadowItems[#entityShadowItems + 1] = item
+                end
+            end
+        end
+
+        if canDrawXrayTarget(object) then
+            xrayTargets[#xrayTargets + 1] = item
+        elseif canMaskXrayOccluder(object) then
+            xrayOccluders[#xrayOccluders + 1] = item
+        end
+    end
+
+    if #xrayTargets > MAX_XRAY_TARGETS_PER_FRAME then
+        table.sort(xrayTargets, sortXrayTargets)
+        for i = #xrayTargets, MAX_XRAY_TARGETS_PER_FRAME + 1, -1 do
+            xrayTargets[i] = nil
+        end
+    end
+
+    if PERF and PERF.enabled then
+        PERF.groundQueueCount = #groundItems
+        PERF.objectQueueCount = #objectItems
+        PERF.tilesetShadowCount = #tilesetShadowItems
+        PERF.entityShadowCount = #entityShadowItems
+        PERF.xrayTargetCount = #xrayTargets
+        PERF.xrayOccluderCount = #xrayOccluders
+        PERF.groundDecalCount = #(self.groundDecalQueue or {})
+    end
 end
 
 function Game:drawLightSprites()
-    local width = playerLightImage:getWidth()
-    local height = playerLightImage:getHeight()
     local previousBlendMode, previousAlphaMode = love.graphics.getBlendMode()
     local sources = self:getLightSources()
+    if PERF and PERF.enabled then
+        PERF.lightSourceCount = #sources
+        PERF.lightSpriteDrawCount = 0
+    end
 
     love.graphics.setBlendMode("alpha", "alphamultiply")
 
     for _, source in ipairs(sources) do
-        local visual = source.config and source.config.visual
+        local visual = source.visual or (source.config and source.config.visual)
         if visual and visual.enabled ~= false then
             local color = visual.color or {1, 1, 1}
             local flicker = source.flicker or 1
@@ -2477,15 +3407,18 @@ function Game:drawLightSprites()
                 0,
                 scale,
                 scale,
-                width / 2,
-                height / 2
+                playerLightHalfWidth,
+                playerLightHalfHeight
             )
+            if PERF and PERF.enabled then
+                PERF.lightSpriteDrawCount = (PERF.lightSpriteDrawCount or 0) + 1
+            end
         end
     end
 
     love.graphics.setBlendMode("add", "alphamultiply")
     for _, source in ipairs(sources) do
-        local visual = source.config and source.config.visual
+        local visual = source.visual or (source.config and source.config.visual)
         if visual and visual.enabled ~= false and visual.glowAlpha and visual.glowAlpha > 0 then
             local color = visual.color or {1, 1, 1}
             local flicker = source.flicker or 1
@@ -2507,9 +3440,12 @@ function Game:drawLightSprites()
                 0,
                 scale,
                 scale,
-                width / 2,
-                height / 2
+                playerLightHalfWidth,
+                playerLightHalfHeight
             )
+            if PERF and PERF.enabled then
+                PERF.lightSpriteDrawCount = (PERF.lightSpriteDrawCount or 0) + 1
+            end
         end
     end
 
@@ -2752,26 +3688,76 @@ function Game:drawLowHealthVignette()
 end
 
 function Game:drawWorld()
+    local perfEnabled = PERF and PERF.enabled
+    local phaseStart = perfEnabled and love.timer.getTime() or nil
+    if perfEnabled then
+        PERF.pixelBatchDraws = 0
+        PERF.pixelBatchSprites = 0
+    end
+    resetDrawProfile()
     camera:attach()
     love.graphics.scale(WORLD_SCALE_X, YSCALE)
 
     Ground:draw(Player)
+    if perfEnabled then
+        PERF.worldGroundMs = (love.timer.getTime() - phaseStart) * 1000
+        phaseStart = love.timer.getTime()
+    end
     self:drawLightSprites()
-    table.sort(self.drawQueue, sortDrawQueue)
+    if perfEnabled then
+        PERF.worldLightsMs = (love.timer.getTime() - phaseStart) * 1000
+        phaseStart = love.timer.getTime()
+    end
+    if #self.drawQueue > 1 then
+        table.sort(self.drawQueue, sortDrawQueue)
+    end
+    self:prepareDrawQueues()
+    if perfEnabled then
+        PERF.worldSortMs = (love.timer.getTime() - phaseStart) * 1000
+        phaseStart = love.timer.getTime()
+    end
 
     if not (CURRENT_LEVEL and CURRENT_LEVEL.enableTrails == false) then
         Trail:draw()
     end
     self:drawFootsteps()
+    if perfEnabled then
+        PERF.wFootstepsMs = (love.timer.getTime() - phaseStart) * 1000
+        phaseStart = love.timer.getTime()
+    end
     self:drawGroundQueueObjects()
+    if perfEnabled then
+        PERF.wGroundQueueMs = (love.timer.getTime() - phaseStart) * 1000
+        phaseStart = love.timer.getTime()
+    end
     self:drawShadows()
     Player:drawSight()
+    if perfEnabled then
+        PERF.wShadowsMs = (love.timer.getTime() - phaseStart) * 1000
+        phaseStart = love.timer.getTime()
+    end
     self:drawQueueObjects()
+    if perfEnabled then
+        PERF.wQueueObjMs = (love.timer.getTime() - phaseStart) * 1000
+        PERF.worldQueueMs = (PERF.wFootstepsMs or 0) + (PERF.wGroundQueueMs or 0) + (PERF.wShadowsMs or 0) + (PERF.wQueueObjMs or 0)
+        phaseStart = love.timer.getTime()
+    end
     if CURRENT_LEVEL and CURRENT_LEVEL.drawDebug then
         CURRENT_LEVEL:drawDebug()
     end
+    if perfEnabled then
+        phaseStart = love.timer.getTime()
+    end
     Clouds:draw()
+    if perfEnabled then
+        PERF.worldCloudsMs = (love.timer.getTime() - phaseStart) * 1000
+        phaseStart = love.timer.getTime()
+    end
     self:drawXrayTargets()
+    if perfEnabled then
+        PERF.worldXrayMs = (love.timer.getTime() - phaseStart) * 1000
+        updateDrawProfileTop()
+    end
 
     love.graphics.scale(1, 1)
     camera:detach()
@@ -2811,17 +3797,29 @@ function Game:draw()
     self:drawWorld()
 end
 
+function Game:markHUDDirty()
+    self._hudDirty = true
+end
+
 function Game:drawHUD()
     if not self.hudCanvas or self.hudCanvas:getWidth() ~= baseWidth or self.hudCanvas:getHeight() ~= baseHeight then
         self.hudCanvas = love.graphics.newCanvas(baseWidth, baseHeight)
         self.hudCanvas:setFilter("nearest", "nearest")
+        self._hudDirty = true
+        self._hudFrame = 0
     end
 
-    local previousCanvas = love.graphics.getCanvas()
-    love.graphics.setCanvas(self.hudCanvas)
-    love.graphics.clear(0, 0, 0, 0)
-    self:drawUI()
-    love.graphics.setCanvas(previousCanvas)
+    -- redraw HUD content every 2 frames (30fps for UI), or when explicitly dirty
+    self._hudFrame = (self._hudFrame or 0) + 1
+    if self._hudDirty or self._hudFrame >= 2 then
+        local previousCanvas = love.graphics.getCanvas()
+        love.graphics.setCanvas(self.hudCanvas)
+        love.graphics.clear(0, 0, 0, 0)
+        self:drawUI()
+        love.graphics.setCanvas(previousCanvas)
+        self._hudDirty = false
+        self._hudFrame = 0
+    end
 
     hudDistortionShader:send("u_time", love.timer.getTime()/2)
     hudDistortionShader:send("u_strength", 0.00055)

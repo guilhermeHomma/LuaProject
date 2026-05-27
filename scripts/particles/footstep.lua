@@ -1,6 +1,7 @@
 Particle = require("scripts/particles/particle")
 FootStep = setmetatable({}, {__index = Particle})
 FootStep.__index = FootStep
+FootStep.castsShadow = false
 
 local sprite1 = love.graphics.newImage("assets/sprites/particles/footsteps1.png")
 local sprite2 = love.graphics.newImage("assets/sprites/particles/footsteps2.png")

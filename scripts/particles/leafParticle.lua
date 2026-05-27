@@ -2,6 +2,7 @@ local Particle = require("scripts/particles/particle")
 
 local LeafParticle = setmetatable({}, {__index = Particle})
 LeafParticle.__index = LeafParticle
+LeafParticle.castsShadow = false
 
 local sprite = love.graphics.newImage("assets/sprites/particles/leaves.png")
 sprite:setFilter("nearest", "nearest")

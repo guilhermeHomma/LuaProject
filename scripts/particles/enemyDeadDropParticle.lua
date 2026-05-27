@@ -42,6 +42,7 @@ function EnemyDeadDropParticle:new(x, y)
     particle.rotation = 0
     particle.quad = quads[math.random(1, #quads)]
     particle.isAlive = true
+    particle.particleType = "enemyDeadDrop"
     particle.squashTimer = 0.16
     particle.squashDuration = 0.16
     return particle
@@ -51,27 +52,31 @@ function EnemyDeadDropParticle:isColliding(moveX, moveY)
     local futureX = self.x + moveX
     local futureY = self.y + moveY
     local boxSize = 4
-    local selfBoxX = {x = futureX - boxSize / 2, y = self.y - boxSize / 2, width = boxSize, height = boxSize}
-    local selfBoxY = {x = self.x - boxSize / 2, y = futureY - boxSize / 2, width = boxSize, height = boxSize}
+    local halfSize = boxSize / 2
+    local boxXLeft = futureX - halfSize
+    local boxXRight = futureX + halfSize
+    local boxXTop = self.y - halfSize
+    local boxXBottom = self.y + halfSize
+    local boxYLeft = self.x - halfSize
+    local boxYRight = self.x + halfSize
+    local boxYTop = futureY - halfSize
+    local boxYBottom = futureY + halfSize
     local collidedX = false
     local collidedY = false
 
-    local closeTiles = Tilemap:getNearbyTiles(self.x, self.y)
+    local closeTiles = Tilemap.getNearbyCollidableTiles and Tilemap:getNearbyCollidableTiles(self.x, self.y)
+        or Tilemap:getNearbyTiles(self.x, self.y)
     for _, tile in ipairs(closeTiles) do
-        if tile.collider then
-            local tileBox = {
-                x = tile.xWorld - tile.size / 2,
-                y = tile.yWorld - tile.size,
-                width = tile.size,
-                height = tile.size,
-            }
+        local tileLeft = tile.xWorld - tile.size / 2
+        local tileRight = tileLeft + tile.size
+        local tileTop = tile.yWorld - tile.size
+        local tileBottom = tileTop + tile.size
 
-            if checkCollision(selfBoxX, tileBox) then
-                collidedX = true
-            end
-            if checkCollision(selfBoxY, tileBox) then
-                collidedY = true
-            end
+        if boxXLeft < tileRight and boxXRight > tileLeft and boxXTop < tileBottom and boxXBottom > tileTop then
+            collidedX = true
+        end
+        if boxYLeft < tileRight and boxYRight > tileLeft and boxYTop < tileBottom and boxYBottom > tileTop then
+            collidedY = true
         end
     end
 
@@ -84,7 +89,16 @@ function EnemyDeadDropParticle:update(dt)
     self.timer = self.timer + dt
     local moveX = self.vx * dt
     local moveY = self.vy * dt
-    local collidedX, collidedY = self:isColliding(moveX, moveY)
+    local isSettled = self.height <= 0
+        and math.abs(self.vx) + math.abs(self.vy) < 3
+        and math.abs(self.zVelocity) < 1
+    local collidedX, collidedY = false, false
+
+    if not isSettled then
+        collidedX, collidedY = self:isColliding(moveX, moveY)
+    else
+        moveX, moveY = 0, 0
+    end
 
     if collidedX then
         self.vx = -self.vx * 0.22

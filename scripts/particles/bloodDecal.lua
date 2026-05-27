@@ -1,5 +1,6 @@
 local BloodDecal = {}
 BloodDecal.__index = BloodDecal
+BloodDecal.castsShadow = false
 
 require("scripts/utils")
 
@@ -8,6 +9,9 @@ local bloodSprites = {}
 local splatBase = love.audio.newSource("assets/sfx/enemies/splat.mp3", "static")
 local bloodPixelSize = 1
 local centerFillRadius = 0.22
+local maxBloodDecals = 24
+local fadeOutDuration = 5
+local bloodDecalUpdateInterval = 1 / 30
 
 local function createBloodSprite(path)
     local imageData = love.image.newImageData(path)
@@ -104,6 +108,80 @@ local function getSourceAngle(x, y, damageDx, damageDy)
     return math.random() * math.pi * 2
 end
 
+local function getPixelDrawPosition(decal, pixel, cosA, sinA)
+    local localX = pixel.x * decal.scale
+    local localY = pixel.y * decal.scale
+    return math.floor(localX * cosA - localY * sinA + 0.5),
+        math.floor(localX * sinA + localY * cosA + 0.5)
+end
+
+local function buildStaticCanvas(decal)
+    local cosA = math.cos(decal.rotation)
+    local sinA = math.sin(decal.rotation)
+    local minX, minY = math.huge, math.huge
+    local maxX, maxY = -math.huge, -math.huge
+
+    for _, pixel in ipairs(decal.sprite.pixels or {}) do
+        local drawX, drawY = getPixelDrawPosition(decal, pixel, cosA, sinA)
+        minX = math.min(minX, drawX)
+        minY = math.min(minY, drawY)
+        maxX = math.max(maxX, drawX + 1)
+        maxY = math.max(maxY, drawY + 1)
+    end
+
+    if minX == math.huge then
+        return
+    end
+
+    local width = math.max(1, maxX - minX + 3)
+    local height = math.max(1, maxY - minY + 3)
+    local canvas = love.graphics.newCanvas(width, height)
+    canvas:setFilter("nearest", "nearest")
+
+    local previousCanvas = love.graphics.getCanvas()
+    local previousShader = love.graphics.getShader()
+    local r, g, b, a = love.graphics.getColor()
+    love.graphics.setCanvas(canvas)
+    love.graphics.setShader()
+    love.graphics.clear(0, 0, 0, 0)
+
+    local drawnPixels = {}
+    local offsetX = -minX + 1
+    local offsetY = -minY + 1
+
+    local function drawCachedPixel(drawX, drawY, pixel, alpha)
+        local key = drawX .. ":" .. drawY
+        if drawnPixels[key] then
+            return
+        end
+
+        drawnPixels[key] = true
+        love.graphics.setColor(pixel.r, pixel.g, pixel.b, pixel.a * (alpha or 1))
+        love.graphics.rectangle("fill", drawX + offsetX, drawY + offsetY, bloodPixelSize, bloodPixelSize)
+    end
+
+    for _, pixel in ipairs(decal.sprite.pixels or {}) do
+        local drawX, drawY = getPixelDrawPosition(decal, pixel, cosA, sinA)
+        local centeredU = pixel.u - 0.5
+        local centeredV = pixel.v - 0.5
+        local distanceFromCenter = math.sqrt(centeredU * centeredU + centeredV * centeredV)
+
+        drawCachedPixel(drawX, drawY, pixel, 1)
+        if distanceFromCenter <= centerFillRadius and decal.scale > 1 then
+            drawCachedPixel(drawX + 1, drawY, pixel, 0.92)
+            drawCachedPixel(drawX, drawY + 1, pixel, 0.92)
+        end
+    end
+
+    love.graphics.setCanvas(previousCanvas)
+    love.graphics.setShader(previousShader)
+    love.graphics.setColor(r, g, b, a)
+
+    decal.staticCanvas = canvas
+    decal.staticCanvasX = decal.x + minX - 1
+    decal.staticCanvasY = decal.y + minY - 1
+end
+
 function BloodDecal:new(x, y, damageDx, damageDy, options)
     options = options or {}
     local decal = setmetatable({}, BloodDecal)
@@ -115,23 +193,34 @@ function BloodDecal:new(x, y, damageDx, damageDy, options)
     decal.scale = randomRange(1.1, 1.4) * (options.scaleMultiplier or 1)
     decal.timer = 0
     decal.lifeTime = 35
-    decal.revealDuration = 0.33
-    decal.flashDuration = 0.24
-    decal.fadeStart = 1.25
+    decal.revealDuration = 0.16
+    decal.flashDuration = 0.12
+    decal.fadeStart = decal.lifeTime - fadeOutDuration
     decal.alpha = 1
     decal.isAlive = true
     decal.particleType = "bloodDecal"
     decal.isGroundLayer = true
     decal.drawPriority = y + 0.4
+    decal.updateInterval = bloodDecalUpdateInterval
+    decal.maxUpdateDt = bloodDecalUpdateInterval * 2
+    decal.updateAccumulator = bloodDecalUpdateInterval
 
+    buildStaticCanvas(decal)
     playSplat(x, y, options)
 
     return decal
 end
 
+function BloodDecal:queueDraw()
+    if Game and Game.groundDecalQueue then
+        Game.groundDecalQueue[#Game.groundDecalQueue + 1] = self
+    else
+        addToDrawQueue(self.drawPriority, self, false)
+    end
+end
+
 function BloodDecal:update(dt)
     self.timer = self.timer + dt
-    addToDrawQueue(self.drawPriority, self, false)
 
     if self.timer >= self.lifeTime then
         self.isAlive = false
@@ -142,64 +231,43 @@ function BloodDecal:drawShadow()
 end
 
 function BloodDecal:draw()
-    local fadeProgress = smoothstep(self.fadeStart, self.lifeTime, self.timer)
-    local alpha = 1 - fadeProgress
-    local revealProgress = smoothstep(0, self.revealDuration, self.timer)
-    local revealRadius = 0.15 + 0.57 * revealProgress
-    local flash = 1 - smoothstep(0, self.flashDuration, self.timer)
+    if not self.staticCanvas then return end
     local r, g, b, a = love.graphics.getColor()
+    local alpha = 1
 
-    local cosA = math.cos(self.rotation)
-    local sinA = math.sin(self.rotation)
-    local drawnPixels = {}
-
-    local function drawBloodPixel(drawX, drawY, pixel, pixelAlpha, flash)
-        local key = drawX .. ":" .. drawY
-        if drawnPixels[key] then
-            return
-        end
-
-        drawnPixels[key] = true
-        local flashR = math.min(pixel.r + 0.46, 1)
-        local flashG = math.min(pixel.g + 0.20, 1)
-        local flashB = math.min(pixel.b + 0.12, 1)
-
-        love.graphics.setColor(
-            pixel.r + (flashR - pixel.r) * flash,
-            pixel.g + (flashG - pixel.g) * flash,
-            pixel.b + (flashB - pixel.b) * flash,
-            pixelAlpha
-        )
-        love.graphics.rectangle("fill", drawX, drawY, bloodPixelSize, bloodPixelSize)
+    if self.timer >= self.fadeStart then
+        alpha = 1 - smoothstep(self.fadeStart, self.lifeTime, self.timer)
     end
 
-    for _, pixel in ipairs(self.sprite.pixels or {}) do
-        local centeredU = pixel.u - 0.5
-        local centeredV = pixel.v - 0.5
-        local distanceFromCenter = math.sqrt(centeredU * centeredU + centeredV * centeredV)
-        local mask = 1 - smoothstep(revealRadius - 0.025, revealRadius + 0.045, distanceFromCenter)
-
-        if mask > 0.01 then
-            local localX = pixel.x * self.scale
-            local localY = pixel.y * self.scale
-            local drawX = math.floor(self.x + localX * cosA - localY * sinA + 0.5)
-            local drawY = math.floor(self.y + localX * sinA + localY * cosA + 0.5)
-            local pixelAlpha = a * alpha * pixel.a * mask
-
-            drawBloodPixel(drawX, drawY, pixel, pixelAlpha, flash)
-            if distanceFromCenter <= centerFillRadius and self.scale > 1 then
-                drawBloodPixel(drawX + 1, drawY, pixel, pixelAlpha * 0.92, flash)
-                drawBloodPixel(drawX, drawY + 1, pixel, pixelAlpha * 0.92, flash)
-            end
-        end
+    if self.timer < self.revealDuration then
+        alpha = alpha * smoothstep(0, self.revealDuration, self.timer)
     end
 
+    love.graphics.setColor(r, g, b, a * alpha)
+    love.graphics.draw(self.staticCanvas, self.staticCanvasX, self.staticCanvasY)
     love.graphics.setColor(r, g, b, a)
 end
 
 function BloodDecal.spawn(x, y, damageDx, damageDy, options)
     if not Game or not Game.particles then
         return
+    end
+
+    local oldestIndex = nil
+    local oldestTimer = -math.huge
+    local count = 0
+    for index, particle in ipairs(Game.particles) do
+        if particle.particleType == "bloodDecal" then
+            count = count + 1
+            if (particle.timer or 0) > oldestTimer then
+                oldestTimer = particle.timer or 0
+                oldestIndex = index
+            end
+        end
+    end
+
+    if count >= maxBloodDecals and oldestIndex then
+        table.remove(Game.particles, oldestIndex)
     end
 
     table.insert(Game.particles, BloodDecal:new(x, y, damageDx, damageDy, options))

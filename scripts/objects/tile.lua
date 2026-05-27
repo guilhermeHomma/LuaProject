@@ -170,7 +170,11 @@ function Tile:onshoot(damage)
         local FloorManager = require("scripts/managers/floorManager")
         FloorManager:markCurrentRoomObjectBroken(self.x, self.y)
         Tile.tilemap.getTilemap()[self.y][self.x] = 0
-        Tile.tilemap:loadfinders()
+        if Tile.tilemap.updatePathfinderTile then
+            Tile.tilemap:updatePathfinderTile(self.x, self.y)
+        else
+            Tile.tilemap:loadfinders()
+        end
         self.isBreaking = true
         self.breakTimer = 0
         return true
@@ -282,14 +286,17 @@ function Tile:draw()
             scaleX, scaleY = DamageStretch:getScale(self)
         end
 
-        if self.isBreaking or (self.hitFlashTimer and self.hitFlashTimer > 0) then
+        local useFlashShader = self.isBreaking or (self.hitFlashTimer and self.hitFlashTimer > 0)
+        if useFlashShader then
             local alpha = self.isBreaking and 0.7 or (self.hitFlashTimer / (self.hitFlashDuration or 0.08))
             love.graphics.setColor(1, 1, 1, alpha)
             love.graphics.setShader(whiteShader)
         end
         love.graphics.draw(tilesetImage, self.quad, self.xWorld, self.yWorld + yOffset, 0, scaleX, scaleY, tileSize/2, tileSize*2)
-        love.graphics.setShader()
-        love.graphics.setColor(1, 1, 1, 1)
+        if useFlashShader then
+            love.graphics.setShader()
+            love.graphics.setColor(1, 1, 1, 1)
+        end
 
     elseif self.quadIndex == 1 or self.quadIndex == 2 or self.quadIndex == 3
         or self.quadIndex == 31 or self.quadIndex == 32 or self.quadIndex == 33

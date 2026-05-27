@@ -83,7 +83,7 @@ DefaultLevel.followCameraSize = {
 }
 
 DefaultLevel.fixedCameraSize = {
-    width = 1120,-- 960,
+    width =  1120,-- 960,
     height = 630, --540,
 }
 

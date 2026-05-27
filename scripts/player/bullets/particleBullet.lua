@@ -105,6 +105,7 @@ function Bullet:new(x, y, angle, height, speed, damage, options)
     bullet.angle = angle
     bullet.radius = options.radius or 1.1
     bullet.isAlive = true
+    bullet.isProjectile = true
     bullet.timer = 0
     bullet.lastParticle = 0
     bullet.lifeTime = options.lifeTime or (0.3 + math.random() * 0.1)
@@ -152,6 +153,14 @@ function Bullet:spawnColorParticles(count)
 end
 
 function Bullet:spawnSpriteTrailPoint(x, y)
+    if Game then
+        local currentCount = Game.bulletSpriteParticleCount or 0
+        if currentCount >= 32 then
+            return
+        end
+        Game.bulletSpriteParticleCount = currentCount + 1
+    end
+
     table.insert(Game.particles, BulletSpriteParticle:new(
         x,
         y,
@@ -216,25 +225,25 @@ function Bullet:isColliding(size)
     local top = self.y - halfSize
     local bottom = self.y + halfSize
 
-    local nearbyTiles = Tilemap.getNearbyTiles and Tilemap:getNearbyTiles(self.x, self.y) or Tilemap.tiles
+    local nearbyTiles = Tilemap.getNearbyCollidableTiles and Tilemap:getNearbyCollidableTiles(self.x, self.y)
+        or Tilemap.getNearbyTiles and Tilemap:getNearbyTiles(self.x, self.y)
+        or Tilemap.tiles
     for _, tile in ipairs(nearbyTiles or {}) do
-        if tile.collider and not tile.isWater then
-            local tileLeft = tile.xWorld - tile.size / 2
-            local tileTop = tile.yWorld - tile.size
-            if left < tileLeft + tile.size
-                and right > tileLeft
-                and top < tileTop + tile.size
-                and bottom > tileTop then
-                self.hitTileOnDeath = true
-                local damaged = false
-                if type(tile.onshoot) == "function" then
-                    damaged = tile:onshoot(self.damage) == true
-                end
-                if damaged then
-                    DamageNumber.spawn(self.x, self.y, self.height, self.damage)
-                end
-                return true
+        local tileLeft = tile.xWorld - tile.size / 2
+        local tileTop = tile.yWorld - tile.size
+        if left < tileLeft + tile.size
+            and right > tileLeft
+            and top < tileTop + tile.size
+            and bottom > tileTop then
+            self.hitTileOnDeath = true
+            local damaged = false
+            if type(tile.onshoot) == "function" then
+                damaged = tile:onshoot(self.damage) == true
             end
+            if damaged then
+                DamageNumber.spawn(self.x, self.y, self.height, self.damage)
+            end
+            return true
         end
     end
 
@@ -249,6 +258,9 @@ function Bullet:update(dt)
 
     self.x = self.x + self.dx * dt
     self.y = self.y + self.dy * dt
+    if Tilemap.markGrassNearPoint then
+        Tilemap:markGrassNearPoint(self.x, self.y, 12, self.x)
+    end
     self:spawnSpriteTrail(previousX, previousY)
     self.colorParticleTimer = self.colorParticleTimer + dt
     if self.colorParticleTimer >= self.colorParticles.spawnInterval then
@@ -279,7 +291,8 @@ function Bullet:update(dt)
         table.insert(Game.particles, Particle:new(self.x, self.y, self.height - 2, 1.2, 0.07))
     end
 
-    for _, enemy in ipairs(Game.enemies) do
+    local enemies = Game.getEnemiesNearPoint and Game:getEnemiesNearPoint(self.x, self.y, self.radius + 24) or Game.enemies
+    for _, enemy in ipairs(enemies) do
         if self.isAlive and enemy.isAlive and self:checkCollisionWithEnemy(enemy) then
             self.isAlive = false
             DamageNumber.spawn(self.x, self.y, self.height, self.damage)
@@ -342,10 +355,13 @@ function Bullet:drawGlow()
     local innerRadius = self.radius * self.glow.innerScale * pulse
 
     love.graphics.setBlendMode("add")
-    setGlowColor(self.glow.outerColor)
-    love.graphics.circle("fill", x, y, outerRadius)
-    setGlowColor(self.glow.midColor)
-    love.graphics.circle("fill", x, y, outerRadius * self.glow.midScale)
+    local drawCount = Game and (Game.projectileDrawCount or 0) or 0
+    if drawCount <= 12 then
+        setGlowColor(self.glow.outerColor)
+        love.graphics.circle("fill", x, y, outerRadius)
+        setGlowColor(self.glow.midColor)
+        love.graphics.circle("fill", x, y, outerRadius * self.glow.midScale)
+    end
     setGlowColor(self.glow.innerColor)
     love.graphics.circle("fill", x, y, innerRadius)
     love.graphics.setBlendMode("alpha")
@@ -353,6 +369,10 @@ function Bullet:drawGlow()
 end
 
 function Bullet:draw()
+    if Game then
+        Game.projectileDrawCount = (Game.projectileDrawCount or 0) + 1
+    end
+
     if self.projectileSprite then
         local progress = (self.timer % self.spriteTrailLifetime) / self.spriteTrailLifetime
         local frameIndex = math.floor(math.min(0.999, progress) * 5)

@@ -3,6 +3,7 @@ local GunStarDraw = require("scripts/effects/gunStarDraw")
 
 local GunStarParticle = setmetatable({}, {__index = Particle})
 GunStarParticle.__index = GunStarParticle
+GunStarParticle.castsShadow = false
 
 function GunStarParticle:new(x, y, height, scale, spritePath)
     local particle = Particle.new(self, x, y, height or 0, scale or 1, GunStarDraw.getAnimationDuration())

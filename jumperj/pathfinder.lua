@@ -128,13 +128,17 @@ if (...) then
     local path = Path:new()
     path.grid = finder.grid
     lastPathCost = node.f or path:getLength()
+    local reversed = {}
 
     while true do
       if node.parent then
-        t_insert(path,1,node)
+        reversed[#reversed + 1] = node
         node = node.parent
       else
-        t_insert(path,1,startNode)
+        path[1] = startNode
+        for i = #reversed, 1, -1 do
+          path[#path + 1] = reversed[i]
+        end
         return path
       end
     end
@@ -164,8 +168,14 @@ if (...) then
     newPathfinder:setWalkable(walkable)
     newPathfinder:setMode('DIAGONAL')
     newPathfinder:setHeuristic('MANHATTAN')
+    newPathfinder.heuristicWeight = 1
     newPathfinder.openList = Heap()
     return newPathfinder
+  end
+
+  function Pathfinder:setHeuristicWeight(weight)
+    self.heuristicWeight = weight or 1
+    return self
   end
 
   --- Sets a `grid` object. Defines the `grid` on which the `pathfinder` will make path searches.

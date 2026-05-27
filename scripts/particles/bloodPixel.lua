@@ -1,7 +1,10 @@
 local BloodPixel = {}
 BloodPixel.__index = BloodPixel
+BloodPixel.castsShadow = false
 
 local bloodPixelScale = 1.35
+local maxBloodPixels = 72
+local bloodUpdateInterval = 1 / 30
 
 local palette = {
     {0.46, 0.12, 0.10, 1},
@@ -41,12 +44,22 @@ function BloodPixel:new(x, y, dx, dy, customPalette)
     particle.colorOffset = math.random(0, #activePalette - 1)
     particle.frozenColor = nil
     particle.isAlive = true
+    particle.particleType = "bloodPixel"
+    particle.updateInterval = bloodUpdateInterval
+    particle.maxUpdateDt = bloodUpdateInterval * 2
+    particle.updateAccumulator = bloodUpdateInterval
     return particle
 end
 
-function BloodPixel:update(dt)
-    addToDrawQueue(self.y + 8, self)
+function BloodPixel:queueDraw()
+    if self.grounded and Game and Game.groundDecalQueue then
+        Game.groundDecalQueue[#Game.groundDecalQueue + 1] = self
+    else
+        addToDrawQueue(self.y + 8, self)
+    end
+end
 
+function BloodPixel:update(dt)
     self.timer = self.timer + dt
     self.x = self.x + self.vx * dt
     self.y = self.y + self.vy * dt
@@ -84,6 +97,13 @@ function BloodPixel:drawShadow()
 end
 
 function BloodPixel:draw()
+    local x, y, size, r, g, b, alpha = self:getBatchDrawInfo()
+    love.graphics.setColor(r, g, b, alpha)
+    love.graphics.rectangle("fill", x, y, size, size)
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
+function BloodPixel:getBatchDrawInfo()
     local color = self.frozenColor
     local activePalette = self.palette or palette
     if not color then
@@ -91,15 +111,14 @@ function BloodPixel:draw()
         color = activePalette[colorIndex]
     end
 
-    love.graphics.setColor(color[1], color[2], color[3], 1)
-    love.graphics.rectangle(
-        "fill",
+    return
         math.floor(self.x + 0.5),
         math.floor(self.y - self.height + 0.5),
         bloodPixelScale,
-        bloodPixelScale
-    )
-    love.graphics.setColor(1, 1, 1, 1)
+        color[1],
+        color[2],
+        color[3],
+        1
 end
 
 function BloodPixel.spawnBurst(x, y, dx, dy, minCount, maxCount, customPalette)
@@ -108,6 +127,20 @@ function BloodPixel.spawnBurst(x, y, dx, dy, minCount, maxCount, customPalette)
     end
 
     local count = math.random(minCount or 4, maxCount or minCount or 4)
+    local activeCount = 0
+    local bloodPixelIndexes = {}
+    for index, particle in ipairs(Game.particles) do
+        if particle.particleType == "bloodPixel" then
+            activeCount = activeCount + 1
+            bloodPixelIndexes[activeCount] = index
+        end
+    end
+
+    local overflow = math.max(0, activeCount + count - maxBloodPixels)
+    for index = math.min(overflow, activeCount), 1, -1 do
+        table.remove(Game.particles, bloodPixelIndexes[index])
+    end
+
     for _ = 1, count do
         table.insert(Game.particles, BloodPixel:new(x, y, dx, dy, customPalette))
     end

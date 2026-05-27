@@ -275,7 +275,7 @@ end
             toClear[jumpNode] = true -- Records this node to reset its properties later.
             jumpNode.g = newG
             jumpNode.h = jumpNode.h or
-              (finder.heuristic(jumpNode.x-endNode.x,jumpNode.y-endNode.y))
+              (finder.heuristic(jumpNode.x-endNode.x,jumpNode.y-endNode.y) * (finder.heuristicWeight or 1))
             jumpNode.f = jumpNode.g+jumpNode.h
             jumpNode.parent = node
             if not jumpNode.opened then

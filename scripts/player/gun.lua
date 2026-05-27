@@ -160,6 +160,22 @@ local function resolveBulletSoundPath(bulletConfig)
         .. "/" .. (bulletConfig.sound or "bullet.mp3")
 end
 
+local function preloadWeaponSounds(weaponDefinitions)
+    for _, weaponConfig in ipairs(weaponDefinitions or {}) do
+        if weaponConfig then
+            local audio = weaponConfig.audio or {}
+            getSoundSource(resolveWeaponSoundPath(weaponConfig, "shot"))
+            getSoundSource(resolveWeaponSoundPath(weaponConfig, "load"))
+            getSoundSource(audio.empty or "assets/sfx/gun/empty.mp3")
+
+            for _, projectile in ipairs(weaponConfig.projectiles or {}) do
+                local bulletConfig = resolveBulletConfig(weaponConfig, projectile.bullet)
+                getSoundSource(resolveBulletSoundPath(bulletConfig))
+            end
+        end
+    end
+end
+
 local function createWeaponSlot(index, weaponConfig, infiniteAmmo)
     if not weaponConfig then
         return nil
@@ -214,6 +230,7 @@ function Gun:load()
     self.centerDistance = 0
     self.bullets = {}
     self.weaponDefinitions = weapons
+    preloadWeaponSounds(self.weaponDefinitions)
     self.gunSheet = love.graphics.newImage("assets/sprites/player/guns.png")
     self.bulletSheet = love.graphics.newImage("assets/sprites/player/gun-bullet.png")
     self.infinityIcon = love.graphics.newImage("assets/sprites/ui/infinity.png")

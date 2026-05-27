@@ -11,6 +11,8 @@ local Grid = require("jumperj.grid")
 local Pathfinder = require("jumperj.pathfinder")
 
 local tileSize = 16
+local treeFadeCellSize = 64
+local tileUpdateCellSize = 128
 local tilemap = nil
 local tilemapWorldX = -40 * tileSize
 local tilemapWorldY = -40 * tileSize
@@ -59,6 +61,8 @@ local TILE_DOOR_BACK = 9
 local TILE_CONTAINER = 13
 local TILE_CHEST = 15
 local TILE_CHEST_MARKER = 6
+local GRASS_WALKABLE_RADIUS = 4
+local TILE_OBJECT_BORDER_CULL_LAYERS = 3
 
 local function isWalkableTile(tile)
     return tile == TILE_FLOOR or tile == TILE_DOOR_BACK
@@ -74,6 +78,28 @@ end
 
 local function isWalkableOrChestTile(tile)
     return isWalkableTile(tile) or tile == TILE_CHEST or tile == TILE_CHEST_MARKER
+end
+
+local function getTreeFadeCell(value)
+    return math.floor(value / treeFadeCellSize)
+end
+
+local function getTreeFadeCellKey(cellX, cellY)
+    return cellX .. ":" .. cellY
+end
+
+local function getSpatialCell(value)
+    return math.floor(value / tileUpdateCellSize)
+end
+
+local function getSpatialCellKey(cellX, cellY)
+    return cellX .. ":" .. cellY
+end
+
+local function clearArray(list)
+    for i = #list, 1, -1 do
+        list[i] = nil
+    end
 end
 
 local function hasAdjacentWalkableOrChest(x, y, sourceMap)
@@ -267,6 +293,43 @@ local function isGrassBlockingObjectTile(tile)
         or tile == TILE_CONTAINER
 end
 
+local function hasWalkableTileWithin(x, y, radius)
+    local radiusSq = radius * radius
+    for checkY = y - radius, y + radius do
+        local row = tilemap[checkY]
+        if row then
+            for checkX = x - radius, x + radius do
+                local dx = checkX - x
+                local dy = checkY - y
+                if dx * dx + dy * dy <= radiusSq and isWalkableTile(row[checkX]) then
+                    return true
+                end
+            end
+        end
+    end
+
+    return false
+end
+
+local function shouldCreateTileObject(tile, x, y)
+    if tile == TILE_FLOOR or tile == TILE_DOOR_BACK then
+        return false
+    end
+
+    if tile == TILE_DOOR or tile == TILE_STORE or tile == TILE_CHEST then
+        return true
+    end
+
+    local mapHeight = #tilemap
+    local mapWidth = tilemap[1] and #tilemap[1] or 0
+    local border = TILE_OBJECT_BORDER_CULL_LAYERS
+    if x <= border or y <= border or x > mapWidth - border or y > mapHeight - border then
+        return false
+    end
+
+    return true
+end
+
 local function isNearGrassBlockingObject(x, y)
     local neighbors = {
         {x = x, y = y},
@@ -288,6 +351,9 @@ end
 
 local function shouldCreateGrass(tile, collider, x, y)
     if isNearGrassBlockingObject(x, y) then
+        return false
+    end
+    if not hasWalkableTileWithin(x, y, GRASS_WALKABLE_RADIUS) then
         return false
     end
 
@@ -778,12 +844,18 @@ local function shouldCreateBigGrass(tile, collider, x, y, occupied)
     if isNearGrassBlockingObject(x, y) then
         return false
     end
+    if not hasWalkableTileWithin(x, y, GRASS_WALKABLE_RADIUS) then
+        return false
+    end
 
     return (tile == 0 or tile == 5 or tile == 6) and isFloorNearWall(x, y) and not occupied[getTileKey(x, y)] and math.random() < 0.05
 end
 
 local function shouldCreateDecorativeBigGrass(tile, collider, x, y, occupied)
     if isNearGrassBlockingObject(x, y) then
+        return false
+    end
+    if not hasWalkableTileWithin(x, y, GRASS_WALKABLE_RADIUS) then
         return false
     end
 
@@ -801,7 +873,7 @@ local function canCreateBigGrassAt(x, y, occupied)
         return false
     end
 
-    return not isNearGrassBlockingObject(x, y) and isFloorNearWall(x, y)
+    return not isNearGrassBlockingObject(x, y) and hasWalkableTileWithin(x, y, GRASS_WALKABLE_RADIUS) and isFloorNearWall(x, y)
 end
 
 local function canCreateDecorativeBigGrassAt(x, y, occupied)
@@ -811,6 +883,7 @@ local function canCreateDecorativeBigGrassAt(x, y, occupied)
 
     return currentThemeAllowsWallGrass()
         and not isNearGrassBlockingObject(x, y)
+        and hasWalkableTileWithin(x, y, GRASS_WALKABLE_RADIUS)
         and tilemap[y][x] == 1
         and not isWallTouchingWalkableGround(x, y)
         and not (
@@ -842,6 +915,9 @@ end
 local function canRenderGrassEntry(entry)
     local tile = tilemap[entry.y] and tilemap[entry.y][entry.x]
     if not tile then
+        return false
+    end
+    if not hasWalkableTileWithin(entry.x, entry.y, GRASS_WALKABLE_RADIUS) then
         return false
     end
 
@@ -1353,12 +1429,9 @@ function DefaultTilemap:setDoorOpen(direction, open, animate, options)
                     tilemap[tile.y][tile.x] = TILE_DOOR
                 end
             end
+            self:updatePathfinderTile(tile.x, tile.y)
             changed = true
         end
-    end
-
-    if changed then
-        self:loadfinders()
     end
 end
 
@@ -1387,14 +1460,11 @@ function DefaultTilemap:setAllRoomDoorsOpen(open, animate, options)
                             tilemap[tile.y][tile.x] = TILE_DOOR
                         end
                     end
+                    self:updatePathfinderTile(tile.x, tile.y)
                     changed = true
                 end
             end
         end
-    end
-
-    if changed then
-        self:loadfinders()
     end
 end
 
@@ -1410,35 +1480,289 @@ function DefaultTilemap:worldToMap(x, y)
     return xMap, yMap
 end
 
-function DefaultTilemap:getNearbyTiles(worldX, worldY)
-    local tiles = {}
-    local mapX, mapY = self:worldToMap(worldX, worldY)
+function DefaultTilemap:getTileAtMapPosition(x, y)
+    local row = tilemap and tilemap[y]
+    if not (row and row[x] ~= nil) then
+        return nil
+    end
 
-    for y = mapY - 1, mapY + 1 do
-        if tilemap[y] then
-            for x = mapX - 1, mapX + 1 do
-                if tilemap[y][x] then
-                    local xWorld, yWorld = self:mapToWorld(x, y)
-                    local tile = self.tileLookup and self.tileLookup[getTileKey(x, y)]
-                    if tile then
-                        tiles[#tiles + 1] = tile
-                    else
-                        tiles[#tiles + 1] = {
-                            mapX = x,
-                            mapY = y,
-                            collider = not isWalkableMapPosition(x, y),
-                            tileIndex = tilemap[y][x],
-                            xWorld = xWorld,
-                            yWorld = yWorld,
-                            size = tileSize,
-                        }
+    local lookupRow = self.tileLookupByMap and self.tileLookupByMap[y]
+    local tile = lookupRow and lookupRow[x]
+    if tile then
+        return tile
+    end
+
+    local staticRow = self.staticTileInfo and self.staticTileInfo[y]
+    return staticRow and staticRow[x] or nil
+end
+
+function DefaultTilemap:buildTileQueryCache()
+    self.staticTileInfo = {}
+    self.nearbyTileCache = {}
+    self.nearbyCollidableTileCache = {}
+    self.tileLookupByMap = self.tileLookupByMap or {}
+
+    for y = 1, #tilemap do
+        self.staticTileInfo[y] = {}
+        for x = 1, #tilemap[y] do
+            local xWorld, yWorld = self:mapToWorld(x, y)
+            self.staticTileInfo[y][x] = {
+                mapX = x,
+                mapY = y,
+                collider = not isWalkableMapPosition(x, y),
+                tileIndex = tilemap[y][x],
+                xWorld = xWorld,
+                yWorld = yWorld,
+                size = tileSize,
+            }
+        end
+    end
+
+    for y = 1, #tilemap do
+        self.nearbyTileCache[y] = {}
+        self.nearbyCollidableTileCache[y] = {}
+        for x = 1, #tilemap[y] do
+            local nearby = {}
+            local collidable = {}
+            for nearbyY = y - 1, y + 1 do
+                if tilemap[nearbyY] then
+                    for nearbyX = x - 1, x + 1 do
+                        local tile = self:getTileAtMapPosition(nearbyX, nearbyY)
+                        if tile then
+                            nearby[#nearby + 1] = tile
+                            if tile.collider and not tile.isWater then
+                                collidable[#collidable + 1] = tile
+                            end
+                        end
+                    end
+                end
+            end
+            self.nearbyTileCache[y][x] = nearby
+            self.nearbyCollidableTileCache[y][x] = collidable
+        end
+    end
+end
+
+function DefaultTilemap:refreshStaticTileInfoAt(x, y)
+    if not (tilemap and tilemap[y] and tilemap[y][x] ~= nil) then
+        return
+    end
+
+    self.staticTileInfo = self.staticTileInfo or {}
+    self.staticTileInfo[y] = self.staticTileInfo[y] or {}
+
+    local info = self.staticTileInfo[y][x]
+    if not info then
+        local xWorld, yWorld = self:mapToWorld(x, y)
+        info = {
+            mapX = x,
+            mapY = y,
+            xWorld = xWorld,
+            yWorld = yWorld,
+            size = tileSize,
+        }
+        self.staticTileInfo[y][x] = info
+    end
+
+    info.collider = not isWalkableMapPosition(x, y)
+    info.tileIndex = tilemap[y][x]
+end
+
+function DefaultTilemap:rebuildNearbyTileCacheAt(x, y)
+    if not (tilemap and tilemap[y] and tilemap[y][x] ~= nil) then
+        return
+    end
+
+    self.nearbyTileCache = self.nearbyTileCache or {}
+    self.nearbyTileCache[y] = self.nearbyTileCache[y] or {}
+    self.nearbyCollidableTileCache = self.nearbyCollidableTileCache or {}
+    self.nearbyCollidableTileCache[y] = self.nearbyCollidableTileCache[y] or {}
+    local nearby = self.nearbyTileCache[y][x] or {}
+    local collidable = self.nearbyCollidableTileCache[y][x] or {}
+    clearArray(nearby)
+    clearArray(collidable)
+
+    for nearbyY = y - 1, y + 1 do
+        if tilemap[nearbyY] then
+            for nearbyX = x - 1, x + 1 do
+                local tile = self:getTileAtMapPosition(nearbyX, nearbyY)
+                if tile then
+                    nearby[#nearby + 1] = tile
+                    if tile.collider and not tile.isWater then
+                        collidable[#collidable + 1] = tile
                     end
                 end
             end
         end
     end
 
+    self.nearbyTileCache[y][x] = nearby
+    self.nearbyCollidableTileCache[y][x] = collidable
+end
+
+function DefaultTilemap:updateTileQueryCacheAt(x, y)
+    if not (tilemap and tilemap[y] and tilemap[y][x] ~= nil) then
+        return
+    end
+
+    self:refreshStaticTileInfoAt(x, y)
+
+    for cacheY = y - 1, y + 1 do
+        if tilemap[cacheY] then
+            for cacheX = x - 1, x + 1 do
+                self:rebuildNearbyTileCacheAt(cacheX, cacheY)
+            end
+        end
+    end
+end
+
+function DefaultTilemap:getNearbyTiles(worldX, worldY)
+    local mapX, mapY = self:worldToMap(worldX, worldY)
+    local row = self.nearbyTileCache and self.nearbyTileCache[mapY]
+    if row and row[mapX] then
+        return row[mapX]
+    end
+
+    local tiles = {}
+    for y = mapY - 1, mapY + 1 do
+        if tilemap[y] then
+            for x = mapX - 1, mapX + 1 do
+                local tile = self:getTileAtMapPosition(x, y)
+                if tile then
+                    tiles[#tiles + 1] = tile
+                end
+            end
+        end
+    end
+
     return tiles
+end
+
+function DefaultTilemap:getNearbyCollidableTiles(worldX, worldY)
+    local mapX, mapY = self:worldToMap(worldX, worldY)
+    local row = self.nearbyCollidableTileCache and self.nearbyCollidableTileCache[mapY]
+    if row and row[mapX] then
+        return row[mapX]
+    end
+
+    local tiles = {}
+    for y = mapY - 1, mapY + 1 do
+        if tilemap[y] then
+            for x = mapX - 1, mapX + 1 do
+                local tile = self:getTileAtMapPosition(x, y)
+                if tile and tile.collider and not tile.isWater then
+                    tiles[#tiles + 1] = tile
+                end
+            end
+        end
+    end
+
+    return tiles
+end
+
+function DefaultTilemap:getTilesInWorldBox(minX, minY, maxX, maxY)
+    local tiles = self.tilesInWorldBoxScratch or {}
+    clearArray(tiles)
+    self.tilesInWorldBoxScratch = tiles
+    local minMapX, minMapY = self:worldToMap(minX, minY)
+    local maxMapX, maxMapY = self:worldToMap(maxX, maxY)
+
+    if minMapX > maxMapX then
+        minMapX, maxMapX = maxMapX, minMapX
+    end
+    if minMapY > maxMapY then
+        minMapY, maxMapY = maxMapY, minMapY
+    end
+
+    for y = minMapY - 1, maxMapY + 1 do
+        if tilemap[y] then
+            for x = minMapX - 1, maxMapX + 1 do
+                local tile = self:getTileAtMapPosition(x, y)
+                if tile then
+                    tiles[#tiles + 1] = tile
+                end
+            end
+        end
+    end
+
+    return tiles
+end
+
+function DefaultTilemap:buildTreeFadeIndex(trees)
+    self.treeFadeGrid = {}
+    self.treeFadeCandidates = trees or {}
+    self.markedTreeFadeTargets = {}
+
+    for _, tree in ipairs(self.treeFadeCandidates) do
+        if tree.getFadeBox then
+            local box = tree:getFadeBox()
+            local minCellX = getTreeFadeCell(box.x)
+            local maxCellX = getTreeFadeCell(box.x + box.width)
+            local minCellY = getTreeFadeCell(box.y)
+            local maxCellY = getTreeFadeCell(box.y + box.height)
+
+            tree.fadeBox = box
+            for cellY = minCellY, maxCellY do
+                for cellX = minCellX, maxCellX do
+                    local key = getTreeFadeCellKey(cellX, cellY)
+                    local bucket = self.treeFadeGrid[key]
+                    if not bucket then
+                        bucket = {}
+                        self.treeFadeGrid[key] = bucket
+                    end
+                    bucket[#bucket + 1] = tree
+                end
+            end
+        end
+    end
+end
+
+function DefaultTilemap:markTreesTransparentNearBox(box, padding)
+    if not (box and self.treeFadeGrid) then
+        return
+    end
+
+    padding = padding or 0
+    local minX = box.x - padding
+    local maxX = box.x + box.width + padding
+    local minY = box.y - padding
+    local maxY = box.y + box.height + padding
+    local minCellX = getTreeFadeCell(minX)
+    local maxCellX = getTreeFadeCell(maxX)
+    local minCellY = getTreeFadeCell(minY)
+    local maxCellY = getTreeFadeCell(maxY)
+    local checked = {}
+
+    for cellY = minCellY, maxCellY do
+        for cellX = minCellX, maxCellX do
+            local bucket = self.treeFadeGrid[getTreeFadeCellKey(cellX, cellY)]
+            if bucket then
+                for _, tree in ipairs(bucket) do
+                    if not checked[tree] then
+                        checked[tree] = true
+                        local treeBox = tree.fadeBox or (tree.getFadeBox and tree:getFadeBox())
+                        if treeBox
+                            and minX <= treeBox.x + treeBox.width
+                            and maxX >= treeBox.x
+                            and minY <= treeBox.y + treeBox.height
+                            and maxY >= treeBox.y then
+                            if tree.fadeTargetAlpha == nil then
+                                self.markedTreeFadeTargets[#self.markedTreeFadeTargets + 1] = tree
+                            end
+                            tree:markTransparent()
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+function DefaultTilemap:clearTreeFadeTargets()
+    for _, tree in ipairs(self.markedTreeFadeTargets or {}) do
+        tree.fadeTargetAlpha = nil
+    end
+    self.markedTreeFadeTargets = {}
 end
 
 function DefaultTilemap:getNearestWalkableMapPosition(mapX, mapY, maxRadius)
@@ -1461,8 +1785,19 @@ function DefaultTilemap:getNearestWalkableMapPosition(mapX, mapY, maxRadius)
     return nil, nil
 end
 
+function DefaultTilemap:getNearestWalkableWorldPosition(worldX, worldY, maxRadius)
+    local mapX, mapY = self:worldToMap(worldX, worldY)
+    mapX, mapY = self:getNearestWalkableMapPosition(mapX, mapY, maxRadius or 3)
+    if not mapX then
+        return nil, nil
+    end
+
+    local x, y = self:mapToWorld(mapX, mapY)
+    return x, y - 8
+end
+
 function DefaultTilemap:getPathBetweenWorldPoints(startX, startY, endX, endY)
-    if not self.finderAstar then
+    if not self.finder then
         return nil
     end
 
@@ -1476,6 +1811,18 @@ function DefaultTilemap:getPathBetweenWorldPoints(startX, startY, endX, endY)
     end
 
     local ok, path = pcall(function()
+        return self.finder:getPath(startMapX, startMapY, endMapX, endMapY)
+    end)
+
+    if ok and path then
+        return path
+    end
+
+    if not self.finderAstar then
+        return nil
+    end
+
+    ok, path = pcall(function()
         return self.finderAstar:getPath(startMapX, startMapY, endMapX, endMapY)
     end)
 
@@ -1495,11 +1842,40 @@ function DefaultTilemap:hasTileClose(x, y, tileIndex)
 end
 
 function DefaultTilemap:loadfinders()
-    self.sharedGrid = Grid(buildPathfinderMap(tilemap))
-    self.finder = Pathfinder(self.sharedGrid, "JPS", 0)
-    self.finderAstar = Pathfinder(self.sharedGrid, "ASTAR", 0)
-    self.finder:setMode("ORTHOGONAL")
-    self.finderAstar:setMode("ORTHOGONAL")
+    local needsRebuild = not self.pathfinderMap
+        or #self.pathfinderMap ~= #tilemap
+        or (tilemap[1] and self.pathfinderMap[1] and #self.pathfinderMap[1] ~= #tilemap[1])
+
+    if needsRebuild then
+        self.pathfinderMap = buildPathfinderMap(tilemap)
+        self.sharedGrid = Grid(self.pathfinderMap)
+        self.finder = Pathfinder(self.sharedGrid, "JPS", 0)
+        self.finderAstar = Pathfinder(self.sharedGrid, "ASTAR", 0)
+        self.finder:setMode("ORTHOGONAL")
+        self.finderAstar:setMode("ORTHOGONAL")
+        self.finder:setHeuristicWeight(1.35)
+        self.finderAstar:setHeuristicWeight(1.35)
+        return
+    end
+
+    for y = 1, #tilemap do
+        local sourceRow = tilemap[y]
+        local pathRow = self.pathfinderMap[y]
+        for x = 1, #sourceRow do
+            pathRow[x] = isWalkableTile(sourceRow[x]) and 0 or 1
+        end
+    end
+end
+
+function DefaultTilemap:updatePathfinderTile(x, y)
+    self:updateTileQueryCacheAt(x, y)
+
+    if not (self.pathfinderMap and self.pathfinderMap[y]) then
+        self:loadfinders()
+        return
+    end
+
+    self.pathfinderMap[y][x] = isWalkableTile(tilemap[y] and tilemap[y][x]) and 0 or 1
 end
 
 local function isSpecialStoneWallRoom(room)
@@ -1720,6 +2096,10 @@ function DefaultTilemap:load()
 
     tileSet:createTileSet(visualTheme.tileset)
     Tile:setTilemap(self)
+    self.pathfinderMap = nil
+    self.sharedGrid = nil
+    self.finder = nil
+    self.finderAstar = nil
     self:loadfinders()
 
     self.grass = {}
@@ -1727,8 +2107,12 @@ function DefaultTilemap:load()
     self.floorPaths = {}
     self.tiles = {}
     self.tileLookup = {}
+    self.tileLookupByMap = {}
     self.doorTiles = {}
     self.groundOccluderTiles = {}
+    self.treeFadeGrid = {}
+    self.treeFadeCandidates = {}
+    self.markedTreeFadeTargets = {}
     self.spawnPositions = {}
     self.moonbeams = {}
     self.ambientDust = nil
@@ -1800,18 +2184,22 @@ function DefaultTilemap:load()
                 end
             end
 
-            local createdTile = self:createTile(x, y, tile, collider)
-            if createdTile then
-                self.tiles[#self.tiles + 1] = createdTile
-                self.tileLookup[getTileKey(x, y)] = createdTile
-                if createdTile.collider and not createdTile.isWater then
-                    self.groundOccluderTiles[#self.groundOccluderTiles + 1] = createdTile
-                end
-                if createdTile.openDoor and createdTile.closeDoor then
-                    self.doorTiles[#self.doorTiles + 1] = createdTile
-                end
-                if createdTile.treeIndex then
-                    trees[#trees + 1] = createdTile
+            if shouldCreateTileObject(tile, x, y) then
+                local createdTile = self:createTile(x, y, tile, collider)
+                if createdTile then
+                    self.tiles[#self.tiles + 1] = createdTile
+                    self.tileLookup[getTileKey(x, y)] = createdTile
+                    self.tileLookupByMap[y] = self.tileLookupByMap[y] or {}
+                    self.tileLookupByMap[y][x] = createdTile
+                    if createdTile.collider and not createdTile.isWater then
+                        self.groundOccluderTiles[#self.groundOccluderTiles + 1] = createdTile
+                    end
+                    if createdTile.openDoor and createdTile.closeDoor then
+                        self.doorTiles[#self.doorTiles + 1] = createdTile
+                    end
+                    if createdTile.treeIndex then
+                        trees[#trees + 1] = createdTile
+                    end
                 end
             end
         end
@@ -1836,8 +2224,11 @@ function DefaultTilemap:load()
         end
     end
 
+    self:buildTileQueryCache()
+    self:buildTreeFadeIndex(trees)
     self:loadMoonbeams(trees, specialMoonbeamTargets)
     self:loadAmbientDust(walkablePositions)
+    self:buildUpdateSpatialIndex()
 end
 
 local function isSpawnCandidateAllowed(candidate, reference, targetDistance, avoidPoints)
@@ -1885,11 +2276,15 @@ function DefaultTilemap:getRandomSpawnPosition(reference, minDistance, avoidPoin
 end
 
 function DefaultTilemap:getRandomReachableSpawnPosition(reference, minDistance, avoidPoints)
-    if not tilemap or not self.finderAstar then
+    if not tilemap or not self.finder then
         return self:getRandomSpawnPosition(reference, minDistance, avoidPoints)
     end
 
     local targetDistance = minDistance or GameConfig.spawnMinDistance
+    local spawnPositions = self.spawnPositions or {}
+    if #spawnPositions == 0 then
+        return self:getRandomSpawnPosition(reference, minDistance, avoidPoints)
+    end
     local referenceMapX, referenceMapY = nil, nil
     if reference then
         referenceMapX, referenceMapY = self:worldToMap(reference.x, reference.y)
@@ -1897,25 +2292,24 @@ function DefaultTilemap:getRandomReachableSpawnPosition(reference, minDistance, 
     end
 
     for _ = 1, 120 do
-        local y = math.random(1, #tilemap)
-        local x = math.random(1, #tilemap[y])
+        local candidate = spawnPositions[math.random(1, #spawnPositions)]
 
-        if tilemap[y][x] == TILE_FLOOR then
-            local worldX, worldY = self:mapToWorld(x, y)
-            local candidate = {x = worldX, y = worldY - 8}
-            local farEnough = isSpawnCandidateAllowed(candidate, reference, targetDistance, avoidPoints)
+        if candidate and isSpawnCandidateAllowed(candidate, reference, targetDistance, avoidPoints) then
+            if not referenceMapX then
+                return candidate.x, candidate.y
+            end
 
-            if farEnough then
-                if not referenceMapX then
-                    return candidate.x, candidate.y
-                end
-
-                local ok, path = pcall(function()
+            local x, y = self:worldToMap(candidate.x, candidate.y)
+            local ok, path = pcall(function()
+                return self.finder:getPath(x, y, referenceMapX, referenceMapY)
+            end)
+            if (not ok or not path) and self.finderAstar then
+                ok, path = pcall(function()
                     return self.finderAstar:getPath(x, y, referenceMapX, referenceMapY)
                 end)
-                if ok and path and #path > 1 then
-                    return candidate.x, candidate.y
-                end
+            end
+            if ok and path and #path > 1 then
+                return candidate.x, candidate.y
             end
         end
     end
@@ -1944,39 +2338,261 @@ local function isObjectNearCamera(object, margin)
         and screenY <= baseHeight + margin
 end
 
+local function getCameraWorldBox(margin)
+    if not camera then
+        return nil
+    end
+
+    margin = margin or 160
+    local zoomX = math.max(camera.zoomX or 1, 0.001)
+    local zoomY = math.max(camera.zoomY or 1, 0.001)
+    local scaleX = math.max(WORLD_SCALE_X or 1, 0.001)
+    local scaleY = math.max(YSCALE or 1, 0.001)
+
+    return {
+        minX = (camera.x - margin / zoomX) / scaleX,
+        maxX = (camera.x + (baseWidth + margin) / zoomX) / scaleX,
+        minY = (camera.y - margin / zoomY) / scaleY,
+        maxY = (camera.y + (baseHeight + margin) / zoomY) / scaleY,
+    }
+end
+
+local function getObjectSpatialBounds(object)
+    local x = object and (object.xWorld or object.x)
+    local y = object and (object.yWorld or object.y)
+    if not (x and y) then
+        return nil
+    end
+
+    if object and type(object.getXrayOccluderBox) == "function" then
+        local box = object:getXrayOccluderBox()
+        if box then
+            return box.x, box.y, box.x + box.width, box.y + box.height
+        end
+    end
+
+    local radius = object.spatialRadius or object.size or 16
+    return x - radius, y - radius, x + radius, y + radius
+end
+
+local function addObjectToSpatialGrid(grid, object)
+    local minX, minY, maxX, maxY = getObjectSpatialBounds(object)
+    if not minX then
+        return
+    end
+
+    local minCellX = getSpatialCell(minX)
+    local maxCellX = getSpatialCell(maxX)
+    local minCellY = getSpatialCell(minY)
+    local maxCellY = getSpatialCell(maxY)
+
+    for cellY = minCellY, maxCellY do
+        for cellX = minCellX, maxCellX do
+            local key = getSpatialCellKey(cellX, cellY)
+            local bucket = grid[key]
+            if not bucket then
+                bucket = {}
+                grid[key] = bucket
+            end
+            bucket[#bucket + 1] = object
+        end
+    end
+end
+
+function DefaultTilemap:buildUpdateSpatialIndex()
+    self.updateSpatialGrids = {
+        tiles = {},
+        grass = {},
+        bigGrass = {},
+        grassInteraction = {},
+        bigGrassInteraction = {},
+        floorPaths = {},
+        moonbeams = {},
+    }
+    self.visibleUpdateScratch = self.visibleUpdateScratch or {}
+    self.visibleQueryStamp = 0
+
+    for _, tile in ipairs(self.tiles or {}) do
+        addObjectToSpatialGrid(self.updateSpatialGrids.tiles, tile)
+    end
+    for _, grass in ipairs(self.grass or {}) do
+        addObjectToSpatialGrid(self.updateSpatialGrids.grass, grass)
+        if grass.tile ~= 1 then
+            addObjectToSpatialGrid(self.updateSpatialGrids.grassInteraction, grass)
+        end
+    end
+    for _, grass in ipairs(self.bigGrass or {}) do
+        addObjectToSpatialGrid(self.updateSpatialGrids.bigGrass, grass)
+        if grass.interactive ~= false then
+            addObjectToSpatialGrid(self.updateSpatialGrids.bigGrassInteraction, grass)
+        end
+    end
+    for _, path in ipairs(self.floorPaths or {}) do
+        addObjectToSpatialGrid(self.updateSpatialGrids.floorPaths, path)
+    end
+    for _, beam in ipairs(self.moonbeams or {}) do
+        addObjectToSpatialGrid(self.updateSpatialGrids.moonbeams, beam)
+    end
+end
+
+function DefaultTilemap:getVisibleObjectsFromGrid(gridName, margin)
+    local grids = self.updateSpatialGrids
+    local grid = grids and grids[gridName]
+    if not grid then
+        return nil
+    end
+
+    local box = getCameraWorldBox(margin)
+    if not box then
+        return nil
+    end
+
+    local result = self.visibleUpdateScratch[gridName]
+    if not result then
+        result = {}
+        self.visibleUpdateScratch[gridName] = result
+    else
+        clearArray(result)
+    end
+
+    self.visibleQueryStamp = (self.visibleQueryStamp or 0) + 1
+    local stamp = self.visibleQueryStamp
+    local minCellX = getSpatialCell(box.minX)
+    local maxCellX = getSpatialCell(box.maxX)
+    local minCellY = getSpatialCell(box.minY)
+    local maxCellY = getSpatialCell(box.maxY)
+
+    for cellY = minCellY, maxCellY do
+        for cellX = minCellX, maxCellX do
+            local bucket = grid[getSpatialCellKey(cellX, cellY)]
+            if bucket then
+                for _, object in ipairs(bucket) do
+                    if object.__tilemapVisibleStamp ~= stamp then
+                        object.__tilemapVisibleStamp = stamp
+                        result[#result + 1] = object
+                    end
+                end
+            end
+        end
+    end
+
+    return result
+end
+
+function DefaultTilemap:markGrassNearPoint(x, y, radius, sourceX)
+    local grids = self.updateSpatialGrids
+    if not (grids and x and y) then
+        return
+    end
+
+    radius = radius or 12
+    sourceX = sourceX or x
+    local radiusSq = radius * radius
+    local minCellX = getSpatialCell(x - radius)
+    local maxCellX = getSpatialCell(x + radius)
+    local minCellY = getSpatialCell(y - radius)
+    local maxCellY = getSpatialCell(y + radius)
+    self.grassInteractionStamp = (self.grassInteractionStamp or 0) + 1
+    local stamp = self.grassInteractionStamp
+
+    local function markGrid(gridName, yField)
+        local grid = grids[gridName]
+        if not grid then
+            return
+        end
+
+        for cellY = minCellY, maxCellY do
+            for cellX = minCellX, maxCellX do
+                local bucket = grid[getSpatialCellKey(cellX, cellY)]
+                if bucket then
+                    for _, grass in ipairs(bucket) do
+                        if grass.__grassInteractionStamp ~= stamp then
+                            grass.__grassInteractionStamp = stamp
+                            local grassY = grass[yField] or grass.y
+                            local dx = grass.x - x
+                            local dy = grassY - y
+                            if dx * dx + dy * dy <= radiusSq and grass.markInteraction then
+                                grass:markInteraction(sourceX)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    markGrid("grassInteraction", "y")
+    markGrid("bigGrassInteraction", "interactionY")
+end
+
+local function getObjectFadeBox(object, defaultSize)
+    if not object then
+        return nil
+    end
+
+    if type(object.collisionBox) == "function" then
+        return object:collisionBox()
+    end
+
+    if type(object.getCollisionBox) == "function" then
+        return object:getCollisionBox()
+    end
+
+    local x = object.x or object.xWorld
+    local y = object.y or object.yWorld
+    local size = object.size or defaultSize or 10
+    if not (x and y) then
+        return nil
+    end
+
+    return {
+        x = x - size / 2,
+        y = y - size / 2,
+        width = size,
+        height = size,
+    }
+end
+
+local function markActorTreeFadeAreas(tilemapSystem)
+    if Player and Player.isAlive then
+        tilemapSystem:markTreesTransparentNearBox(getObjectFadeBox(Player, 12), 0)
+    end
+
+    for _, enemy in ipairs((Game and Game.nearbyEnemies) or {}) do
+        if enemy.isAlive ~= false then
+            tilemapSystem:markTreesTransparentNearBox(getObjectFadeBox(enemy, 10), 0)
+        end
+    end
+end
+
 function DefaultTilemap:update(dt)
+    self:clearTreeFadeTargets()
+    markActorTreeFadeAreas(self)
+
     if self.ambientDust then
         self.ambientDust:update(dt)
     end
 
-    for _, beam in ipairs(self.moonbeams or {}) do
-        if isObjectNearCamera(beam, 240) then
-            beam:update(dt)
-        end
+    for _, beam in ipairs(self:getVisibleObjectsFromGrid("moonbeams", 240) or self.moonbeams or {}) do
+        beam:update(dt)
     end
 
-    for _, g in ipairs(self.bigGrass) do
-        if isObjectNearCamera(g, 220) then
-            g:update(dt)
-        end
+    for _, g in ipairs(self:getVisibleObjectsFromGrid("bigGrass", 220) or self.bigGrass) do
+        g:update(dt)
     end
 
-    for _, g in ipairs(self.grass) do
-        if isObjectNearCamera(g, 170) then
-            g:update(dt)
-        end
+    for _, g in ipairs(self:getVisibleObjectsFromGrid("grass", 170) or self.grass) do
+        g:update(dt)
     end
 
-    for _, path in ipairs(self.floorPaths or {}) do
-        if isObjectNearCamera(path) then
-            path:update(dt)
-        end
+    for _, path in ipairs(self:getVisibleObjectsFromGrid("floorPaths", 160) or self.floorPaths or {}) do
+        path:update(dt)
     end
 
-    for _, tile in ipairs(self.tiles) do
+    for _, tile in ipairs(self:getVisibleObjectsFromGrid("tiles", 96) or self.tiles) do
         if tile.isAlive then
             local forceUpdate = tile.isBreaking or (tile.hitFlashTimer and tile.hitFlashTimer > 0)
-            if forceUpdate or isObjectNearCamera(tile, tile.renderCullMargin or 260) then
+            if forceUpdate or isObjectNearCamera(tile, tile.renderCullMargin or 96) then
                 tile:update(dt)
             end
         end

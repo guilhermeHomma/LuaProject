@@ -1,6 +1,7 @@
 Particle = require("scripts/particles/particle")
 WalkP = setmetatable({}, {__index = Particle})
 WalkP.__index = WalkP
+WalkP.castsShadow = false
 
 local sprite = love.graphics.newImage("assets/sprites/particles/ball.png")
 local starSprite = love.graphics.newImage("assets/sprites/particles/star.png")

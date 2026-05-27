@@ -114,7 +114,23 @@ local function shouldSkipSegment(index, gapSeed, gapChance)
 end
 
 local function addPoint(points, point)
-    table.insert(points, 1, point)
+    points[#points + 1] = point
+end
+
+local function trimTrailPoints(points, maxPoints)
+    while #points > maxPoints do
+        table.remove(points, 1)
+    end
+end
+
+local function updateTrailPointList(points, dt)
+    for index = #points, 1, -1 do
+        local point = points[index]
+        point.age = point.age + dt
+        if point.age >= point.lifetime then
+            table.remove(points, index)
+        end
+    end
 end
 
 local function isPointInCircleSq(px, py, cx, cy, radius)
@@ -142,6 +158,7 @@ function Bullet:new(x, y, angle, height, speed, damage, options)
     bullet.radius = options.radius or 1.1
     bullet.isAlive = true
     bullet.isActive = true
+    bullet.isProjectile = true
     bullet.bodyVisible = true
     bullet.timer = 0
     bullet.lifeTime = options.lifeTime or (0.3 + math.random() * 0.1)
@@ -156,6 +173,7 @@ function Bullet:new(x, y, angle, height, speed, damage, options)
     bullet.mainPoints = {}
     bullet.redPoints = {}
     bullet.cyanPoints = {}
+    bullet.renderPointsScratch = {}
     bullet.impactPoint = nil
     bullet.redTurn = 0
     bullet.cyanTurn = 0
@@ -223,25 +241,25 @@ function Bullet:isColliding(size)
     local top = self.y - halfSize
     local bottom = self.y + halfSize
 
-    local nearbyTiles = Tilemap.getNearbyTiles and Tilemap:getNearbyTiles(self.x, self.y) or Tilemap.tiles
+    local nearbyTiles = Tilemap.getNearbyCollidableTiles and Tilemap:getNearbyCollidableTiles(self.x, self.y)
+        or Tilemap.getNearbyTiles and Tilemap:getNearbyTiles(self.x, self.y)
+        or Tilemap.tiles
     for _, tile in ipairs(nearbyTiles or {}) do
-        if tile.collider and not tile.isWater then
-            local tileLeft = tile.xWorld - tile.size / 2
-            local tileTop = tile.yWorld - tile.size
-            if left < tileLeft + tile.size
-                and right > tileLeft
-                and top < tileTop + tile.size
-                and bottom > tileTop then
-                self.hitTileOnDeath = true
-                local damaged = false
-                if type(tile.onshoot) == "function" then
-                    damaged = tile:onshoot(self.damage) == true
-                end
-                if damaged then
-                    DamageNumber.spawn(self.x, self.y, self.height, self.damage)
-                end
-                return true
+        local tileLeft = tile.xWorld - tile.size / 2
+        local tileTop = tile.yWorld - tile.size
+        if left < tileLeft + tile.size
+            and right > tileLeft
+            and top < tileTop + tile.size
+            and bottom > tileTop then
+            self.hitTileOnDeath = true
+            local damaged = false
+            if type(tile.onshoot) == "function" then
+                damaged = tile:onshoot(self.damage) == true
             end
+            if damaged then
+                DamageNumber.spawn(self.x, self.y, self.height, self.damage)
+            end
+            return true
         end
     end
 
@@ -258,15 +276,9 @@ function Bullet:updateTrail(dt)
         self.cyanTurn = (math.random() * 2 - 1) * self.trail.turnJitter
     end
 
-    for _, list in ipairs({self.mainPoints, self.redPoints, self.cyanPoints}) do
-        for index = #list, 1, -1 do
-            local point = list[index]
-            point.age = point.age + dt
-            if point.age >= point.lifetime then
-                table.remove(list, index)
-            end
-        end
-    end
+    updateTrailPointList(self.mainPoints, dt)
+    updateTrailPointList(self.redPoints, dt)
+    updateTrailPointList(self.cyanPoints, dt)
 
     if self.impactPoint then
         self.impactPoint.age = self.impactPoint.age + dt
@@ -283,12 +295,6 @@ function Bullet:recordTrailPoint()
         return
     end
 
-    local pointBase = {
-        age = 0,
-        lifetime = self.trail.pointLifetime,
-        fadeDelay = self.trail.fadeDelay
-    }
-
     local centerX = self.x
     local centerY = self.y - self.height
     local dirX = math.cos(self.angle)
@@ -297,32 +303,53 @@ function Bullet:recordTrailPoint()
     local perpY = dirX
     local forwardOffset = self.trail.lateralOffset * self.trail.directionBias
 
-    addPoint(self.mainPoints, mergeTables(pointBase, { x = centerX, y = centerY }))
-    addPoint(self.redPoints, mergeTables(pointBase, {
+    local lifetime = self.trail.pointLifetime
+    local fadeDelay = self.trail.fadeDelay
+
+    addPoint(self.mainPoints, {
+        x = centerX,
+        y = centerY,
+        age = 0,
+        lifetime = lifetime,
+        fadeDelay = fadeDelay
+    })
+    addPoint(self.redPoints, {
         x = centerX - perpX * self.trail.lateralOffset - dirX * forwardOffset + self.redTurn,
-        y = centerY - perpY * self.trail.lateralOffset - dirY * forwardOffset + self.redTurn * 0.2
-    }))
-    addPoint(self.cyanPoints, mergeTables(pointBase, {
+        y = centerY - perpY * self.trail.lateralOffset - dirY * forwardOffset + self.redTurn * 0.2,
+        age = 0,
+        lifetime = lifetime,
+        fadeDelay = fadeDelay
+    })
+    addPoint(self.cyanPoints, {
         x = centerX + perpX * self.trail.lateralOffset - dirX * forwardOffset + self.cyanTurn,
-        y = centerY + perpY * self.trail.lateralOffset - dirY * forwardOffset - self.cyanTurn * 0.2
-    }))
+        y = centerY + perpY * self.trail.lateralOffset - dirY * forwardOffset - self.cyanTurn * 0.2,
+        age = 0,
+        lifetime = lifetime,
+        fadeDelay = fadeDelay
+    })
 
     self.lastTrailX = self.x
     self.lastTrailY = self.y
     self.trailSpawnTimer = 0
 
-    while #self.mainPoints > self.trail.trailMaxPoints do table.remove(self.mainPoints) end
-    while #self.redPoints > self.trail.trailMaxPoints do table.remove(self.redPoints) end
-    while #self.cyanPoints > self.trail.trailMaxPoints do table.remove(self.cyanPoints) end
+    trimTrailPoints(self.mainPoints, self.trail.trailMaxPoints)
+    trimTrailPoints(self.redPoints, self.trail.trailMaxPoints)
+    trimTrailPoints(self.cyanPoints, self.trail.trailMaxPoints)
 end
 
 function Bullet:getRenderPoints(points)
-    local result = {}
+    local result = self.renderPointsScratch or {}
+    self.renderPointsScratch = result
+    for index = #result, 1, -1 do
+        result[index] = nil
+    end
+
     if self.impactPoint then
         result[#result + 1] = self.impactPoint
     end
 
-    for _, point in ipairs(points) do
+    for index = #points, 1, -1 do
+        local point = points[index]
         if point.age >= self.trail.headDelay then
             result[#result + 1] = point
         end
@@ -363,6 +390,9 @@ function Bullet:update(dt)
     if self.isActive then
         self.x = self.x + self.dx * dt
         self.y = self.y + self.dy * dt
+        if Tilemap.markGrassNearPoint then
+            Tilemap:markGrassNearPoint(self.x, self.y, 12, self.x)
+        end
         self.colorParticleTimer = self.colorParticleTimer + dt
         if self.colorParticleTimer >= self.colorParticles.spawnInterval then
             self.colorParticleTimer = 0
@@ -382,7 +412,8 @@ function Bullet:update(dt)
 
         self:recordTrailPoint()
 
-        for _, enemy in ipairs(Game.enemies) do
+        local enemies = Game.getEnemiesNearPoint and Game:getEnemiesNearPoint(self.x, self.y, self.radius + 24) or Game.enemies
+        for _, enemy in ipairs(enemies) do
             if self.isActive and enemy.isAlive and self:checkCollisionWithEnemy(enemy) then
                 self:deactivate()
                 DamageNumber.spawn(self.x, self.y, self.height, self.damage)
@@ -502,13 +533,23 @@ function Bullet:drawHeadGlow()
 end
 
 function Bullet:draw()
-    self:drawTrailGlow(self.redPoints, self.trail.redColor, self.trail.glowAlpha)
-    self:drawTrailGlow(self.cyanPoints, self.trail.cyanColor, self.trail.glowAlpha)
+    local drawCount = Game and ((Game.projectileDrawCount or 0) + 1) or 1
+    if Game then
+        Game.projectileDrawCount = drawCount
+    end
+    local manyProjectiles = drawCount > 12 or (Game and Game.enemies and #Game.enemies > 16 and drawCount > 8)
+
+    if not manyProjectiles then
+        self:drawTrailGlow(self.redPoints, self.trail.redColor, self.trail.glowAlpha)
+        self:drawTrailGlow(self.cyanPoints, self.trail.cyanColor, self.trail.glowAlpha)
+    end
     self:drawTrailGlow(self.mainPoints, self.trail.glowColor, self.trail.glowAlpha * 0.8)
 
     love.graphics.setLineWidth(self.trail.lineWidth)
-    self:drawTrailLine(self.redPoints, self.trail.redColor, self.trail.rgbAlpha, 0)
-    self:drawTrailLine(self.cyanPoints, self.trail.cyanColor, self.trail.rgbAlpha, 2)
+    if not manyProjectiles then
+        self:drawTrailLine(self.redPoints, self.trail.redColor, self.trail.rgbAlpha, 0)
+        self:drawTrailLine(self.cyanPoints, self.trail.cyanColor, self.trail.rgbAlpha, 2)
+    end
     self:drawTrailLine(self.mainPoints, self.trail.lineColor, self.trail.mainAlpha, 1)
     love.graphics.setLineWidth(1)
     love.graphics.setColor(1, 1, 1, 1)
@@ -517,7 +558,9 @@ function Bullet:draw()
         return
     end
 
-    self:drawHeadGlow()
+    if not manyProjectiles then
+        self:drawHeadGlow()
+    end
     self:drawSquare(self.x, self.y - self.height, 90, self.radius * 1.2)
 
     if self.level >= 2 then return end

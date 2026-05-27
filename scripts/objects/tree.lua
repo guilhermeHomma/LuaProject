@@ -1,5 +1,6 @@
 TreeTile = setmetatable({}, {__index = Tile})
 TreeTile.__index = TreeTile
+TreeTile.castsShadow = false
 TileSet = require("scripts.objects.tileset")
 local LeafParticle = require("scripts/particles/leafParticle")
 local FloorManager = require("scripts/managers/floorManager")
@@ -40,10 +41,22 @@ local shader = love.graphics.newShader([[
 shader:send("direction", 1.0) 
 shader:send("spriteSize", {64.0, 96.0})
 
+local treeShaderSize = {64, 96}
+local lastTreeShaderWidth = 64
+local lastTreeShaderHeight = 96
+local lastTreeShaderDirection = nil
+
 local function applyTreeShader(direction, width, height)
     love.graphics.setShader(shader)
-    shader:send("direction", direction)
-    shader:send("spriteSize", {width, height})
+    if direction ~= lastTreeShaderDirection then
+        shader:send("direction", direction)
+        lastTreeShaderDirection = direction
+    end
+    if width ~= lastTreeShaderWidth or height ~= lastTreeShaderHeight then
+        treeShaderSize[1], treeShaderSize[2] = width, height
+        shader:send("spriteSize", treeShaderSize)
+        lastTreeShaderWidth, lastTreeShaderHeight = width, height
+    end
 end
 
 local function randomRange(minValue, maxValue)
@@ -129,6 +142,22 @@ local function getTreeFadeBox(tree, originX, originY, spriteWidth)
         width = spriteWidth - marginX * 2,
         height = originY - topOffset + bottomPadding,
     }
+end
+
+local function getTreeSpriteMetrics(tree)
+    local originX = 32
+    local originY = 93
+    local spriteWidth = 64
+    local spriteHeight = 96
+
+    if tree.treeIndex == 6 then
+        originX = 80
+        originY = 156
+        spriteWidth = 160
+        spriteHeight = 160
+    end
+
+    return originX, originY, spriteWidth, spriteHeight
 end
 
 local function drawTreeDebugFadeArea(box)
@@ -247,10 +276,31 @@ end
 
 function TreeTile:update(dt)
     self.isXrayOccluder = true
+    if camera and camera.objectPosition then
+        local cameraPosition = camera:objectPosition()
+        local margin = self.renderCullMargin or 420
+        local limit = (HARD_RENDER_DISTANCE or RENDER_DISTANCE or 350) + margin
+        local dx = self.xWorld - cameraPosition.x
+        local dy = self.yWorld - cameraPosition.y
+        if dx * dx + dy * dy > limit * limit then
+            return
+        end
+    end
+
     addToDrawQueue(self.yWorld + 1 + self.yAdd + (self.ySortOffset or 0), self, false)
     self.shaderDirection = math.sin(love.timer.getTime() + (self.yWorld/10)) * 0.45 + 1
     self:updateLeaves(dt)
     --print(self.shaderDirection)
+end
+
+function TreeTile:getFadeBox()
+    local originX, originY, spriteWidth = getTreeSpriteMetrics(self)
+    return getTreeFadeBox(self, originX, originY, spriteWidth)
+end
+
+function TreeTile:markTransparent()
+    local fadeArea = getFadeAreaConfig()
+    self.fadeTargetAlpha = fadeArea.hiddenAlpha or 0
 end
 
 function TreeTile:getTargetAlpha(box)
@@ -269,6 +319,10 @@ function TreeTile:getTargetAlpha(box)
         return 1
     end
 
+    if self.fadeTargetAlpha ~= nil then
+        return self.fadeTargetAlpha
+    end
+
     if not isObjectNearBox(Player, box, fadeArea.playerCalculationPadding or 160) then
         return 1
     end
@@ -280,34 +334,12 @@ function TreeTile:getTargetAlpha(box)
         end
     end
     
-    local enemies = Game.nearbyEnemies or Game.enemies
-    if enemies then
-        local padding = fadeArea.enemyAreaPadding or 0
-        for _, enemy in ipairs(enemies) do
-            if enemy.isAlive ~= false and isObjectInsideBox(enemy, box, padding) then
-                return hiddenAlpha
-            end 
-        end
-    end
     return 1
 end
 
-function TreeTile:drawShadow()
-   
-end
 
 function TreeTile:getXrayOccluderBox()
-    local originX = 32
-    local originY = 93
-    local spriteWidth = 64
-    local spriteHeight = 96
-
-    if self.treeIndex == 6 then
-        originX = 80
-        originY = 156
-        spriteWidth = 160
-        spriteHeight = 160
-    end
+    local originX, originY, spriteWidth, spriteHeight = getTreeSpriteMetrics(self)
 
     return {
         x = self.xWorld - originX,
@@ -342,10 +374,7 @@ function TreeTile:draw()
     local tilesetImage = TileSet.tilesetImage
 
     local image = threeImage1
-    local originX = 32
-    local originY = 93
-    local spriteWidth = 64
-    local spriteHeight = 96
+    local originX, originY, spriteWidth, spriteHeight = getTreeSpriteMetrics(self)
 
     if self.treeIndex == 2 then image = threeImage2 end 
     if self.treeIndex == 3 then image = threeImage3 end
@@ -353,10 +382,6 @@ function TreeTile:draw()
     if self.treeIndex == 5 then image = threeImage5 end
     if self.treeIndex == 6 then
         image = bigThreeImage
-        originX = 80
-        originY = 156
-        spriteWidth = 160
-        spriteHeight = 160
     end
 
     applyTreeShader(self.shaderDirection, spriteWidth, spriteHeight)

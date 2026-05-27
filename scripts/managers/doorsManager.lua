@@ -86,10 +86,15 @@ function DoorsManager:openTiles(tileIndices)
             if tile.quadIndex == index then
                 tile:openDoor()
                 tilemap[tile.y][tile.x] = 0
+                if Tilemap.updatePathfinderTile then
+                    Tilemap:updatePathfinderTile(tile.x, tile.y)
+                end
             end
         end
     end
-    Tilemap:loadfinders()
+    if not Tilemap.updatePathfinderTile then
+        Tilemap:loadfinders()
+    end
 end
 
 function DoorsManager:openSouth()

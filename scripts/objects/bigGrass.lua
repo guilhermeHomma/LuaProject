@@ -37,6 +37,14 @@ local bigGrassShader = love.graphics.newShader([[
 ]])
 
 bigGrassShader:send("spriteSize", {spriteWidth, spriteHeight})
+local lastBigGrassShaderDirection = nil
+
+local function sendBigGrassDirection(direction)
+    if direction ~= lastBigGrassShaderDirection then
+        bigGrassShader:send("direction", direction)
+        lastBigGrassShaderDirection = direction
+    end
+end
 
 function BigGrass:new(x, y, options)
     options = options or {}
@@ -93,6 +101,18 @@ function BigGrass:isCloseTo(object, radius)
     return dx * dx + dy * dy < radius * radius
 end
 
+function BigGrass:markInteraction(sourceX)
+    if not self.interactive then
+        return
+    end
+
+    if sourceX < self.x then
+        self.externalTargetDirection = -1
+    else
+        self.externalTargetDirection = 1
+    end
+end
+
 function BigGrass:getTarget()
     if not self.interactive then
         return 0
@@ -116,40 +136,20 @@ function BigGrass:getTarget()
         end
 
         self.changedTarget = true
-
-        for _, bullet in ipairs(Player.gun.bullets) do
-            if self:isCloseTo(bullet, 12) then
-                if bullet.x < self.x then
-                    return -1
-                end
-                return 1
-            end
-        end
     end
 
-    local enemies = Game.nearbyEnemies or Game.enemies
-    if enemies then
-        for _, enemy in ipairs(enemies) do
-            if self:isCloseTo(enemy, 12) then
-                if enemy.x < self.x then
-                    return -1
-                end
-                return 1
-            end
-        end
+    if self.externalTargetDirection then
+        return self.externalTargetDirection
     end
 
     return 0
 end
 
 function BigGrass:update(dt)
-    if distance(self, camera:objectPosition()) > RENDER_DISTANCE then
-        return
-    end
-
     self.soundTimer = self.soundTimer + dt
 
     local target = self:getTarget()
+    self.externalTargetDirection = nil
     local speed = 2
     if target ~= 0 then speed = 14 end
 
@@ -166,7 +166,7 @@ function BigGrass:draw()
         local scaleX = blade.flipH and -1 or 1
         local xOffset = blade.flipH and 1 or 0
 
-        bigGrassShader:send("direction", self.shaderDirection + blade.directionOffset)
+        sendBigGrassDirection(self.shaderDirection + blade.directionOffset)
 
         love.graphics.draw(
             sprite,

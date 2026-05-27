@@ -25,7 +25,8 @@ function Pole:new(x, y, quadIndex, collider)
     tile.flickerTime = math.random() * 10
     tile.flickerSeed = math.random() * 100
     tile.lightFlicker = 1
-    tile.renderCullMargin = 320
+    tile.renderCullMargin = 420
+    tile.spatialRadius = 260
     tile.isXrayOccluder = true
     return tile
 end

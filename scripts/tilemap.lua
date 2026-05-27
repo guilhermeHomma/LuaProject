@@ -22,6 +22,52 @@ function Tilemap:getNearbyTiles(worldX, worldY)
     return getSystem():getNearbyTiles(worldX, worldY)
 end
 
+function Tilemap:getNearbyCollidableTiles(worldX, worldY)
+    local system = getSystem()
+    if system.getNearbyCollidableTiles then
+        return system:getNearbyCollidableTiles(worldX, worldY)
+    end
+    return system:getNearbyTiles(worldX, worldY)
+end
+
+function Tilemap:getTilesInWorldBox(minX, minY, maxX, maxY)
+    local system = getSystem()
+    if system.getTilesInWorldBox then
+        return system:getTilesInWorldBox(minX, minY, maxX, maxY)
+    end
+    return system.tiles or {}
+end
+
+function Tilemap:getVisibleObjectsFromGrid(gridName, margin)
+    local system = getSystem()
+    if system.getVisibleObjectsFromGrid then
+        return system:getVisibleObjectsFromGrid(gridName, margin)
+    end
+    return nil
+end
+
+function Tilemap:getNearestWalkableWorldPosition(worldX, worldY, maxRadius)
+    local system = getSystem()
+    if system.getNearestWalkableWorldPosition then
+        return system:getNearestWalkableWorldPosition(worldX, worldY, maxRadius)
+    end
+    return worldX, worldY
+end
+
+function Tilemap:markTreesTransparentNearBox(box, padding)
+    local system = getSystem()
+    if system.markTreesTransparentNearBox then
+        return system:markTreesTransparentNearBox(box, padding)
+    end
+end
+
+function Tilemap:markGrassNearPoint(x, y, radius, sourceX)
+    local system = getSystem()
+    if system.markGrassNearPoint then
+        return system:markGrassNearPoint(x, y, radius, sourceX)
+    end
+end
+
 function Tilemap:getRoomTransitionAt(worldX, worldY)
     local system = getSystem()
     if system.getRoomTransitionAt then
@@ -80,6 +126,16 @@ function Tilemap:getPathBetweenWorldPoints(startX, startY, endX, endY)
     end
 
     return nil
+end
+
+function Tilemap:updatePathfinderTile(x, y)
+    local system = getSystem()
+    if system.updatePathfinderTile then
+        return system:updatePathfinderTile(x, y)
+    end
+    if system.loadfinders then
+        return system:loadfinders()
+    end
 end
 
 function Tilemap:__index(key)

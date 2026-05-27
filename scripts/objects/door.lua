@@ -353,13 +353,18 @@ function DoorTile:closeConnectedDoors()
             tile:startClosing()
             if map and map[tile.y] then
                 map[tile.y][tile.x] = 4
+                if Tilemap.updatePathfinderTile then
+                    Tilemap:updatePathfinderTile(tile.x, tile.y)
+                end
                 changed = true
             end
         end
     end
 
     if changed then
-        Tilemap:loadfinders()
+        if not Tilemap.updatePathfinderTile then
+            Tilemap:loadfinders()
+        end
     end
 end
 
@@ -387,6 +392,15 @@ function DoorTile:update(dt)
     self:updateLockState(dt)
     self.isXrayOccluder = self.collider == true
     addToDrawQueue(self.yWorld + self.ySortOffset, self)
+    local Tilemap = require("scripts/tilemap")
+    if Tilemap.markTreesTransparentNearBox then
+        Tilemap:markTreesTransparentNearBox({
+            x = self.xWorld - self.size / 2,
+            y = self.yWorld - self.size,
+            width = self.size,
+            height = self.size,
+        }, 0)
+    end
     self:queueLockIcon()
 
     if self.open and not self.opening then
@@ -458,7 +472,11 @@ function DoorTile:update(dt)
                     local map = Tilemap:getTilemap()
                     if map and map[self.y] then
                         map[self.y][self.x] = 0
-                        Tilemap:loadfinders()
+                        if Tilemap.updatePathfinderTile then
+                            Tilemap:updatePathfinderTile(self.x, self.y)
+                        else
+                            Tilemap:loadfinders()
+                        end
                     end
                 end
             end

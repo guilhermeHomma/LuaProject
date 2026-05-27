@@ -14,6 +14,7 @@ extern number u_crtScanline;
 extern number u_crtCurvature;
 extern number u_crtVignette;
 extern number u_crtChromatic;
+extern number u_crtFast;
 
 vec2 applyShockwaves(vec2 sourceCoord) {
     vec2 coord = sourceCoord;
@@ -59,13 +60,23 @@ vec4 samplePixel(Image tex, vec2 sourceCoord, vec4 color) {
 vec4 applyCrtLook(Image tex, vec2 sourceCoord, vec2 localCoord, vec4 color) {
     float chroma = u_crtChromatic * u_crtIntensity;
     vec4 base = samplePixel(tex, sourceCoord, color);
-    vec4 shiftedR = samplePixel(tex, sourceCoord + vec2(chroma, 0.0), color);
-    vec4 shiftedB = samplePixel(tex, sourceCoord - vec2(chroma, 0.0), color);
-    vec4 sampled = vec4(shiftedR.r, base.g, shiftedB.b, base.a);
+    vec4 sampled = base;
 
-    float scan = 0.5 + 0.5 * sin(localCoord.y * 3.14159265);
+    if (chroma > 0.001) {
+        vec4 shiftedR = samplePixel(tex, sourceCoord + vec2(chroma, 0.0), color);
+        vec4 shiftedB = samplePixel(tex, sourceCoord - vec2(chroma, 0.0), color);
+        sampled = vec4(shiftedR.r, base.g, shiftedB.b, base.a);
+    }
+
+    float scan = 0.58 + 0.42 * sin(localCoord.y * 3.14159265);
     float scanDarken = 1.0 - u_crtScanline * u_crtIntensity * (1.0 - scan);
     sampled.rgb *= scanDarken;
+
+    float luma = dot(sampled.rgb, vec3(0.299, 0.587, 0.114));
+    float saturation = 1.0 + 0.16 * u_crtIntensity;
+    float contrast = 1.0 + 0.11 * u_crtIntensity;
+    sampled.rgb = mix(vec3(luma), sampled.rgb, saturation);
+    sampled.rgb = (sampled.rgb - vec3(0.5)) * contrast + vec3(0.5);
 
     vec2 uv = localCoord / (u_sourceResolution * u_scale);
     float dist = distance(uv, vec2(0.5));
@@ -73,6 +84,7 @@ vec4 applyCrtLook(Image tex, vec2 sourceCoord, vec2 localCoord, vec4 color) {
     sampled.rgb *= vignette;
 
     sampled.rgb *= 1.0 + 0.035 * u_crtIntensity;
+    sampled.rgb = clamp(sampled.rgb, vec3(0.0), vec3(1.0));
     return sampled;
 }
 

@@ -1,7 +1,7 @@
 local LightConfig = {
     activeType = "player",
     maxWorldLights = 32,
-    maxGroundLightOccluders = 128,
+    maxGroundLightOccluders = 32,
     groundLightOcclusion = {
         enabled = true,
         strength = 0.15,
@@ -91,7 +91,7 @@ local LightConfig = {
                     enabled = true,
                     calculationDistance = 180,
                     visual = {
-                        enabled = true,
+                        enabled = false,
                         scale = 0.13,
                         alpha = 0.04,
                         color = {1.0, 0.28, 0.18},
@@ -99,7 +99,7 @@ local LightConfig = {
                         glowAlpha = 0.055,
                     },
                     spriteBrightness = {
-                        enabled = true,
+                        enabled = false,
                         minDistance = 4,
                         maxDistance = 34,
                         maxBrightness = 0.70,
@@ -117,7 +117,7 @@ local LightConfig = {
                     enabled = true,
                     calculationDistance = 180,
                     visual = {
-                        enabled = true,
+                        enabled = false,
                         scale = 0.13,
                         alpha = 0.04,
                         color = {1.0, 0.28, 0.18},
@@ -125,7 +125,7 @@ local LightConfig = {
                         glowAlpha = 0.055,
                     },
                     spriteBrightness = {
-                        enabled = true,
+                        enabled = false,
                         minDistance = 4,
                         maxDistance = 34,
                         maxBrightness = 0.70,
@@ -155,6 +155,15 @@ function LightConfig:getWorldLightConfig(lightType)
 end
 
 function LightConfig:getGeneralShadow()
+    local FloorManager = package.loaded["scripts/managers/floorManager"]
+    local theme = FloorManager and FloorManager.getCurrentRoomTheme and FloorManager:getCurrentRoomTheme()
+    local room = FloorManager and FloorManager.getCurrentRoom and FloorManager:getCurrentRoom()
+    local cacheKey = tostring(theme) .. tostring(room) .. tostring(self.activeType) .. tostring(CURRENT_LEVEL)
+
+    if self._generalShadowCache and self._generalShadowCacheKey == cacheKey then
+        return self._generalShadowCache
+    end
+
     local levelLightConfig = CURRENT_LEVEL and CURRENT_LEVEL.lightConfig
     local result = nil
 
@@ -166,11 +175,6 @@ function LightConfig:getGeneralShadow()
         local active = self:getActive()
         result = active and active.generalShadow or {}
     end
-
-    local FloorManager = package.loaded["scripts/managers/floorManager"]
-    local theme = FloorManager
-        and FloorManager.getCurrentRoomTheme
-        and FloorManager:getCurrentRoomTheme()
 
     if theme and theme.generalShadow then
         local copy = {}
@@ -192,16 +196,17 @@ function LightConfig:getGeneralShadow()
         result = copy
     end
 
-    local room = FloorManager and FloorManager.getCurrentRoom and FloorManager:getCurrentRoom()
     if room and (room.isShopRoom or room.isCardRoom) and not (theme and theme.lootLightBoost == false) then
         local copy = {}
         for key, value in pairs(result or {}) do
             copy[key] = value
         end
         copy.minBrightness = math.max(copy.minBrightness or 0, 0.75)
-        return copy
+        result = copy
     end
 
+    self._generalShadowCache = result
+    self._generalShadowCacheKey = cacheKey
     return result
 end
 

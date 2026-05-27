@@ -1,5 +1,5 @@
 const int MAX_LIGHTS = 32;
-const int MAX_OCCLUDERS = 96;
+const int MAX_OCCLUDERS = 8;
 
 extern number u_lightCount;
 extern vec2 u_lightCenters[MAX_LIGHTS];
@@ -78,7 +78,10 @@ vec4 effect(vec4 color, Image tex, vec2 texCoord, vec2 screenCoord) {
             }
 
             float t = smoothstep(u_innerRadii[i], u_outerRadii[i], distance(screenCoord, u_lightCenters[i]));
-            float occlusion = getOcclusion(u_lightCenters[i], screenCoord) * u_occlusionStrength;
+            float occlusion = 0.0;
+            if (i == 0 && u_occluderCount > 0.0) {
+                occlusion = getOcclusion(u_lightCenters[i], screenCoord) * u_occlusionStrength;
+            }
             float lightBrightness = mix(u_maxBrightnesses[i], u_generalShadowMinBrightness, t);
             lightBrightness = mix(lightBrightness, u_generalShadowMinBrightness, occlusion);
             brightness = max(brightness, lightBrightness);

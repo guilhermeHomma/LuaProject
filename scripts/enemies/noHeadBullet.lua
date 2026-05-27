@@ -69,9 +69,9 @@ function NoHeadBullet:new(x, y, angle, speed, damage, tileDamage)
     bullet.playerHitRadius = 2.2
     bullet.hitboxHeightOffset = 7
     bullet.spriteTrail = {}
-    bullet.spriteTrailDistance = 6
+    bullet.spriteTrailDistance = 8
     bullet.spriteTrailRemainder = 0
-    bullet.spriteTrailMaxPerUpdate = 6
+    bullet.spriteTrailMaxPerUpdate = 3
     bullet.timer = 0
     bullet.lifeTime = 2.4
     bullet.impactTimer = 0
@@ -82,6 +82,7 @@ function NoHeadBullet:new(x, y, angle, speed, damage, tileDamage)
     bullet.colorParticlePalette = BulletColorParticle.getPalette(bulletSpritePath)
     bullet.isDying = false
     bullet.isAlive = true
+    bullet.isProjectile = true
     bullet.isXrayVisible = true
     bullet.isXrayProjectile = true
     bullet:spawnColorParticles(bullet.colorParticles.count)
@@ -166,25 +167,38 @@ function NoHeadBullet:hitPlayer()
     end
 
     local playerBox = Player:getCollisionBox()
-    return checkCollision(self:getPlayerHitBox(), playerBox)
+    local radius = self.playerHitRadius or self.radius
+    local size = radius * 2
+    local left = self.x - radius
+    local right = self.x + radius
+    local top = self.y - self.height + (self.hitboxHeightOffset or 0) - radius
+    local bottom = top + size
+
+    return left < playerBox.x + playerBox.width
+        and right > playerBox.x
+        and top < playerBox.y + playerBox.height
+        and bottom > playerBox.y
 end
 
 function NoHeadBullet:collidingTile()
-    local box = self:getBox()
+    local radius = self.radius
+    local size = radius * 2
+    local left = self.x - radius
+    local right = self.x + radius
+    local top = self.y - self.height + (self.hitboxHeightOffset or 0) - radius
+    local bottom = top + size
 
-    local nearbyTiles = Tilemap.getNearbyTiles and Tilemap:getNearbyTiles(self.x, self.y) or Tilemap.tiles
+    local nearbyTiles = Tilemap.getNearbyCollidableTiles and Tilemap:getNearbyCollidableTiles(self.x, self.y)
+        or Tilemap.getNearbyTiles and Tilemap:getNearbyTiles(self.x, self.y)
+        or Tilemap.tiles
     for _, tile in ipairs(nearbyTiles or {}) do
-        if tile.collider and not tile.isWater then
-            local tileBox = {
-                x = tile.xWorld - tile.size / 2,
-                y = tile.yWorld - tile.size,
-                width = tile.size,
-                height = tile.size,
-            }
-
-            if checkCollision(box, tileBox) then
-                return tile
-            end
+        local tileLeft = tile.xWorld - tile.size / 2
+        local tileTop = tile.yWorld - tile.size
+        if left < tileLeft + tile.size
+            and right > tileLeft
+            and top < tileTop + tile.size
+            and bottom > tileTop then
+            return tile
         end
     end
 
@@ -273,6 +287,9 @@ function NoHeadBullet:update(dt)
     self.timer = self.timer + dt
     self.x = self.x + self.dx * dt
     self.y = self.y + self.dy * dt
+    if Tilemap.markGrassNearPoint then
+        Tilemap:markGrassNearPoint(self.x, self.y, 12, self.x)
+    end
     self:spawnSpriteTrail(previousX, previousY)
     self.colorParticleTimer = self.colorParticleTimer + dt
     if self.colorParticleTimer >= self.colorParticles.spawnInterval then

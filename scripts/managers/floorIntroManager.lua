@@ -7,9 +7,9 @@ local riserSoundBase = love.audio.newSource("assets/sfx/effects/riser.mp3", "sta
 local impactSoundBase = love.audio.newSource("assets/sfx/effects/impact-hit.mp3", "static")
 
 local FLOOR_RISER_DURATION = 2.3
-local FLOOR_TITLE_DURATION = 2.75
-local FLOOR_MUSIC_FADE_DURATION = 1
-local FLOOR_START_BREATH_DURATION = 0.3
+local FLOOR_TITLE_DURATION = 2.1
+local FLOOR_MUSIC_FADE_DURATION = 0.65
+local FLOOR_START_BREATH_DURATION = 0.18
 local FLOOR_TITLE_GROW_DURATION = 0.12
 local FLOOR_TITLE_Y_OFFSET = -58
 local THANKS_SCREEN_DURATION = 6.6

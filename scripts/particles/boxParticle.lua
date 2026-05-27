@@ -3,6 +3,7 @@ local RgbShiftDraw = require("scripts/effects/rgbShiftDraw")
 
 local boxParticle = setmetatable({}, {__index = Particle})
 boxParticle.__index = boxParticle
+boxParticle.castsShadow = false
 local sprite = love.graphics.newImage("assets/sprites/particles/box-particles.png")
 local quads = {}
 

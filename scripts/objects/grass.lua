@@ -21,6 +21,12 @@ local function playClonedSound(baseSource, volume, pitch)
     return sound
 end
 
+local function isClose(a, b, radius)
+    local dx = a.x - b.x
+    local dy = a.y - b.y
+    return dx * dx + dy * dy < radius * radius
+end
+
 
 local grassShader = love.graphics.newShader([[
     extern number direction;
@@ -40,7 +46,10 @@ local grassShader = love.graphics.newShader([[
 
 
 grassShader:send("direction", 1.0) 
-grassShader:send("spriteSize", {16.0, 16.0})
+local grassSpriteSize = {16.0, 16.0}
+grassShader:send("spriteSize", grassSpriteSize)
+
+local lastGrassShaderDirection = nil
 
 
 local function getGrassIndex(tile)
@@ -57,6 +66,27 @@ local function getGrassIndex(tile)
     return 4
 end
 
+local grassSprites = {sprite, sprite2, sprite3, sprite4}
+
+local function isNearCamera(x, y)
+    if not (camera and camera.objectPosition) then
+        return true
+    end
+
+    local cameraPosition = camera:objectPosition()
+    if not cameraPosition then
+        return true
+    end
+
+    local visibleHalfWidth = (baseWidth or love.graphics.getWidth()) / math.max(WORLD_SCALE_X or 1, 0.001) * 0.5
+    local visibleHalfHeight = (baseHeight or love.graphics.getHeight()) / math.max(YSCALE or 1, 0.001) * 0.5
+    local margin = 28
+    return x >= cameraPosition.x - visibleHalfWidth - margin
+        and x <= cameraPosition.x + visibleHalfWidth + margin
+        and y >= cameraPosition.y - visibleHalfHeight - margin
+        and y <= cameraPosition.y + visibleHalfHeight + margin
+end
+
 function Grass:new(x, y, tile, state)
     local grass = setmetatable({}, Grass)
     state = state or {}
@@ -64,6 +94,7 @@ function Grass:new(x, y, tile, state)
     grass.x = x 
     grass.y = y 
     grass.index = state.index or getGrassIndex(tile)
+    grass.sprite = grassSprites[grass.index] or sprite
     grass.shaderDirection = 1
     grass.collisionDirection = 0
     grass.tile = tile
@@ -73,12 +104,24 @@ function Grass:new(x, y, tile, state)
     return grass
 end
 
+function Grass:markInteraction(sourceX)
+    if self.tile == 1 then
+        return
+    end
+
+    if sourceX < self.x then
+        self.externalTargetDirection = -1
+    else
+        self.externalTargetDirection = 1
+    end
+end
+
 
 function Grass:getTarget()
     if self.tile == 1 then return 0 end
 
     if Player.isAlive then
-        if distance(self, Player) < 10 then
+        if isClose(self, Player, 10) then
             if self.soundTimer >= 2 and self.changedTarget then
                 local volume = math.random() * 0.03
                 if math.random() > 0.4 then
@@ -97,41 +140,23 @@ function Grass:getTarget()
         end
 
         self.changedTarget = true
-
-        for _, bullet in ipairs(Player.gun.bullets) do
-            if distance(self, bullet) < 10 then
-                if bullet.x < self.x then
-                    return -1
-                else
-                    return 1
-                end
-            end 
-        end
     end
 
-    local enemies = Game.nearbyEnemies or Game.enemies
-    if enemies then
-        for _, enemy in ipairs(enemies) do
-            if distance(self, enemy) < 10 then
-                if enemy.x < self.x then
-                    return -1
-                else
-                    return 1
-                end
-            end 
-        end
+    if self.externalTargetDirection then
+        return self.externalTargetDirection
     end
 
-    
     return 0
 end
 
 function Grass:update(dt)    
-    self.soundTimer = self.soundTimer + dt
-    local target = 0
-    if distance(self, camera:objectPosition()) < 200 then
-        target = self:getTarget()
+    if not isNearCamera(self.x, self.y) then
+        return
     end
+
+    self.soundTimer = self.soundTimer + dt
+    local target = self:getTarget()
+    self.externalTargetDirection = nil
 
     local speed = 2
     if target ~= 0 then speed = 12 end
@@ -149,21 +174,13 @@ end
 
 function Grass:draw()
     love.graphics.setShader(grassShader)
-    grassShader:send("direction", self.shaderDirection)
-
-
-    local currentSprite = sprite
-    if self.index == 1 then
-        currentSprite = sprite
-    elseif self.index == 2 then
-        currentSprite = sprite2
-    elseif self.index == 3 then
-        currentSprite = sprite3
-    else 
-        currentSprite = sprite4
+    if self.shaderDirection ~= lastGrassShaderDirection then
+        grassShader:send("direction", self.shaderDirection)
+        lastGrassShaderDirection = self.shaderDirection
     end
 
-    love.graphics.draw(currentSprite, self.x - 8, self.y - 15 * stretch, 0, 1, stretch)
+
+    love.graphics.draw(self.sprite or sprite, self.x - 8, self.y - 15 * stretch, 0, 1, stretch)
 
     love.graphics.setShader()
 end

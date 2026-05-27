@@ -38,7 +38,7 @@ if (...) then
 			if neighbour.opened then
 				neighbour.opened = false
 			end
-			neighbour.h = heuristic(endNode.x - neighbour.x, endNode.y - neighbour.y)
+			neighbour.h = heuristic(endNode.x - neighbour.x, endNode.y - neighbour.y) * (finder.heuristicWeight or 1)
 			neighbour.f = neighbour.g + neighbour.h
 			finder.openList:push(neighbour)
 			neighbour.opened = true

@@ -82,6 +82,7 @@ function Moonbeam:new(x, y, config)
     beam.startY = beam.endY - beam.dy
     beam.drawPriority = beam.y + (config.ySortOffset or 0)
     beam.isAlive = true
+    beam.spatialRadius = math.max(260, beam.length + beam.width)
     beam.flickerTimer = math.random() * 10
     beam.dust = {}
     beam.stripes = {}

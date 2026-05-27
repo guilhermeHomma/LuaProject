@@ -5,6 +5,7 @@ Zombie.enemyTypeId = "zombie"
 
 local ZParticle = require("scripts/particles/zombieDeadParticle")
 local Tilemap = require("scripts/tilemap")
+local EnemyDirector = require("scripts/enemies/enemyDirector")
 local whiteShader = love.graphics.newShader("scripts/shaders/whiteShader.glsl")
 local glitchShader = love.graphics.newShader("scripts/shaders/playerGlitch.glsl")
 local WalkParticle = require("scripts/particles/walkParticle")
@@ -158,6 +159,35 @@ local function getLightTint(enemy)
     return brightness, brightness, brightness
 end
 
+local function getScaledPathUpdateInterval(enemy)
+    local interval = enemy.pathUpdateInterval or 1
+    local enemyCount = #(Game and Game.enemies or {})
+
+    if enemyCount >= 42 then
+        return interval * 2.2
+    elseif enemyCount >= 26 then
+        return interval * 1.55
+    end
+
+    return interval
+end
+
+local function distanceSqToPoint(x1, y1, x2, y2)
+    local dx = x1 - x2
+    local dy = y1 - y2
+    return dx * dx + dy * dy
+end
+
+local function getRoamTargetAttempts()
+    local enemyCount = #(Game and Game.enemies or {})
+    if enemyCount >= 28 then
+        return 3
+    elseif enemyCount >= 16 then
+        return 4
+    end
+    return 6
+end
+
 function Zombie:startDeathRoamPause()
     local minPause = self.deathRoamPauseMin or 0.55
     local maxPause = self.deathRoamPauseMax or 1.4
@@ -277,6 +307,15 @@ function Zombie:new(x, y, speed)
     enemy.whiteFlashTimer = 0
     enemy.damageAnimationInterval = 0.04
     enemy.lastDamageAnimationTime = -math.huge
+    enemy.hitBloodPixelMin = 4
+    enemy.hitBloodPixelMax = 6
+    enemy.deathBloodPixelMin = 9
+    enemy.deathBloodPixelMax = 12
+    enemy.hitBloodDecalCooldown = 0.06
+    enemy.nextHitBloodDecalTime = 0
+    enemy.deadDropParticleMin = 2
+    enemy.deadDropParticleMax = 4
+    enemy.deathBodyParticleEnabled = true
     DamageStretch:init(enemy, 0.1, 0.1)
 
     enemy.state = (math.random(0, 1) == 0) and Zombie.states.idle or Zombie.states.walk
@@ -309,8 +348,9 @@ end
 
 function Zombie:getEnemySeparationScore(x, y)
     local bestDistanceSq = math.huge
+    local enemies = Game and Game.getEnemiesNearPoint and Game:getEnemiesNearPoint(x, y, 120) or (Game and Game.enemies) or {}
 
-    for _, enemy in ipairs((Game and Game.enemies) or {}) do
+    for _, enemy in ipairs(enemies) do
         if enemy.isAlive and enemy ~= self and enemy.x and enemy.y then
             local dx = x - enemy.x
             local dy = y - enemy.y
@@ -378,9 +418,8 @@ end
 
 function Zombie:pickRoamTarget()
     if not Player.isAlive then
-        local targetX, targetY = self:chooseSeparatedReachableTarget(self, tileSize * 3, 10)
+        local targetX, targetY = EnemyDirector:configureRandomRoam(self, 1.8 + math.random() * 2.4)
         if targetX and targetY then
-            self:setRoamTarget(targetX, targetY, 8 + math.random() * 4)
             self.deathRoamPauseTimer = 0
             self.state = Zombie.states.walk
             return
@@ -392,14 +431,14 @@ function Zombie:pickRoamTarget()
         and Player.isAlive
         and distance(self, Player) > (self.emptySpaceTargetMinPlayerDistance or tileSize * 5)
         and math.random() < (self.emptySpaceTargetChance or 0) then
-        local targetX, targetY = self:chooseSeparatedReachableTarget(Player, self.emptySpaceTargetMinPlayerDistance or tileSize * 5, 8)
+        local targetX, targetY = self:chooseSeparatedReachableTarget(Player, self.emptySpaceTargetMinPlayerDistance or tileSize * 5, getRoamTargetAttempts())
         if targetX and targetY then
             self:setRoamTarget(targetX, targetY, self.roamTargetDuration)
             return
         end
     end
 
-    local targetX, targetY = self:chooseSeparatedPlayerRoamTarget(8)
+    local targetX, targetY = self:chooseSeparatedPlayerRoamTarget(getRoamTargetAttempts())
     self:setRoamTarget(targetX, targetY, self.roamTargetDuration)
 end
 
@@ -415,8 +454,8 @@ function Zombie:ensureRoamTarget(dt)
     local needsTarget = not self.roamTargetX
         or not self.roamTargetY
         or self.roamTargetTimer <= 0
-        or distance({x = self.roamTargetX, y = self.roamTargetY}, self) < 8
-        or (Player.isAlive and distance({x = self.roamTargetX, y = self.roamTargetY}, Player) > self.roamRadiusMax + 32)
+        or distanceSqToPoint(self.roamTargetX or self.x, self.roamTargetY or self.y, self.x, self.y) < 8 * 8
+        or (Player.isAlive and distanceSqToPoint(self.roamTargetX or Player.x, self.roamTargetY or Player.y, Player.x, Player.y) > (self.roamRadiusMax + 32) * (self.roamRadiusMax + 32))
 
     if needsTarget then
         self:pickRoamTarget()
@@ -461,15 +500,31 @@ function Zombie:update(dt)
     self:noiseCheck(dt)
 
     local targetX, targetY = self:getMovementTarget(dt)
-    if self.pathUpdateCounter >= self.pathUpdateInterval or self.path == nil or #self.path < 2 then
+    local usePathfinding = EnemyDirector:shouldUsePathfinding(self)
+    if not usePathfinding then
+        self.roamTargetTimer = math.max(0, (self.roamTargetTimer or 0) - dt)
+        local needsRandomTarget = not self.roamTargetX
+            or not self.roamTargetY
+            or self.roamTargetTimer <= 0
+            or distanceSqToPoint(self.roamTargetX or self.x, self.roamTargetY or self.y, self.x, self.y) < 8 * 8
+        if needsRandomTarget then
+            EnemyDirector:configureRandomRoam(self, Player.isAlive and self.roamTargetDuration or (1.8 + math.random() * 2.4))
+        end
+        targetX = self.roamTargetX or targetX
+        targetY = self.roamTargetY or targetY
+        self.path = nil
+    elseif self.pathUpdateCounter >= getScaledPathUpdateInterval(self) or self.path == nil or #self.path < 2 then
     --if (self.pathUpdateCounter >= self.pathUpdateInterval and self.state == Zombie.states.idle and Player.isAlive) or self.path == nil or #self.path < 2 then
         self.pathUpdateCounter = 0
-        self.path = Tilemap:getPathBetweenWorldPoints(self.x, self.y, targetX, targetY)
+        local path, requested = EnemyDirector:requestPath(self.x, self.y, targetX, targetY)
+        if requested then
+            self.path = path
+        end
     end
 
     local nextTileX, nextTileY = self.x, self.y
     
-    if self.path and #self.path > 1 then --ok
+    if usePathfinding and self.path and #self.path > 1 then --ok
 
         local nextNode = self.path[2]
 
@@ -477,8 +532,7 @@ function Zombie:update(dt)
 
         nextTileY = nextTileY - 8
 
-        local distance = math.sqrt((self.x - nextTileX)^2 + (self.y - nextTileY)^2)
-        if distance < 4 then
+        if distanceSqToPoint(self.x, self.y, nextTileX, nextTileY) < 4 * 4 then
             table.remove(self.path, 1)
             if #self.path > 1 then
                 nextNode = self.path[2]
@@ -499,6 +553,9 @@ function Zombie:update(dt)
         velocityX = moveX
         velocityY = moveY
         
+    elseif not usePathfinding and targetX and targetY then
+        velocityX = targetX - self.x
+        velocityY = targetY - self.y
     end 
 
     local length = math.sqrt(velocityX * velocityX + velocityY * velocityY)
@@ -575,7 +632,7 @@ function Zombie:update(dt)
         if not collidedX then self.x = self.x + moveX end
         if not collidedY then self.y = self.y + moveY end
 
-        if (collidedX or collidedY) and distance({x = previousX, y = previousY}, self) < 0.2 then
+        if (collidedX or collidedY) and distanceSqToPoint(previousX, previousY, self.x, self.y) < 0.2 * 0.2 then
             if not Player.isAlive then
                 self:startDeathRoamPause()
             else
@@ -626,12 +683,16 @@ function Zombie:stateManager(dt, animationDuration)
 end
 
 function Zombie:getRepulsionVector()
-    local repulseX, repulseY = 0, 0
-    local selfBox = self:collisionBox(self.x, self.y)
+    local now = love.timer.getTime()
+    if self.nextRepulsionSampleTime and now < self.nextRepulsionSampleTime then
+        return self.cachedRepulseX or 0, self.cachedRepulseY or 0
+    end
 
-    for _, enemy in ipairs(Game.enemies) do
+    local repulseX, repulseY = 0, 0
+    local enemies = Game and Game.getEnemiesNearPoint and Game:getEnemiesNearPoint(self.x, self.y, 18) or Game.enemies
+
+    for _, enemy in ipairs(enemies) do
         if enemy.isAlive and enemy ~= self and enemy.state == Zombie.states.walk and self.speed < enemy.speed then
-            local enemyBox = enemy:collisionBox()
             local dx = self.x - enemy.x
             local dy = self.y - enemy.y
             local distSq = dx * dx + dy * dy
@@ -647,6 +708,9 @@ function Zombie:getRepulsionVector()
         end
     end
 
+    self.cachedRepulseX = repulseX
+    self.cachedRepulseY = repulseY
+    self.nextRepulsionSampleTime = now + (self.repulsionSampleInterval or 0.07) + (self.drawPriority or 0) * 0.025
     return repulseX, repulseY
 end
 
@@ -661,8 +725,15 @@ function Zombie:isColliding(moveX, moveY)
     local futureX = self.x + moveX
     local futureY = self.y + moveY
 
-    local selfBoxX = self:collisionBox(futureX, self.y)
-    local selfBoxY = self:collisionBox(self.x, futureY)
+    local halfSize = self.size / 2
+    local boxXLeft = futureX - halfSize
+    local boxXRight = futureX + halfSize
+    local boxXTop = self.y - halfSize
+    local boxXBottom = self.y + halfSize
+    local boxYLeft = self.x - halfSize
+    local boxYRight = self.x + halfSize
+    local boxYTop = futureY - halfSize
+    local boxYBottom = futureY + halfSize
 
     local collidedX = false
     local collidedY = false
@@ -670,12 +741,15 @@ function Zombie:isColliding(moveX, moveY)
     local closeTiles = Tilemap:getNearbyTiles(self.x, self.y)
     for _, tile in ipairs(closeTiles) do
         if tile.collider then
-            local tileBox = { x = tile.xWorld - tile.size/2, y = tile.yWorld - tile.size, width = tile.size, height = tile.size }
+            local tileLeft = tile.xWorld - tile.size / 2
+            local tileRight = tileLeft + tile.size
+            local tileTop = tile.yWorld - tile.size
+            local tileBottom = tileTop + tile.size
 
-            if checkCollision(selfBoxX, tileBox) then
+            if boxXLeft < tileRight and boxXRight > tileLeft and boxXTop < tileBottom and boxXBottom > tileTop then
                 collidedX = true
             end
-            if checkCollision(selfBoxY, tileBox) then
+            if boxYLeft < tileRight and boxYRight > tileLeft and boxYTop < tileBottom and boxYBottom > tileTop then
                 collidedY = true
             end
         end
@@ -702,20 +776,29 @@ function Zombie:spawnDeathBloodDecal()
     end
 
     self.deathBloodDecalSpawned = true
-    BloodDecal.spawn(self.x, self.y, self.lastDamageDx, self.lastDamageDy)
+    BloodDecal.spawn(self.x, self.y + (self.bloodSpawnYOffset or 0), self.lastDamageDx, self.lastDamageDy, self.deathBloodDecalOptions)
 end
 
 function Zombie:takeDamage(damage, dx, dy)
+    if self.life <= 0 or self.isAlive == false then
+        return
+    end
+
     self.lastDamageDx = dx
     self.lastDamageDy = dy
     self.life = self.life - damage
-    BloodPixel.spawnBurst(self.x, self.y - 2, dx, dy, 4, 6)
+    local bloodY = self.y + (self.bloodSpawnYOffset or 0)
+    BloodPixel.spawnBurst(self.x, bloodY - 2, dx, dy, self.hitBloodPixelMin or 4, self.hitBloodPixelMax or 6)
     if self.life > 0 then
-        BloodDecal.spawn(self.x, self.y, dx, dy, {
-            scaleMultiplier = 0.5,
-            volumeMultiplier = 0.5,
-            pitchMultiplier = 0.72,
-        })
+        local now = love.timer.getTime()
+        if now >= (self.nextHitBloodDecalTime or 0) then
+            self.nextHitBloodDecalTime = now + (self.hitBloodDecalCooldown or 0)
+            BloodDecal.spawn(self.x, bloodY, dx, dy, {
+                scaleMultiplier = self.hitBloodDecalScaleMultiplier or 0.5,
+                volumeMultiplier = self.hitBloodDecalVolumeMultiplier or 0.5,
+                pitchMultiplier = self.hitBloodDecalPitchMultiplier or 0.72,
+            })
+        end
     else
         self:spawnDeathBloodDecal()
     end
@@ -756,13 +839,28 @@ function Zombie:death()
 
     DropTemplates.spawnResolvedDrops(self.resolvedDrops, self.x, self.y, Game.objects)
 
-    for _ = 1, math.random(2, 4) do
+    local deadDropMin = self.deadDropParticleMin or 2
+    local deadDropMax = self.deadDropParticleMax or 4
+    local deadDropCount = math.random(deadDropMin, deadDropMax)
+    if #(Game.particles or {}) > 120 then
+        deadDropCount = math.random(math.min(deadDropMin, 1), math.min(deadDropMax, 2))
+    end
+    for _ = 1, deadDropCount do
         table.insert(Game.particles, EnemyDeadDropParticle:new(self.x, self.y))
     end
 
-    local particle = ZParticle:new(self.x, self.y, self.spriteSheet)
-    table.insert(Game.particles, particle)
-    BloodPixel.spawnBurst(self.x, self.y - 2, 0, -1, 9, 12)
+    if self.deathBodyParticleEnabled ~= false then
+        local particle = ZParticle:new(self.x, self.y, self.spriteSheet)
+        table.insert(Game.particles, particle)
+    end
+    BloodPixel.spawnBurst(
+        self.x,
+        self.y + (self.bloodSpawnYOffset or 0) - 2,
+        0,
+        -1,
+        self.deathBloodPixelMin or 9,
+        self.deathBloodPixelMax or 12
+    )
     self:spawnDeathBloodDecal()
 
     Game:increasePlayerPoints(self.dropPoints)

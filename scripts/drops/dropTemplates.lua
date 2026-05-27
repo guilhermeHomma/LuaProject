@@ -6,7 +6,7 @@ DropTemplates.enemies = {
         drops = {
             { id = "coins", amount = 1, weight = 10 },
             { id = "coins", amount = 2, weight = 4 },
-            { id = "coins", amount = 3, weight = 2 },
+            { id = "coins", amount = 4, weight = 2 },
             { id = "none", weight = 12 },
             { id = "bullets", amount = 1, weight = 1 },
         },
@@ -19,7 +19,7 @@ DropTemplates.enemies = {
         drops = {
             { id = "coins", amount = 1, weight = 10 },
             { id = "coins", amount = 2, weight = 5 },
-            { id = "coins", amount = 3, weight = 3 },
+            { id = "coins", amount = 4, weight = 3 },
             { id = "none", weight = 5 },
             { id = "bullets", amount = 1, weight = 1 },
         },
@@ -42,8 +42,8 @@ DropTemplates.enemies = {
     noHead = {
         points = 0,
         drops = {
-            { id = "coins", amount = 1, weight = 10 },
-            { id = "coins", amount = 2, weight = 5 },
+            { id = "coins", amount = 2, weight = 10 },
+            { id = "coins", amount = 3, weight = 5 },
             { id = "none", weight = 2 },
             { id = "bullets", amount = 1, weight = 1 },
         },
@@ -54,8 +54,8 @@ DropTemplates.enemies = {
     spider = {
         points = 0,
         drops = {
-            { id = "coins", amount = 1, weight = 3 },
-            { id = "none", weight = 14 },
+            { id = "coins", amount = 2, weight = 6 },
+            { id = "none", weight = 10 },
         },
         extraDrops = {
             { id = "life", amount = 1, chance = 0.002 },
@@ -67,8 +67,10 @@ DropTemplates.objects = {
     chest = {
         drops = {
             { id = "coins", amount = 3, weight = 15 },
-            { id = "life", amount = 1, weight = 1 },
-            { id = "bullets", amount = 1, weight = 7 },
+            { id = "coins", amount = 2, weight = 20 },
+            { id = "coins", amount = 4, weight = 10 },
+            { id = "life", amount = 1, weight = 2 },
+            { id = "bullets", amount = 1, weight = 12 },
         },
     },
     cardChest = {
@@ -78,8 +80,9 @@ DropTemplates.objects = {
     },
     box = {
         drops = {
-            { id = "coins", amount = 1, weight = 1 },
-            { id = "none", weight = 2 },
+            { id = "coins", amount = 1, weight = 10 },
+            { id = "none", weight = 20 },
+            { id = "bullets", amount = 1, weight = 1 },
         },
     },
 }

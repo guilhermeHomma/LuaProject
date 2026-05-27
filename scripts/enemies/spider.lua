@@ -1,5 +1,6 @@
 local Zombie = require("scripts/enemies/zombie")
 local Tilemap = require("scripts/tilemap")
+local EnemyDirector = require("scripts/enemies/enemyDirector")
 
 local footstepSounds = {
     love.audio.newSource("assets/sfx/footsteps/foot-steps-1.mp3", "static"),
@@ -9,6 +10,13 @@ local footstepSounds = {
 local Spider = setmetatable({}, {__index = Zombie})
 Spider.__index = Spider
 Spider.enemyTypeId = "spider"
+local SPIDER_COLLISION_RADIUS = 6 * 2.5
+
+local function distanceSqToPoint(x1, y1, x2, y2)
+    local dx = x1 - x2
+    local dy = y1 - y2
+    return dx * dx + dy * dy
+end
 
 local function playSpiderFootstep(playerDistance)
     local now = love.timer.getTime()
@@ -28,7 +36,7 @@ function Spider:new(x, y)
     local enemy = Zombie.new(self, x, y, math.random(74, 92))
     enemy.totalLife = 38
     enemy.life = enemy.totalLife
-    enemy.size = 6
+    enemy.size = SPIDER_COLLISION_RADIUS
     enemy.dropPoints = 0
     enemy.roamAroundPlayer = false
     enemy.pathUpdateInterval = 0.25
@@ -41,6 +49,20 @@ function Spider:new(x, y)
     enemy.footStepAlpha = 0.24
     enemy.footStepVisualInterval = 0.22
     enemy.animationSpeed = 0.1
+    enemy.bloodSpawnYOffset = -2
+    enemy.hitBloodPixelMin = 2
+    enemy.hitBloodPixelMax = 3
+    enemy.deathBloodPixelMin = 5
+    enemy.deathBloodPixelMax = 7
+    enemy.hitBloodDecalCooldown = 0.18
+    enemy.hitBloodDecalScaleMultiplier = 0.34
+    enemy.hitBloodDecalVolumeMultiplier = 0.36
+    enemy.deathBloodDecalOptions = {
+        scaleMultiplier = 0.72,
+        volumeMultiplier = 0.72,
+    }
+    enemy.deadDropParticleMin = 1
+    enemy.deadDropParticleMax = 2
     enemy.footstepEveryWalkFrame = true
     enemy.skipWalkParticles = true
     enemy.mouthVariant = "none"
@@ -96,30 +118,25 @@ end
 function Spider:pickRandomPathTarget()
     local currentMapX, currentMapY = Tilemap:worldToMap(self.x, self.y)
     local distanceTiles = self.randomPathTiles or 6
-    local candidates = {}
 
-    for _ = 1, 7 do
-        local angle = math.random() * math.pi * 2
-        local targetMapX = currentMapX + math.floor(math.cos(angle) * distanceTiles + 0.5)
-        local targetMapY = currentMapY + math.floor(math.sin(angle) * distanceTiles + 0.5)
-        local targetX, targetY = Tilemap:mapToWorld(targetMapX, targetMapY)
-        targetY = targetY - 8
-        local path = Tilemap:getPathBetweenWorldPoints(self.x, self.y, targetX, targetY)
+    local angle = math.random() * math.pi * 2
+    local targetMapX = currentMapX + math.floor(math.cos(angle) * distanceTiles + 0.5)
+    local targetMapY = currentMapY + math.floor(math.sin(angle) * distanceTiles + 0.5)
+    local targetX, targetY = Tilemap:mapToWorld(targetMapX, targetMapY)
+    targetY = targetY - 8
 
-        if path and #path > 1 then
-            if math.random() < 0.45 then
-                return path
-            end
-
-            candidates[#candidates + 1] = path
-        end
+    local path = nil
+    local requested = true
+    if EnemyDirector and EnemyDirector.requestPath then
+        path, requested = EnemyDirector:requestPath(self.x, self.y, targetX, targetY)
+    else
+        path = Tilemap:getPathBetweenWorldPoints(self.x, self.y, targetX, targetY)
+    end
+    if path and #path > 1 then
+        return path
     end
 
-    if #candidates == 0 then
-        return nil
-    end
-
-    return candidates[math.random(1, #candidates)]
+    return requested and nil or self.path
 end
 
 function Spider:startIdlePause()
@@ -215,6 +232,41 @@ function Spider:update(dt)
         return
     end
 
+    if not EnemyDirector:shouldUsePathfinding(self) then
+        self.roamTargetTimer = math.max(0, (self.roamTargetTimer or 0) - dt)
+        local needsRandomTarget = not self.roamTargetX
+            or not self.roamTargetY
+            or self.roamTargetTimer <= 0
+            or distance({x = self.roamTargetX, y = self.roamTargetY}, self) < 8
+        if needsRandomTarget then
+            EnemyDirector:configureRandomRoam(self, 1.1 + math.random() * 1.4)
+        end
+
+        local velocityX = (self.roamTargetX or self.x) - self.x
+        local velocityY = (self.roamTargetY or self.y) - self.y
+        local length = math.sqrt(velocityX * velocityX + velocityY * velocityY)
+        if length <= 0 then
+            self:startIdlePause()
+            return
+        end
+
+        velocityX = velocityX / length
+        velocityY = velocityY / length
+        self.state = Zombie.states.walk
+        self:animate(3, 6, dt)
+
+        local moveX = velocityX * self.speed * dt
+        local moveY = velocityY * self.speed * dt
+        local previousX, previousY = self.x, self.y
+        local collidedX, collidedY = self:isColliding(moveX, moveY)
+        if not collidedX then self.x = self.x + moveX end
+        if not collidedY then self.y = self.y + moveY end
+        if (collidedX or collidedY) and distanceSqToPoint(previousX, previousY, self.x, self.y) < 0.2 * 0.2 then
+            self:startIdlePause()
+        end
+        return
+    end
+
     if not self.path or #self.path < 2 then
         self.path = self:pickRandomPathTarget()
         if not self.path then
@@ -227,7 +279,7 @@ function Spider:update(dt)
     local nextTileX, nextTileY = Tilemap:mapToWorld(nextNode.x, nextNode.y)
     nextTileY = nextTileY - 8
 
-    if distance({x = nextTileX, y = nextTileY}, self) < 4 then
+    if distanceSqToPoint(nextTileX, nextTileY, self.x, self.y) < 4 * 4 then
         table.remove(self.path, 1)
         if #self.path < 2 then
             self:startIdlePause()
@@ -269,7 +321,7 @@ function Spider:update(dt)
 
     local moveX = velocityX * self.speed * dt
     local moveY = velocityY * self.speed * dt
-    local remainingDistance = distance({x = nextTileX, y = nextTileY}, self)
+    local remainingDistance = math.sqrt(distanceSqToPoint(nextTileX, nextTileY, self.x, self.y))
     local moveDistance = math.sqrt(moveX * moveX + moveY * moveY)
     if remainingDistance > 0 and moveDistance > remainingDistance then
         local scale = remainingDistance / moveDistance
@@ -282,7 +334,7 @@ function Spider:update(dt)
     if not collidedX then self.x = self.x + moveX end
     if not collidedY then self.y = self.y + moveY end
 
-    if (collidedX or collidedY) and distance({x = previousX, y = previousY}, self) < 0.2 then
+    if (collidedX or collidedY) and distanceSqToPoint(previousX, previousY, self.x, self.y) < 0.2 * 0.2 then
         self:startIdlePause()
     end
 end

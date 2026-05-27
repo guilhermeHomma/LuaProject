@@ -2,6 +2,7 @@ local Particle = require("scripts/particles/particle")
 
 local BulletSpriteParticle = setmetatable({}, {__index = Particle})
 BulletSpriteParticle.__index = BulletSpriteParticle
+BulletSpriteParticle.castsShadow = false
 
 local imageCache = {}
 local quadCache = {}
