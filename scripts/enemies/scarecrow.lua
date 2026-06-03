@@ -8,6 +8,7 @@ local Ball = require("scripts/particles/ballParticle")
 local BloodPixel = require("scripts/particles/bloodPixel")
 local FootStep = require("scripts/particles/footstep")
 local FloorManager = require("scripts/managers/floorManager")
+local DamageImpactParticle = require("scripts/particles/damageImpactParticle")
 
 require("scripts/utils")
 
@@ -33,6 +34,11 @@ local strawBloodPalette = {
     {0.66, 0.62, 0.50, 1},
     {0.34, 0.33, 0.30, 1},
     {0.48, 0.46, 0.38, 1},
+}
+local mortarBallOptions = {
+    sizeMultiplier = 1.15,
+    speedMultiplier = 1.4,
+    speedDownMultiplier = 1.4,
 }
 
 local function playClonedSound(baseSource, volume, pitch)
@@ -84,11 +90,22 @@ function Scarecrow:collisionBox(x, y, size)
     return {x = x - size/2, y = y - size/2, width = size, height = size}
 end
 
-function Scarecrow:takeDamage(damage)
+function Scarecrow:getDamageImpactPosition()
+    return self.x, self.y - 29
+end
+
+function Scarecrow:spawnDamageImpact(dx, dy)
+    if Game and Game.particles then
+        table.insert(Game.particles, DamageImpactParticle:new(self, dx, dy))
+    end
+end
+
+function Scarecrow:takeDamage(damage, dx, dy)
     if not self.isAlive or self.isBreaking then
         return
     end
 
+    self:spawnDamageImpact(dx, dy)
     self.hitFlashTimer = self.hitFlashDuration
     DamageStretch:start(self)
     self.life = self.life - (damage or 10)
@@ -127,8 +144,8 @@ function Scarecrow:breakApart()
         local dy = math.sin(angle)
         local lifetime = math.random(40, 50) / 100
         local size = math.random(8, 10) / 10
-        table.insert(Game.particles, Ball:new(self.x, self.y, 1, dx, dy, lifetime, size))
-        table.insert(Game.particles, Ball:new(self.x, self.y, 1, -dx, -dy, lifetime, size))
+        table.insert(Game.particles, Ball:new(self.x, self.y, 1, dx, dy, lifetime, size, mortarBallOptions))
+        table.insert(Game.particles, Ball:new(self.x, self.y, 1, -dx, -dy, lifetime, size, mortarBallOptions))
     end
     BloodPixel.spawnBurst(self.x, self.y - 8, 0, -1, 9, 12, strawBloodPalette)
 

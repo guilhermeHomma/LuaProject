@@ -9,7 +9,7 @@ local LightConfig = {
     types = {
         player = {
             generalShadow = {
-                minBrightness = 0.65,
+                minBrightness = 0.6,
                 color = {0, 0.1, 0.5},
             },
             worldLights = {
@@ -201,7 +201,7 @@ function LightConfig:getGeneralShadow()
         for key, value in pairs(result or {}) do
             copy[key] = value
         end
-        copy.minBrightness = math.max(copy.minBrightness or 0, 0.75)
+        copy.minBrightness = math.max(copy.minBrightness or 0, 0.6)
         result = copy
     end
 

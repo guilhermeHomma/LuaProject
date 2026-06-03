@@ -69,6 +69,7 @@ float getOcclusion(vec2 lightCenter, vec2 screenCoord) {
 vec4 effect(vec4 color, Image tex, vec2 texCoord, vec2 screenCoord) {
     vec4 pixel = Texel(tex, texCoord) * color;
     float brightness = u_generalShadowMinBrightness;
+    float maxLightLift = max(1.0 - u_generalShadowMinBrightness, 0.0001);
     float additiveBrightness = 0.0;
 
     if (u_lightCount > 0.0) {
@@ -84,7 +85,9 @@ vec4 effect(vec4 color, Image tex, vec2 texCoord, vec2 screenCoord) {
             }
             float lightBrightness = mix(u_maxBrightnesses[i], u_generalShadowMinBrightness, t);
             lightBrightness = mix(lightBrightness, u_generalShadowMinBrightness, occlusion);
-            brightness = max(brightness, lightBrightness);
+            float lightLift = max(lightBrightness - u_generalShadowMinBrightness, 0.0);
+            float remainingLift = clamp(1.0 - ((brightness - u_generalShadowMinBrightness) / maxLightLift), 0.0, 1.0);
+            brightness += lightLift * remainingLift;
             additiveBrightness += (1.0 - t) * u_additiveStrengths[i] * (1.0 - occlusion);
         }
     }

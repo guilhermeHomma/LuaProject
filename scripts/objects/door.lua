@@ -5,6 +5,7 @@ local sheetImage = love.graphics.newImage("assets/sprites/doors/doorWood.png")
 sheetImage:setFilter("nearest", "nearest")
 local lockIconImage = love.graphics.newImage("assets/sprites/icons/lock.png")
 lockIconImage:setFilter("nearest", "nearest")
+local TreeConfig = require("scripts/config/treeConfig")
 local whiteShader = love.graphics.newShader("scripts/shaders/whiteShader.glsl")
 local doorHandleSoundBase = love.audio.newSource("assets/sfx/door/doorhandle.mp3", "static")
 local doorCloseSoundBase = love.audio.newSource("assets/sfx/door/doorclose.mp3", "static")
@@ -214,6 +215,7 @@ function DoorTile:startClosing(options)
     end
 
     options = options or {}
+    self.closeSoundPlayedOnStart = false
     self.opening = true
     self.animationMode = "closing"
     self.openPhase = "animate"
@@ -223,6 +225,13 @@ function DoorTile:startClosing(options)
     self.isAlive = true
     self.targetFrame = self.frameSequence and 1 or self.closedFrame
     self.frameSpeed = options.frameSpeed or options.closeFrameSpeed or self.defaultFrameSpeed or self.frameSpeed
+    if options.playCloseSoundOnStart then
+        local doors = getConnectedDoors(self.doorPairKey)
+        if #doors == 0 or isDoorPairAnchor(self, doors) then
+            playDoorSoundOnce("close", doorCloseSoundBase, self, 0.5, 0.35, true)
+            self.closeSoundPlayedOnStart = true
+        end
+    end
 end
 
 function DoorTile:openConnectedDoors()
@@ -394,11 +403,14 @@ function DoorTile:update(dt)
     addToDrawQueue(self.yWorld + self.ySortOffset, self)
     local Tilemap = require("scripts/tilemap")
     if Tilemap.markTreesTransparentNearBox then
+        local fadeArea = TreeConfig.fadeArea or {}
+        local markWidth = fadeArea.doorMarkWidth or self.size
+        local markHeight = fadeArea.doorMarkHeight or self.size
         Tilemap:markTreesTransparentNearBox({
-            x = self.xWorld - self.size / 2,
-            y = self.yWorld - self.size,
-            width = self.size,
-            height = self.size,
+            x = self.xWorld - markWidth / 2,
+            y = self.yWorld + (fadeArea.doorMarkYOffset or -markHeight),
+            width = markWidth,
+            height = markHeight,
         }, 0)
     end
     self:queueLockIcon()
@@ -443,7 +455,7 @@ function DoorTile:update(dt)
 
                 if self.animationMode == "closing" then
                     local doors = getConnectedDoors(self.doorPairKey)
-                    if #doors == 0 or isDoorPairAnchor(self, doors) then
+                    if not self.closeSoundPlayedOnStart and (#doors == 0 or isDoorPairAnchor(self, doors)) then
                         playDoorSoundOnce("close", doorCloseSoundBase, self, 0.5, 0.35, true)
                     end
 
@@ -454,6 +466,7 @@ function DoorTile:update(dt)
                     self.collider = true
                     self.alpha = 1
                     self.frameSpeed = self.defaultFrameSpeed or self.frameSpeed
+                    self.closeSoundPlayedOnStart = false
                 else
                     local doors = getConnectedDoors(self.doorPairKey)
                     if #doors == 0 or isDoorPairAnchor(self, doors) then

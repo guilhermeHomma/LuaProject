@@ -80,10 +80,10 @@ end
 
 local function playSplat(x, y, options)
     options = options or {}
-    local volume = 0.22
+    local volume = 0.26
 
     if Player then
-        volume = getDistanceVolume(distance({ x = x, y = y }, Player), 0.32, 220)
+        volume = getDistanceVolume(distance({ x = x, y = y }, Player), 0.38, 220)
     end
 
     local sound = splatBase:clone()
@@ -190,7 +190,7 @@ function BloodDecal:new(x, y, damageDx, damageDy, options)
     decal.y = y
     decal.sprite = bloodSprites[math.random(1, #bloodSprites)]
     decal.rotation = getSourceAngle(x, y, damageDx, damageDy)
-    decal.scale = randomRange(1.1, 1.4) * (options.scaleMultiplier or 1)
+    decal.scale = randomRange(1.3, 1.7) * (options.scaleMultiplier or 1)
     decal.timer = 0
     decal.lifeTime = 35
     decal.revealDuration = 0.16

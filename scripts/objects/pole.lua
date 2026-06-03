@@ -17,7 +17,8 @@ for i = 1, frameCount do
     frames[i] = love.graphics.newQuad((i - 1) * frameWidth, 0, frameWidth, spriteHeight, spriteWidth, spriteHeight)
 end
 
-function Pole:new(x, y, quadIndex, collider)
+function Pole:new(x, y, quadIndex, collider, options)
+    options = options or {}
     local tile = Tile.new(self, x, y, quadIndex, collider)
     setmetatable(tile, Pole)
     tile.animationTimer = math.random() * frameCount * (animationConfig.frameTime or 0.12)
@@ -28,6 +29,7 @@ function Pole:new(x, y, quadIndex, collider)
     tile.renderCullMargin = 420
     tile.spatialRadius = 260
     tile.isXrayOccluder = true
+    tile.ySortOffset = options.ySortOffset or 0
     return tile
 end
 
@@ -56,7 +58,7 @@ function Pole:update(dt)
         )
     end
 
-    addToDrawQueue(self.yWorld + 2, self, false)
+    addToDrawQueue(self.yWorld + 2 + (self.ySortOffset or 0), self, false)
 end
 
 function Pole:drawShadow()

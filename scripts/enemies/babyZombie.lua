@@ -19,12 +19,14 @@ end
 
 function babyZombie:new(x, y)
     local zombie = Zombie.new(self, x, y)
-    zombie.speed = math.random(62, 79)
+    zombie.speed = math.random(72, 83)
     zombie.damageTimer = 0.14
     zombie.totalLife = 25
-    zombie.footStepAlpha = 0.3
+    zombie.skipFootSteps = true
+    zombie.skipWalkParticles = true
     zombie.life = zombie.totalLife
     zombie.mouthVariant = "babyZombie"
+    zombie.damageImpactHeightRatio = 0.58
     zombie.roamAroundPlayer = false
     zombie.pathUpdateInterval = 0.45
     zombie.pathUpdateCounter = love.math.random() * zombie.pathUpdateInterval
@@ -41,6 +43,11 @@ end
 
 
 function babyZombie:takeDamage(damage, dx, dy)
+    if self.life <= 0 or self.isAlive == false then
+        return
+    end
+
+    self:spawnDamageImpact(dx, dy)
     self.lastDamageDx = dx
     self.lastDamageDy = dy
     self.life = self.life - damage
@@ -74,7 +81,7 @@ end
 function babyZombie:noiseCheck(dt)
     self.soundTimer = self.soundTimer + dt
 
-    if self.soundTimer >= 10 and Player.isAlive then
+    if self.soundTimer >= (self.soundInterval or 5) and Player.isAlive then
         self.soundTimer = 0
         local soundPositionX, soundPositionY = soundPosition(Player, self)
         local playerDistance = distance(Player, self) / 2

@@ -17,10 +17,10 @@ function Ball:new(x, y, height, dx, dy, lifetime, size, options)
     if not lifetime  then lifetime = math.random(30, 45) / 100 end
     options = options or {}
 
-    local particle = Particle.new(self, x, y, height, size, lifetime)
+    local particle = Particle.new(self, x, y, height, size * (options.sizeMultiplier or 1), lifetime)
     particle.sprite = math.random() < starChance and starSprite or sprite
-    particle.speed = math.random(30, 35)
-    particle.speedDown = math.random(45, 55)
+    particle.speed = math.random(30, 35) * (options.speedMultiplier or 1)
+    particle.speedDown = math.random(45, 55) * (options.speedDownMultiplier or 1)
     particle.dx = dx
     particle.dy = dy
     if options.rgbShift then

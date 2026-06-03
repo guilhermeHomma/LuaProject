@@ -2,13 +2,21 @@ local TreeConfig = {}
 
 TreeConfig.fadeArea = {
     marginX = 4,
-    topOffset = -18,
-    bottomPadding = -26,
+    topOffset = -12,
+    bottomPadding = -22,
     hiddenAlpha = 0.4,
     playerCalculationPadding = 160,
     playerAreaPadding = 0,
     enemyAreaPadding = 0,
     doorAreaPadding = 2,
+    doorBoxWidth = 10,
+    doorBoxHeight = 28,
+    doorBoxYOffset = -34,
+    doorMarkWidth = 10,
+    doorMarkHeight = 12,
+    doorMarkYOffset = -10,
+    fadeOutStep = 0.055,
+    fadeInStep = 0.075,
 }
 
 TreeConfig.debug = {

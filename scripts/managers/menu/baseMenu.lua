@@ -24,6 +24,8 @@ function baseMenu:load()
     self.lastMouseX = nil
     self.lastMouseY = nil
     self.mouseNeedsSync = true
+    self.inputMode = "mouse"
+    self.hoverSoundCooldowns = {}
 
     self.selectSprite = love.graphics.newImage("assets/sprites/menu/menu-select.png")
 
@@ -43,7 +45,7 @@ end
 
 function baseMenu:playNavigateSound()
     navigateSound:stop()
-    navigateSound:setVolume(1)
+    navigateSound:setVolume(0.4 * (SOUND_VOLUME or 1))
     navigateSound:setPitch(0.95 + math.random() * 0.1)
     navigateSound:play()
 end
@@ -51,7 +53,7 @@ end
 function baseMenu:playConfirmSound()
     confirmSound:stop()
     confirmSound:setPitch(1)
-    confirmSound:setVolume(0.2)
+    confirmSound:setVolume(0.7 * (SOUND_VOLUME or 1))
     confirmSound:play()
 end
 
@@ -95,6 +97,20 @@ local hoverPalette = {
     "bfb0c5",
 }
 
+local MENU_TEXT_SHADOW_X = 2
+local MENU_TEXT_SHADOW_Y = 2
+local MENU_TEXT_SHADOW_DARKEN = 0.42
+local MOUSE_REACTIVATE_DISTANCE = 6
+
+local function setDarkerTextColor(r, g, b, a)
+    love.graphics.setColor(
+        r * MENU_TEXT_SHADOW_DARKEN,
+        g * MENU_TEXT_SHADOW_DARKEN,
+        b * MENU_TEXT_SHADOW_DARKEN,
+        a or 1
+    )
+end
+
 local function drawWavyMenuText(self, text, y, font, config)
     local time = love.timer.getTime()
     local textWidth = font:getWidth(text)
@@ -120,11 +136,14 @@ local function drawWavyMenuText(self, text, y, font, config)
         local drawX = math.floor(x + runX + 0.5)
         local drawY = math.floor(y + runY + 0.5)
         local color = config.color or hoverPalette[((i + paletteShift - 1) % #hoverPalette) + 1]
+        local shadowX = config.shadowOffsetX or MENU_TEXT_SHADOW_X
+        local shadowY = config.shadowOffsetY or MENU_TEXT_SHADOW_Y
 
         if char ~= " " then
-            love.graphics.setColor(0.02, 0.015, 0.025, config.shadowAlpha)
-            love.graphics.print(char, drawX + 1, drawY + 1)
-            love.graphics.setColor(hexToRGB(color))
+            local r, g, b = hexToRGB(color)
+            setDarkerTextColor(r, g, b, config.shadowAlpha or 1)
+            love.graphics.print(char, drawX + shadowX, drawY + shadowY)
+            love.graphics.setColor(r, g, b)
             love.graphics.print(char, drawX, drawY)
         end
 
@@ -132,6 +151,15 @@ local function drawWavyMenuText(self, text, y, font, config)
     end
 
     love.graphics.setColor(hexToRGB("fbfaf7"))
+end
+
+local function drawShadowedPrintf(text, x, y, width, align, color, shadowAlpha)
+    local r, g, b = color[1], color[2], color[3]
+    local a = color[4] or 1
+    setDarkerTextColor(r, g, b, shadowAlpha or a)
+    love.graphics.printf(text, x + MENU_TEXT_SHADOW_X, y + MENU_TEXT_SHADOW_Y, width, align)
+    love.graphics.setColor(r, g, b, a)
+    love.graphics.printf(text, x, y, width, align)
 end
 
 function baseMenu:drawTitle()
@@ -147,7 +175,7 @@ function baseMenu:drawTitle()
         secondaryX = 0.16,
         ySpeed = 1.35,
         yAmplitude = 0.28,
-        shadowAlpha = 0.62,
+        shadowAlpha = 1,
         color = "fbfaf7",
     })
     love.graphics.setColor(hexToRGB("ffffff"))
@@ -164,7 +192,7 @@ function baseMenu:drawHoverText(text, y, bounds)
         secondaryX = 0.32,
         ySpeed = 3.1,
         yAmplitude = 0.75,
-        shadowAlpha = 0.8,
+        shadowAlpha = 1,
         leanX = leanX,
         leanY = leanY,
         leanTiltY = 3.0,
@@ -185,15 +213,13 @@ function baseMenu:drawOption(text, x, y, def, isSelected, isInactive, bounds)
     if isInactive then
         love.graphics.setColor(0, 0, 0, 0.45)
         love.graphics.rectangle("fill", bounds.left, bounds.top - 2, bounds.width, bounds.height)
-        love.graphics.setColor(0.45, 0.45, 0.45, 0.55)
-        love.graphics.printf(text, x, y, self:getWidth(), def)
+        drawShadowedPrintf(text, x, y, self:getWidth(), def, {0.45, 0.45, 0.45, 0.7}, 0.9)
         return
     end
 
     if not isSelected then
         --drawOutline(text, x, y, self:getWidth(), def)
-        love.graphics.setColor(hexToRGB("fbfaf7"))
-        love.graphics.printf(text, x, y, self:getWidth(), def)
+        drawShadowedPrintf(text, x, y, self:getWidth(), def, {hexToRGB("fbfaf7")}, 1)
         return
     end
 
@@ -255,14 +281,24 @@ function baseMenu:update(dt)
     local mouseX = love.mouse.getX()
     local mouseY = love.mouse.getY()
 
-    local mouseMoved = self.lastMouseX ~= mouseX or self.lastMouseY ~= mouseY
+    local hadMousePosition = self.lastMouseX ~= nil and self.lastMouseY ~= nil
+    local mouseMoved = hadMousePosition and (self.lastMouseX ~= mouseX or self.lastMouseY ~= mouseY)
     self.lastMouseX = mouseX
     self.lastMouseY = mouseY
 
-    if not mouseMoved and not self.mouseNeedsSync then
+    if not mouseMoved then
         return
     end
 
+    if self.inputMode == "keyboard" and self.keyboardMouseAnchorX and self.keyboardMouseAnchorY then
+        local dx = mouseX - self.keyboardMouseAnchorX
+        local dy = mouseY - self.keyboardMouseAnchorY
+        if dx * dx + dy * dy < MOUSE_REACTIVATE_DISTANCE * MOUSE_REACTIVATE_DISTANCE then
+            return
+        end
+    end
+
+    self.inputMode = "mouse"
     self.mouseNeedsSync = false
 
     local optionIndex = self:getOptionAtPosition(
@@ -270,18 +306,31 @@ function baseMenu:update(dt)
         (mouseY - viewportOffsetY) / scale
     )
     if optionIndex and not self:isOptionIndexInactive(optionIndex) and optionIndex ~= self.selectedOption then
+        local now = love.timer.getTime()
         self.selectedOption = optionIndex
+        self.lastSelectChange = now
+        if now >= (self.hoverSoundCooldowns[optionIndex] or 0) then
+            self.hoverSoundCooldowns[optionIndex] = now + 0.12
+            self:playNavigateSound()
+        end
     end
 end
 
 function baseMenu:getOptionAtPosition(x, y)
+    local closestIndex = nil
+    local closestDistance = math.huge
     for i, bounds in ipairs(self.optionBounds or {}) do
         if x >= bounds.left and x <= bounds.left + bounds.width and
            y >= bounds.top and y <= bounds.top + bounds.height then
-            return i
+            local centerY = bounds.top + bounds.height / 2
+            local distanceToCenter = math.abs(y - centerY)
+            if distanceToCenter < closestDistance then
+                closestDistance = distanceToCenter
+                closestIndex = i
+            end
         end
     end
-    return nil
+    return closestIndex
 end
 
 function baseMenu:mousepressed(x, y, button)
@@ -298,14 +347,17 @@ function baseMenu:mousepressed(x, y, button)
         return
     end
 
+    self.inputMode = "mouse"
     self.selectedOption = optionIndex
     self.lastSelectChange = love.timer.getTime()
     self.mouseNeedsSync = false
     self:playConfirmSound()
     self:onSelect()
+    return true
 end
 
 function baseMenu:keypressed(key)
+    local handled = true
     if key == "up" then
         self:moveSelection(-1)
     elseif key == "down" then
@@ -319,9 +371,16 @@ function baseMenu:keypressed(key)
         self.lastSelectChange = love.timer.getTime()
         return
     else
+        handled = false
+    end
+
+    if not handled then
         return
     end
 
+    self.inputMode = "keyboard"
+    self.keyboardMouseAnchorX = love.mouse.getX()
+    self.keyboardMouseAnchorY = love.mouse.getY()
     self.mouseNeedsSync = true
     self.lastSelectChange = love.timer.getTime()
     self:playNavigateSound()

@@ -27,6 +27,8 @@ local Scarecrow = require("scripts/enemies/scarecrow")
 local CardChoice = require("scripts/managers/cardChoice")
 local Hollow = require("scripts/objects/hollow")
 local FloorIntroManager = require("scripts/managers/floorIntroManager")
+local SpiderWeb = require("scripts/particles/spiderWeb")
+local RoomScreenTransition = require("scripts/managers/roomScreenTransition")
 
 local font = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 32)
 local hudDistortionShader = love.graphics.newShader("scripts/shaders/hudWater.glsl")
@@ -117,13 +119,21 @@ local MAX_XRAY_OCCLUDERS_PER_TARGET = 8
 local XRAY_OCCLUDER_PADDING = 20
 local MAX_PLAYER_PROJECTILE_LIGHTS = 30
 local MAX_ENEMY_PROJECTILE_LIGHTS = 30
-local ENTRY_MOVE_DISTANCE = TILE_WORLD_SIZE * 1.7
-local ENTRY_MOVE_DURATION = 0.24
+local ENTRY_MOVE_DISTANCE = TILE_WORLD_SIZE * 2.25
+local ENTRY_START_BACK_DISTANCE = TILE_WORLD_SIZE * 0.55
+local ENTRY_ANIMATION_LEAD_TIME = 0.08
 local ENTRY_DOOR_CLOSE_WAIT = 0.1
 local ENTRY_DOOR_CLOSE_SPEED = 42
-local EXIT_RUN_DISTANCE = TILE_WORLD_SIZE * 2.1
+local EXIT_RUN_DISTANCE = TILE_WORLD_SIZE * 2.75
+local EXIT_PRE_SLIDE_DISTANCE = TILE_WORLD_SIZE * 1.15
 local ROOM_FADE_OUT_DURATION = 0.38
 local ROOM_FADE_IN_DURATION = 0.24
+local SPOTLIGHT_FOCUS_DURATION = 0.85
+local SPOTLIGHT_TOTAL_DURATION = 2.05
+local SPOTLIGHT_START_SPEED = 360
+local SPOTLIGHT_EXIT_SPEED = 2000
+local SPOTLIGHT_EXIT_ACCELERATION = 2000
+local SPOTLIGHT_FEATHER_SPEED = 22
 local EnemyFactories = {
     zombie = Zombie,
     babyZombie = BabyZombie,
@@ -223,6 +233,24 @@ end
 
 local function getWorldDirectionVector(direction)
     return gridDirectionVectors[direction] or {x = 0, y = 0}
+end
+
+local function primePlayerWalkAnimation(vector)
+    if not (Player and Player.animations and Player.animations.walk) then
+        return
+    end
+
+    Player.currentAnimation = "walk"
+    Player.currentFrame = 2
+    Player.animationTimer = ENTRY_ANIMATION_LEAD_TIME
+    Player.idleHandFrame = Player.currentFrame
+    Player.idleHandTimer = 0
+    Player.footStepTimer = 0
+    Player.moveX = vector.x
+    Player.moveY = vector.y
+    if vector.x ~= 0 then
+        Player.flipH = vector.x > 0
+    end
 end
 
 local function getEncounterConfig()
@@ -1056,8 +1084,8 @@ function Game:load(options)
         radius = 1,
         feather = 3,
         target = 60,
-        speed = 160,
-        speedIncrease = 1000,
+        speed = SPOTLIGHT_START_SPEED,
+        speedIncrease = SPOTLIGHT_EXIT_SPEED,
         enabled = true,
     }
 
@@ -1113,6 +1141,8 @@ function Game:resetRuntimeState()
     self.roomTransitionCooldown = 0
     self.playerRoomEntryMove = nil
     self.playerRoomExitTransition = nil
+    self.pendingRoomRevealId = nil
+    self.minimapRoomOverrideId = nil
     self.currentEntryDoorAvoidPoint = nil
     self.playerCombatRoomsEntered = 0
     self.roomFadeAlpha = 0
@@ -1397,9 +1427,11 @@ function Game:setupCurrentRoom(options)
         return
     end
 
-    state.visited = true
-    state.discovered = true
-    revealRoomConnections(currentRoom)
+    if not options.deferMinimapReveal then
+        state.visited = true
+        state.discovered = true
+        revealRoomConnections(currentRoom)
+    end
     if not options.keepEntryDoorOpen then
         Tilemap:setAllRoomDoorsOpen(false)
     end
@@ -1475,6 +1507,16 @@ function Game:setupCurrentRoom(options)
     self:updateBattleMusicForCurrentRoom()
 end
 
+function Game:spawnInitialSpiderWebsForRoom(currentRoom)
+    local state = currentRoom and currentRoom.state
+    if not state or state.initialSpiderWebsSpawned then
+        return
+    end
+
+    state.initialSpiderWebsSpawned = true
+    SpiderWeb.spawnRandomReachable(2, Player, 45)
+end
+
 function Game:spawnCurrentRoomWave(currentRoom, encounterConfig)
     local state = currentRoom and currentRoom.state
     if not state or currentRoom.isShopRoom or currentRoom.isCardRoom or currentRoom.isEndRoom then
@@ -1534,6 +1576,10 @@ function Game:spawnCurrentRoomWave(currentRoom, encounterConfig)
         return false
     end
 
+    if (spawnedCounts.spider or 0) > 0 then
+        self:spawnInitialSpiderWebsForRoom(currentRoom)
+    end
+
     state.normalEncounterEnemyTotal = (state.normalEncounterEnemyTotal or 0) + spawnedEnemyCount
     self:spawnAdditionalEncounterWave(currentRoom, encounterConfig, spawnedEnemyCount, spawnedPositions)
 
@@ -1588,6 +1634,9 @@ function Game:spawnAdditionalEncounterWave(currentRoom, encounterConfig, normalE
 
     if spawnedAny then
         state.activeEncounterWaves[waveId] = true
+        if (spawnedCounts.spider or 0) > 0 then
+            self:spawnInitialSpiderWebsForRoom(currentRoom)
+        end
     end
 
     return spawnedAny
@@ -1729,10 +1778,14 @@ end
 function Game:startEntryMove(entryDirection)
     local vector = entryMoveVectors[entryDirection] or {x = 0, y = 0}
     local targetX, targetY = getEntryMoveTarget(entryDirection, Player.x, Player.y)
+    local dx = targetX - Player.x
+    local dy = targetY - Player.y
+    local moveDistance = math.sqrt(dx * dx + dy * dy)
+    local moveSpeed = math.max(Player.speed or Player.baseSpeed or 1, 1)
     self.playerRoomEntryMove = {
         phase = "move",
         timer = 0,
-        duration = ENTRY_MOVE_DURATION,
+        duration = math.max(moveDistance / moveSpeed, 0.001),
         closeWaitTimer = 0,
         vectorX = vector.x,
         vectorY = vector.y,
@@ -1743,6 +1796,7 @@ function Game:startEntryMove(entryDirection)
     }
     Player.moveX = vector.x
     Player.moveY = vector.y
+    primePlayerWalkAnimation(vector)
     Dialog.breakMovements = true
 end
 
@@ -1756,15 +1810,26 @@ function Game:updateEntryMove(dt)
         move.closeWaitTimer = math.max(0, (move.closeWaitTimer or ENTRY_DOOR_CLOSE_WAIT) - dt)
         Player.velocityX = 0
         Player.velocityY = 0
-        Player.moveX = 0
-        Player.moveY = 0
+        Player.moveX = move.vectorX
+        Player.moveY = move.vectorY
+        if move.vectorX ~= 0 then
+            Player.flipH = move.vectorX > 0
+        end
         Player:updateAnimation(dt, true)
         Player.gun:update(dt, Player.x, Player.y)
         addToDrawQueue(Player.y + 6, Player)
 
         if move.closeWaitTimer == 0 then
+            Player.moveX = move.vectorX
+            Player.moveY = move.vectorY
+            if move.vectorX ~= 0 then
+                Player.flipH = move.vectorX > 0
+            end
+            Player.sideChangeTimer = 0
             self.playerRoomEntryMove = nil
-            Dialog.breakMovements = false
+            if not self.playerRoomExitTransition then
+                Dialog.breakMovements = false
+            end
         end
 
         return true
@@ -1789,7 +1854,10 @@ function Game:updateEntryMove(dt)
     if move.timer >= move.duration then
         move.phase = "closing"
         move.closeWaitTimer = ENTRY_DOOR_CLOSE_WAIT
-        Tilemap:setAllRoomDoorsOpen(false, true, { frameSpeed = ENTRY_DOOR_CLOSE_SPEED })
+        Tilemap:setAllRoomDoorsOpen(false, true, {
+            frameSpeed = ENTRY_DOOR_CLOSE_SPEED,
+            playCloseSoundOnStart = true,
+        })
     end
 
     return true
@@ -1804,14 +1872,17 @@ function Game:loadRoomFromDirection(direction)
     end
 
     local entryDirection = oppositeDirections[direction]
-    if not FloorManager:enterRoom(targetRoomId) then
+    if not FloorManager:enterRoom(targetRoomId, { deferReveal = true }) then
         return false
     end
 
     self.objects = {}
     for index = #(self.particles or {}), 1, -1 do
         local particleType = self.particles[index].particleType
-        if particleType == "boxParticle" or particleType == "bloodDecal" or particleType == "leafParticle" then
+        if particleType == "boxParticle"
+            or particleType == "bloodDecal"
+            or particleType == "leafParticle"
+            or particleType == "spiderWeb" then
             table.remove(self.particles, index)
         end
     end
@@ -1819,8 +1890,9 @@ function Game:loadRoomFromDirection(direction)
     Tilemap:load()
     Tilemap:setDoorOpen(entryDirection, true)
     local spawnX, spawnY = getEntrySpawn(entryDirection)
-    Player.x = spawnX
-    Player.y = spawnY
+    local entryVector = entryMoveVectors[entryDirection] or { x = 0, y = 0 }
+    Player.x = spawnX - entryVector.x * ENTRY_START_BACK_DISTANCE
+    Player.y = spawnY - entryVector.y * ENTRY_START_BACK_DISTANCE
     self.currentEntryDoorAvoidPoint = getEntryDoorAvoidPoint(entryDirection) or { x = spawnX, y = spawnY }
     local state = FloorManager:getCurrentRoomState()
     if state then
@@ -1836,8 +1908,12 @@ function Game:loadRoomFromDirection(direction)
     end
 
     self.roomTransitionCooldown = 0.28
+    self.pendingRoomRevealId = targetRoomId
     self:startEntryMove(entryDirection)
-    self:setupCurrentRoom({ keepEntryDoorOpen = true })
+    self:setupCurrentRoom({
+        keepEntryDoorOpen = true,
+        deferMinimapReveal = true,
+    })
     self:restoreCurrentRoomDrops()
     return true
 end
@@ -1861,20 +1937,23 @@ function Game:startRoomExitTransition(direction)
     end
 
     local vector = getWorldDirectionVector(direction)
+    local exitMoveDistance = math.min(EXIT_PRE_SLIDE_DISTANCE, EXIT_RUN_DISTANCE)
     self.playerRoomExitTransition = {
-        phase = "fadeOut",
+        phase = "exitMove",
         direction = direction,
         timer = 0,
-        duration = ROOM_FADE_OUT_DURATION,
+        duration = math.max(exitMoveDistance / math.max(Player.speed or Player.baseSpeed or 1, 1), 0.001),
         vectorX = vector.x,
         vectorY = vector.y,
         startX = Player.x,
         startY = Player.y,
-        targetX = Player.x + vector.x * EXIT_RUN_DISTANCE,
-        targetY = Player.y + vector.y * EXIT_RUN_DISTANCE,
+        targetX = Player.x + vector.x * exitMoveDistance,
+        targetY = Player.y + vector.y * exitMoveDistance,
     }
+    self.minimapRoomOverrideId = currentRoom.id
     Player.moveX = vector.x
     Player.moveY = vector.y
+    primePlayerWalkAnimation(vector)
     Dialog.breakMovements = true
     return true
 end
@@ -1885,9 +1964,35 @@ function Game:updateRoomExitTransition(dt)
         return false
     end
 
-    if transition.phase == "fadeOut" then
+    if transition.phase == "exitMove" then
         transition.timer = math.min(transition.duration, transition.timer + dt)
-        self.roomFadeAlpha = transition.timer / transition.duration
+        self.roomFadeAlpha = 0
+        local t = transition.timer / transition.duration
+        Player.x = transition.startX + (transition.targetX - transition.startX) * t
+        Player.y = transition.startY + (transition.targetY - transition.startY) * t
+        Player.velocityX = 0
+        Player.velocityY = 0
+        Player.moveX = transition.vectorX
+        Player.moveY = transition.vectorY
+        if transition.vectorX ~= 0 then
+            Player.flipH = transition.vectorX > 0
+        end
+        Player:updateAnimation(dt, true)
+        Player.gun:update(dt, Player.x, Player.y)
+        addToDrawQueue(Player.y + 6, Player)
+
+        if transition.timer >= transition.duration then
+            transition.phase = "captureOldRoom"
+            transition.timer = 0
+            transition.duration = RoomScreenTransition:getDuration()
+            RoomScreenTransition:beginCapture({
+                x = transition.vectorX,
+                y = transition.vectorY,
+            })
+        end
+    elseif transition.phase == "fadeOut" then
+        transition.timer = math.min(transition.duration, transition.timer + dt)
+        self.roomFadeAlpha = 0
         local t = transition.timer / transition.duration
         Player.x = transition.startX + (transition.targetX - transition.startX) * t
         Player.y = transition.startY + (transition.targetY - transition.startY) * t
@@ -1902,25 +2007,76 @@ function Game:updateRoomExitTransition(dt)
         if transition.timer >= transition.duration then
             local direction = transition.direction
             self.playerRoomExitTransition = nil
-            self.roomFadeAlpha = 1
+            self.roomFadeAlpha = 0
+            RoomScreenTransition:startSlide({
+                x = transition.vectorX,
+                y = transition.vectorY,
+            })
             self:loadRoomFromDirection(direction)
             self.playerRoomExitTransition = {
-                phase = "fadeIn",
+                phase = "screenSlide",
                 timer = 0,
-                duration = ROOM_FADE_IN_DURATION,
+                duration = RoomScreenTransition:getDuration(),
             }
         end
-    elseif transition.phase == "fadeIn" then
+    elseif transition.phase == "captureOldRoom" then
+        self.roomFadeAlpha = 0
+        Player.velocityX = 0
+        Player.velocityY = 0
+        Player.moveX = transition.vectorX
+        Player.moveY = transition.vectorY
+        Player:updateAnimation(dt, true)
+        Player.gun:update(dt, Player.x, Player.y)
+        addToDrawQueue(Player.y + 6, Player)
+
+        if RoomScreenTransition:hasCaptured() then
+            local direction = transition.direction
+            self.playerRoomExitTransition = nil
+            RoomScreenTransition:startSlide({
+                x = transition.vectorX,
+                y = transition.vectorY,
+            })
+            self:loadRoomFromDirection(direction)
+            self.playerRoomExitTransition = {
+                phase = "screenSlide",
+                timer = 0,
+                duration = RoomScreenTransition:getDuration(),
+            }
+        end
+    elseif transition.phase == "screenSlide" then
         transition.timer = math.min(transition.duration, transition.timer + dt)
-        self.roomFadeAlpha = 1 - transition.timer / transition.duration
+        self.roomFadeAlpha = 0
         if self.playerRoomEntryMove then
             self:updateEntryMove(dt)
+        end
+
+        if not transition.minimapRevealed
+            and transition.timer >= transition.duration * 0.5 then
+            transition.minimapRevealed = true
+            if self.pendingRoomRevealId then
+                FloorManager:revealRoom(self.pendingRoomRevealId)
+                revealRoomConnections(FloorManager:getRoom(self.pendingRoomRevealId))
+                self.pendingRoomRevealId = nil
+            end
+            self.minimapRoomOverrideId = nil
         end
 
         if transition.timer >= transition.duration then
             self.roomFadeAlpha = 0
             self.playerRoomExitTransition = nil
+            if self.pendingRoomRevealId then
+                FloorManager:revealRoom(self.pendingRoomRevealId)
+                revealRoomConnections(FloorManager:getRoom(self.pendingRoomRevealId))
+                self.pendingRoomRevealId = nil
+            end
+            self.minimapRoomOverrideId = nil
             Dialog.breakMovements = self.playerRoomEntryMove ~= nil
+            if self.playerRoomEntryMove then
+                primePlayerWalkAnimation({
+                    x = self.playerRoomEntryMove.vectorX,
+                    y = self.playerRoomEntryMove.vectorY,
+                })
+            end
         end
     end
 
@@ -1989,8 +2145,8 @@ function Game:loadFloor(floorIndex, onIntroComplete)
     self.spot.radius = 1
     self.spot.feather = 3
     self.spot.target = 60
-    self.spot.speed = 160
-    self.spot.speedIncrease = 1000
+    self.spot.speed = SPOTLIGHT_START_SPEED
+    self.spot.speedIncrease = SPOTLIGHT_EXIT_SPEED
     self.spot.enabled = true
 
     local spawnX, spawnY = getStartRoomPlayerSpawn()
@@ -2138,19 +2294,19 @@ function Game:updateSpotlight(dt)
     end
 
     self:playSLSound()
-    if self.timer > 1.8 then
+    if self.timer > SPOTLIGHT_FOCUS_DURATION then
         self:playSLSoundOutro()
         self.spot.target = 10000
         self.spot.speed = self.spot.speedIncrease
-        self.spot.feather = self.spot.feather + 10 * dt
-        self.spot.speedIncrease = self.spot.speedIncrease + 1000 * dt
+        self.spot.feather = self.spot.feather + SPOTLIGHT_FEATHER_SPEED * dt
+        self.spot.speedIncrease = self.spot.speedIncrease + SPOTLIGHT_EXIT_ACCELERATION * dt
     end
 
     if self.spot.radius < self.spot.target then
         self.spot.radius = self.spot.radius + self.spot.speed * dt
     end
 
-    if self.timer > 4 then
+    if self.timer > SPOTLIGHT_TOTAL_DURATION then
         self.spot.enabled = false
     end
 end
@@ -2991,9 +3147,30 @@ function Game:drawGroundQueueObjects()
     end
 
     flushPixelBatch(profile)
+    if minBrightness < 1 then
+        buildFastLightSources(lightSources)
+    end
+
+    table.sort(self.groundDecalQueue or {}, function(a, b) return (a.drawPriority or 0) < (b.drawPriority or 0) end)
     for _, object in ipairs(self.groundDecalQueue or {}) do
+        local tintR, tintG, tintB = 1, 1, 1
+        if minBrightness < 1 and object.affectedByLight then
+            local ox = object.xWorld or object.x
+            local oy = object.yWorld or object.y
+            local brt = ox and oy and calcCachedBrightness(object, ox, oy, minBrightness) or minBrightness
+            local color = generalShadow.color or {0, 0, 0}
+            local sr, sg, sb = color[1] or 0, color[2] or 0, color[3] or 0
+            tintR = sr + (1 - sr) * brt
+            tintG = sg + (1 - sg) * brt
+            tintB = sb + (1 - sb) * brt
+            object.lightBrightness = brt
+            object.lightTintR = tintR
+            object.lightTintG = tintG
+            object.lightTintB = tintB
+        end
+
         if canBatchPixelObject(object) then
-            addPixelBatchObject(object, 1, 1, 1, 1)
+            addPixelBatchObject(object, tintR, tintG, tintB, 1)
         else
             flushPixelBatch(profile)
             local start = profile and love.timer.getTime() or nil
@@ -3002,6 +3179,11 @@ function Game:drawGroundQueueObjects()
                 addDrawProfile(profile, object, love.timer.getTime() - start)
             end
         end
+
+        object.lightBrightness = nil
+        object.lightTintR = nil
+        object.lightTintG = nil
+        object.lightTintB = nil
     end
     flushPixelBatch(profile)
 end
@@ -3454,7 +3636,8 @@ function Game:drawLightSprites()
 end
 
 function Game:drawMinimap()
-    local currentRoom = FloorManager:getCurrentRoom()
+    local currentRoom = self.minimapRoomOverrideId and FloorManager:getRoom(self.minimapRoomOverrideId)
+        or FloorManager:getCurrentRoom()
     if not currentRoom then
         return
     end
@@ -3638,9 +3821,12 @@ function Game:drawMinimap()
     end
 
     local playerIconSize = config.playerIconSize or (minimapSprites.player:getWidth() * minimapSpriteScale)
-    local playerIconX, playerIconY = getPlayerMinimapPosition(currentRoom, playerIconSize)
+    local inTransition = self.playerRoomExitTransition ~= nil or self.playerRoomEntryMove ~= nil
+    if not inTransition or not self.minimapPlayerIconX then
+        self.minimapPlayerIconX, self.minimapPlayerIconY = getPlayerMinimapPosition(currentRoom, playerIconSize)
+    end
     love.graphics.setColor(1, 1, 1, 1)
-    drawMinimapSprite(minimapSprites.player, playerIconX, playerIconY, playerIconSize, playerIconSize)
+    drawMinimapSprite(minimapSprites.player, self.minimapPlayerIconX, self.minimapPlayerIconY, playerIconSize, playerIconSize)
 
     if previousScissorX then
         love.graphics.setScissor(previousScissorX, previousScissorY, previousScissorW, previousScissorH)

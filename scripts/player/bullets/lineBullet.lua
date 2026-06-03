@@ -61,7 +61,7 @@ local defaultColorParticles = {
     trailCount = 1,
     spawnInterval = 0.1,
     lifeTime = 0.5,
-    size = 1,
+    size = 1.1,
 }
 
 local function copyTable(source)
@@ -439,7 +439,7 @@ function Bullet:death(dx, dy)
         Game:addWeaponShockwave(self.x, self.y - self.height, self.impactShockwave)
     end
 
-    table.insert(Game.particles, GunStarParticle:new(self.x, self.y, self.height, 1))
+    table.insert(Game.particles, GunStarParticle:new(self.x, self.y, self.height, 1.2))
     self:spawnColorParticles(math.max(self.colorParticles.count, 1))
 
     if not dy or not dx then

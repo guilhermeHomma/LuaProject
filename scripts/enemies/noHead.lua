@@ -157,7 +157,7 @@ function NoHead:new(x, y)
     enemy.shootDisabledTimer = 0
     enemy.shootDisabledMin = 1.6
     enemy.shootDisabledMax = 2.0
-    enemy.bulletSpeed = 125
+    enemy.bulletSpeed = 135
     enemy.aimAngle = 0
     enemy.lockedAimAngle = nil
     enemy.lockedAimTargetX = nil
@@ -366,7 +366,7 @@ function NoHead:shootAtPlayer()
     self.gunVisibleTimer = self.gunVisibleDuration
     self.animationTimer = 0
     table.insert(Game.objects, bullet)
-    table.insert(Game.particles, GunStarParticle:new(spawnX, spawnY, 14, 0.75))
+    table.insert(Game.particles, GunStarParticle:new(spawnX, spawnY, 14, 1))
 
     local playerDistance = distance(Player, self)
     local volume = getDistanceVolume(playerDistance, 0.35, 220)
@@ -563,7 +563,6 @@ function NoHead:moveWithVelocity(velocityX, velocityY, dt, targetX, targetY)
     local repulseX, repulseY = self:getRepulsionVector()
     velocityX = velocityX + repulseX * 10
     velocityY = velocityY + repulseY * 10
-
     local length = math.sqrt(velocityX * velocityX + velocityY * velocityY)
     if length <= 0 then
         self.state = Zombie.states.idle

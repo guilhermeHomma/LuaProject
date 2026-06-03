@@ -17,7 +17,7 @@ IntroLevel.renderDistances = {
 }
 IntroLevel.lightConfig = {
     generalShadow = {
-        minBrightness = 0.65,
+        minBrightness = 0.6,
         color = {0, 0, 0.7},
     },
 }

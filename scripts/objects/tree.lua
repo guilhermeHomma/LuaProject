@@ -23,35 +23,48 @@ threeImage5:setFilter("nearest", "nearest")
 bigThreeImage:setFilter("nearest", "nearest")
 
 local shader = love.graphics.newShader([[
-    extern number direction;
+    extern float time;
+    extern float invScaleY10;
+    extern float camPhaseOffset;
     extern vec2 spriteSize;
 
     vec4 effect(vec4 color, Image tex, vec2 texture_coords, vec2 screen_coords) {
+        float phase = screen_coords.y * invScaleY10 + camPhaseOffset;
+        float direction = sin(time * 1.1 + phase) * 0.45 + 1.0;
         vec2 pixelCoord = texture_coords * spriteSize;
-        if (pixelCoord.y < spriteSize.y - 30.0) {
-            texture_coords.x += direction / spriteSize.x;
-        }
-        if (pixelCoord.y < spriteSize.y - 56.0) {
-            texture_coords.x += direction / spriteSize.x;
-        }    
+        float relY = clamp(1.0 - pixelCoord.y / spriteSize.y, 0.0, 1.0);
+        float sway = relY * relY * 2.0;
+        texture_coords.x += direction / spriteSize.x * sway;
         return Texel(tex, texture_coords) * color;
     }
 ]])
 
-shader:send("direction", 1.0) 
+shader:send("time", 0.0)
+shader:send("invScaleY10", 1.0 / (2.4 * 18.0))
+shader:send("camPhaseOffset", 0.0)
 shader:send("spriteSize", {64.0, 96.0})
 
 local treeShaderSize = {64, 96}
 local lastTreeShaderWidth = 64
 local lastTreeShaderHeight = 96
-local lastTreeShaderDirection = nil
+local lastShaderUpdateTime = -1
 
-local function applyTreeShader(direction, width, height)
-    love.graphics.setShader(shader)
-    if direction ~= lastTreeShaderDirection then
-        shader:send("direction", direction)
-        lastTreeShaderDirection = direction
+local function updateTreeShaderGlobals()
+    local t = love.timer.getTime()
+    if t == lastShaderUpdateTime then return end
+    lastShaderUpdateTime = t
+    shader:send("time", t)
+    if camera and YSCALE then
+        local zy = camera.zoomY or 1
+        local inv = 1.0 / (YSCALE * zy * 18.0)
+        shader:send("invScaleY10", inv)
+        shader:send("camPhaseOffset", (camera.y or 0) / (YSCALE * 18.0) - (baseHeight * 0.5) * inv)
     end
+end
+
+local function applyTreeShader(width, height)
+    love.graphics.setShader(shader)
+    updateTreeShaderGlobals()
     if width ~= lastTreeShaderWidth or height ~= lastTreeShaderHeight then
         treeShaderSize[1], treeShaderSize[2] = width, height
         shader:send("spriteSize", treeShaderSize)
@@ -105,18 +118,27 @@ local function getDoorTiles()
     return TilemapModule.doorTiles
 end
 
+local function getFadeAreaConfig()
+    return TreeConfig.fadeArea or {}
+end
+
 local function hasDoorInsideBox(box, padding)
     local doors = getDoorTiles()
     if not doors then
         return false
     end
 
+    local fadeArea = getFadeAreaConfig()
+    local doorBoxWidth = fadeArea.doorBoxWidth or 16
+    local doorBoxHeight = fadeArea.doorBoxHeight or 48
+    local doorBoxYOffset = fadeArea.doorBoxYOffset or -48
+
     for _, door in ipairs(doors) do
         local doorBox = {
-            x = door.xWorld - 8,
-            y = door.yWorld - 48,
-            width = 16,
-            height = 48,
+            x = door.xWorld - doorBoxWidth / 2,
+            y = door.yWorld + doorBoxYOffset,
+            width = doorBoxWidth,
+            height = doorBoxHeight,
         }
         if doBoxesOverlap(box, doorBox, padding) then
             return true
@@ -124,10 +146,6 @@ local function hasDoorInsideBox(box, padding)
     end
 
     return false
-end
-
-local function getFadeAreaConfig()
-    return TreeConfig.fadeArea or {}
 end
 
 local function getTreeFadeBox(tree, originX, originY, spriteWidth)
@@ -184,7 +202,7 @@ function TreeTile:new(x, y, quadIndex, collider, options)
     local tile = Tile.new(self, x, y, quadIndex, collider)
     options = options or {}
 
-    tile.shaderDirection = 0
+
     tile.yAdd = 3 + math.random() * 0.25
     tile.ySortOffset = options.ySortOffset or 0
     tile.treeIndex = math.random(3)
@@ -214,7 +232,7 @@ function TreeTile:newBig(x, y, quadIndex, collider, options)
     local tile = Tile.new(self, x, y, quadIndex, collider)
     options = options or {}
 
-    tile.shaderDirection = 0
+
     tile.yAdd = 18 + math.random() * 0.25
     tile.ySortOffset = options.ySortOffset or 0
     tile.treeIndex = 6
@@ -288,7 +306,6 @@ function TreeTile:update(dt)
     end
 
     addToDrawQueue(self.yWorld + 1 + self.yAdd + (self.ySortOffset or 0), self, false)
-    self.shaderDirection = math.sin(love.timer.getTime() + (self.yWorld/10)) * 0.45 + 1
     self:updateLeaves(dt)
     --print(self.shaderDirection)
 end
@@ -384,7 +401,7 @@ function TreeTile:draw()
         image = bigThreeImage
     end
 
-    applyTreeShader(self.shaderDirection, spriteWidth, spriteHeight)
+    applyTreeShader(spriteWidth, spriteHeight)
 
     if not self.collider then
         love.graphics.draw(tilesetImage, tileSet[5], self.xWorld, self.yWorld , 0, 1, 1, tileSize/2, tileSize)
@@ -394,7 +411,11 @@ function TreeTile:draw()
 
     local targetAlpha = self:getTargetAlpha(box)
 
-    self.alpha = self.alpha + (targetAlpha - self.alpha) * 0.1
+    local fadeArea = getFadeAreaConfig()
+    local fadeStep = targetAlpha < self.alpha
+        and (fadeArea.fadeOutStep or 0.055)
+        or (fadeArea.fadeInStep or 0.075)
+    self.alpha = self.alpha + (targetAlpha - self.alpha) * fadeStep
     
     local r, g, b, a = love.graphics.getColor()
     love.graphics.setColor(r, g, b, self.alpha)

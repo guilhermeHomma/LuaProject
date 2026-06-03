@@ -249,6 +249,7 @@ function SettingsMenu:draw()
 end
 
 function SettingsMenu:keypressed(key)
+    self.inputMode = "keyboard"
     if key == "left" then
         if not self:isArrowOption(self.menuOptions[self.selectedOption]) then
             return
@@ -293,6 +294,7 @@ function SettingsMenu:mousepressed(x, y, button)
         return
     end
 
+    self.inputMode = "mouse"
     local optionId = self.menuOptions[optionIndex]
     if self:isOptionInactive(optionId) then
         return
@@ -304,7 +306,7 @@ function SettingsMenu:mousepressed(x, y, button)
     if optionId == "back" then
         self:playConfirmSound()
         self:goBack()
-        return
+        return true
     end
 
     local arrows = self.arrowBounds and self.arrowBounds[optionIndex]
@@ -312,24 +314,24 @@ function SettingsMenu:mousepressed(x, y, button)
         if x >= arrows.left.x and x <= arrows.left.x + arrows.left.width
             and y >= arrows.left.y and y <= arrows.left.y + arrows.left.height then
             self:changeSelectedOption(-1)
-            return
+            return true
         end
         if x >= arrows.right.x and x <= arrows.right.x + arrows.right.width
             and y >= arrows.right.y and y <= arrows.right.y + arrows.right.height then
             self:changeSelectedOption(1)
-            return
+            return true
         end
     end
 
     local bounds = self.optionBounds[optionIndex]
     if optionId == "fullscreen" or optionId == "vsync" or optionId == "crt" or optionId == "cameraShake" then
         self:changeSelectedOption(1)
-        return
+        return true
     end
 
     if optionId == "screenSize" then
         self:changeSelectedOption(1)
-        return
+        return true
     end
 
     local relativeX = (x - bounds.left) / bounds.width
@@ -338,6 +340,7 @@ function SettingsMenu:mousepressed(x, y, button)
     else
         self:changeSelectedOption(1)
     end
+    return true
 end
 
 return SettingsMenu

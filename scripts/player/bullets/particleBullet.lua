@@ -38,7 +38,7 @@ local defaultColorParticles = {
     trailCount = 1,
     spawnInterval = 0.1,
     lifeTime = 0.35,
-    size = 1,
+    size = 1.1,
 }
 
 local function playWallImpactSound(x, y, volume)
@@ -127,6 +127,8 @@ function Bullet:new(x, y, angle, height, speed, damage, options)
         bullet.glow.midColor,
         bullet.glow.outerColor,
     })
+    bullet.arcPeak = options.arcPeak or 1
+    bullet.arcDrop = options.arcDrop or 6
     bullet.isXrayVisible = false
     bullet.isXrayProjectile = false
 
@@ -163,7 +165,7 @@ function Bullet:spawnSpriteTrailPoint(x, y)
 
     table.insert(Game.particles, BulletSpriteParticle:new(
         x,
-        y,
+        y - (self.arcOffset or 0),
         self.height,
         self.projectileSprite,
         self.angle,
@@ -258,6 +260,8 @@ function Bullet:update(dt)
 
     self.x = self.x + self.dx * dt
     self.y = self.y + self.dy * dt
+    local _at = math.min(self.timer / self.lifeTime, 1)
+    self.arcOffset = math.sin(_at * math.pi) * (self.arcPeak + self.arcDrop * 0.5) - _at * self.arcDrop
     if Tilemap.markGrassNearPoint then
         Tilemap:markGrassNearPoint(self.x, self.y, 12, self.x)
     end
@@ -288,7 +292,7 @@ function Bullet:update(dt)
     self.lastParticle = self.lastParticle + dt
     if not self.projectileSprite and self.lastParticle > 0.015 then
         self.lastParticle = 0
-        table.insert(Game.particles, Particle:new(self.x, self.y, self.height - 2, 1.2, 0.07))
+        table.insert(Game.particles, Particle:new(self.x, self.y, self.height - 2 + (self.arcOffset or 0), 1.2, 0.07))
     end
 
     local enemies = Game.getEnemiesNearPoint and Game:getEnemiesNearPoint(self.x, self.y, self.radius + 24) or Game.enemies
@@ -312,7 +316,7 @@ function Bullet:death(dx, dy)
         Game:addWeaponShockwave(self.x, self.y - self.height, self.impactShockwave)
     end
 
-    table.insert(Game.particles, GunStarParticle:new(self.x, self.y, self.height, 1, self.impactFlashSprite))
+    table.insert(Game.particles, GunStarParticle:new(self.x, self.y, self.height, 1.1, self.impactFlashSprite))
     self:spawnColorParticles(math.max(self.colorParticles.count, 1))
 
     if not dy or not dx then
@@ -348,8 +352,9 @@ function Bullet:drawGlow()
         return
     end
 
+    local arc = self.arcOffset or 0
     local x = self.x
-    local y = self.y - self.height
+    local y = self.y - self.height - arc
     local pulse = 1 - self.glow.pulseAmount + math.sin(self.timer * self.glow.pulseSpeed) * self.glow.pulseAmount
     local outerRadius = self.radius * self.glow.outerScale * pulse
     local innerRadius = self.radius * self.glow.innerScale * pulse
@@ -373,13 +378,14 @@ function Bullet:draw()
         Game.projectileDrawCount = (Game.projectileDrawCount or 0) + 1
     end
 
+    local arc = self.arcOffset or 0
     if self.projectileSprite then
         local progress = (self.timer % self.spriteTrailLifetime) / self.spriteTrailLifetime
         local frameIndex = math.floor(math.min(0.999, progress) * 5)
         BulletSpriteParticle.drawSprite(
             self.projectileSprite,
             self.x,
-            self.y - self.height,
+            self.y - self.height - arc,
             self.angle,
             frameIndex,
             1,
@@ -389,13 +395,13 @@ function Bullet:draw()
     end
 
     self:drawGlow()
-    self:drawSquare(self.x, self.y - self.height, 90, self.radius * 1.2)
+    self:drawSquare(self.x, self.y - self.height - arc, 90, self.radius * 1.2)
 
     if self.level >= 2 then return end
 
     setColor255(0.70, 102, 115)
     local radius = self.radius * 1.4
-    love.graphics.rectangle("fill", self.x - radius / 2, self.y - self.height - radius / 2, radius, radius)
+    love.graphics.rectangle("fill", self.x - radius / 2, self.y - self.height - arc - radius / 2, radius, radius)
     love.graphics.setColor(1, 1, 1, 1)
 end
 
@@ -431,8 +437,9 @@ function Bullet:drawSquare(x, y, angle, halfSize)
 end
 
 function Bullet:drawXray()
+    local arc = self.arcOffset or 0
     local drawX = self.x
-    local drawY = self.y - self.height
+    local drawY = self.y - self.height - arc
 
     if self.projectileSprite then
         local progress = (self.timer % self.spriteTrailLifetime) / self.spriteTrailLifetime

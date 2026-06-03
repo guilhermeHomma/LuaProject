@@ -1,6 +1,7 @@
 local Zombie = require("scripts/enemies/zombie")
 local Tilemap = require("scripts/tilemap")
 local EnemyDirector = require("scripts/enemies/enemyDirector")
+local SpiderWeb = require("scripts/particles/spiderWeb")
 
 local footstepSounds = {
     love.audio.newSource("assets/sfx/footsteps/foot-steps-1.mp3", "static"),
@@ -11,6 +12,7 @@ local Spider = setmetatable({}, {__index = Zombie})
 Spider.__index = Spider
 Spider.enemyTypeId = "spider"
 local SPIDER_COLLISION_RADIUS = 6 * 2.5
+local WEB_DROP_CHANCE = 0.05
 
 local function distanceSqToPoint(x1, y1, x2, y2)
     local dx = x1 - x2
@@ -33,7 +35,7 @@ local function playSpiderFootstep(playerDistance)
 end
 
 function Spider:new(x, y)
-    local enemy = Zombie.new(self, x, y, math.random(74, 92))
+    local enemy = Zombie.new(self, x, y, math.random(80, 92))
     enemy.totalLife = 38
     enemy.life = enemy.totalLife
     enemy.size = SPIDER_COLLISION_RADIUS
@@ -46,9 +48,10 @@ function Spider:new(x, y)
     enemy.randomPathTiles = 6
     enemy.randomPathIdleTimer = 0.6
     enemy.randomPathPauseTimer = math.random() * 0.35
-    enemy.footStepAlpha = 0.24
-    enemy.footStepVisualInterval = 0.22
+    enemy.footStepAlpha = 0.18
+    enemy.footStepVisualInterval = 0.5
     enemy.animationSpeed = 0.1
+    enemy.damageImpactHeightRatio = 0.62
     enemy.bloodSpawnYOffset = -2
     enemy.hitBloodPixelMin = 2
     enemy.hitBloodPixelMax = 3
@@ -56,7 +59,8 @@ function Spider:new(x, y)
     enemy.deathBloodPixelMax = 7
     enemy.hitBloodDecalCooldown = 0.18
     enemy.hitBloodDecalScaleMultiplier = 0.34
-    enemy.hitBloodDecalVolumeMultiplier = 0.36
+    enemy.hitBloodDecalVolumeMultiplier = 0.55
+    enemy.hitBloodDecalPitchMultiplier = 0.62
     enemy.deathBloodDecalOptions = {
         scaleMultiplier = 0.72,
         volumeMultiplier = 0.72,
@@ -140,10 +144,25 @@ function Spider:pickRandomPathTarget()
 end
 
 function Spider:startIdlePause()
+    self:tryDropWeb()
     self.state = Zombie.states.idle
     self.stateTimer = 0
     self.path = nil
     self.randomPathPauseTimer = self.randomPathIdleTimer or 0.6
+end
+
+function Spider:tryDropWeb()
+    if math.random() >= WEB_DROP_CHANCE then
+        return
+    end
+
+    local mapX, mapY = Tilemap:worldToMap(self.x, self.y)
+    if SpiderWeb.hasAtTile(mapX, mapY) then
+        return
+    end
+
+    local webX, webY = Tilemap:mapToWorld(mapX, mapY)
+    SpiderWeb.spawn(webX, webY - 8, mapX, mapY)
 end
 
 function Spider:updateDying(dt)
@@ -183,6 +202,16 @@ function Spider:update(dt)
     end
 
     addToDrawQueue(self.y + 3 + self.drawPriority, self)
+
+    local dispSq = (self.x - (self.prevX or self.x))^2 + (self.y - (self.prevY or self.y))^2
+    if dispSq > (10 * dt)^2 then
+        self.visualWalkTimer = math.min((self.visualWalkTimer or 0) + dt, 0.15)
+    else
+        self.visualWalkTimer = math.max((self.visualWalkTimer or 0) - dt * 2, 0)
+    end
+    self.isVisuallyWalking = (self.visualWalkTimer or 0) > 0.08
+    self.prevX = self.x
+    self.prevY = self.y
 
     if self.spawnIntroTimer and self.spawnIntroTimer > 0 then
         self.spawnIntroTimer = math.max(0, self.spawnIntroTimer - dt)
@@ -252,8 +281,16 @@ function Spider:update(dt)
 
         velocityX = velocityX / length
         velocityY = velocityY / length
+        local repulseX, repulseY = self:getRepulsionVector()
+        velocityX = velocityX + repulseX * 6
+        velocityY = velocityY + repulseY * 6
+        length = math.sqrt(velocityX * velocityX + velocityY * velocityY)
+        if length > 0 then
+            velocityX = velocityX / length
+            velocityY = velocityY / length
+        end
         self.state = Zombie.states.walk
-        self:animate(3, 6, dt)
+        if self.isVisuallyWalking then self:animate(3, 6, dt) else self:animate(1, 2, dt) end
 
         local moveX = velocityX * self.speed * dt
         local moveY = velocityY * self.speed * dt
@@ -296,7 +333,6 @@ function Spider:update(dt)
     local repulseX, repulseY = self:getRepulsionVector()
     velocityX = velocityX + repulseX * 6
     velocityY = velocityY + repulseY * 6
-
     local length = math.sqrt(velocityX * velocityX + velocityY * velocityY)
     if length <= 0 then
         self:startIdlePause()

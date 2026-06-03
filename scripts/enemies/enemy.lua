@@ -6,6 +6,7 @@ local Particle = require("scripts/particles/particle")
 local Tilemap = require("scripts/tilemap")
 local DamageStretch = require("scripts/effects/damageStretch")
 local BloodPixel = require("scripts/particles/bloodPixel")
+local DamageImpactParticle = require("scripts/particles/damageImpactParticle")
 
 require("scripts/utils")
 
@@ -57,6 +58,9 @@ function Enemy:isColliding(moveX, moveY)
 end
 
 function Enemy:takeDamage(damage, dx, dy)
+    if Game and Game.particles then
+        table.insert(Game.particles, DamageImpactParticle:new(self, dx, dy))
+    end
     self.life = self.life - damage
     BloodPixel.spawnBurst(self.x, self.y - 2, dx, dy, 4, 6)
     DamageStretch:start(self)

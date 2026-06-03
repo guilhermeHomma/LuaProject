@@ -144,7 +144,7 @@ DefaultRoomConfig.floorConfig = {
             "large_48x48",
         },
         templateWeights = {
-            basic_32x32 = 3,
+            basic_32x32 = 5,
             wide_48x32 = 2,
             tall_32x48 = 2,
             large_48x48 = 1,

@@ -48,23 +48,6 @@ local function hasActiveCloud(activeClouds, key)
     return false
 end
 
-local function getClosestCloudCandidate(candidates, activeClouds)
-    local closest
-    local closestDistance
-
-    for i = 1, #candidates do
-        local candidate = candidates[i]
-        if not hasActiveCloud(activeClouds, candidate.key) then
-            if not closestDistance or candidate.distanceSq < closestDistance then
-                closest = candidate
-                closestDistance = candidate.distanceSq
-            end
-        end
-    end
-
-    return closest
-end
-
 
 function Clouds:load(target)
     self.image = love.graphics.newImage("assets/sprites/cloud.png")
@@ -145,8 +128,10 @@ function Clouds:drawCloudLayer(layer, shadow)
     local movement = self.movement * (layer.movementScale or 1)
     local cameraX = camera and camera.x and camera.x / WORLD_SCALE_X or 0
     local cameraY = camera and camera.y and camera.y / YSCALE or 0
-    local visibleWidth = baseWidth / math.max(WORLD_SCALE_X, 0.001)
-    local visibleHeight = baseHeight / math.max(YSCALE, 0.001)
+    local viewWidth = camera and camera.viewWidth or (baseWidth / math.max(camera and camera.zoomX or 1, 0.001))
+    local viewHeight = camera and camera.viewHeight or (baseHeight / math.max(camera and camera.zoomY or 1, 0.001))
+    local visibleWidth = viewWidth / math.max(WORLD_SCALE_X, 0.001)
+    local visibleHeight = viewHeight / math.max(YSCALE, 0.001)
     local parallaxX = cameraX * (1 - parallax)
     local parallaxY = cameraY * (1 - parallax)
     local cloudCells = layer.cloudCells
@@ -158,6 +143,12 @@ function Clouds:drawCloudLayer(layer, shadow)
     local visibleRight = cameraX + visibleWidth
     local visibleTop = cameraY
     local visibleBottom = cameraY + visibleHeight
+    local activationMarginX = layer.activationMarginX or width
+    local activationMarginY = layer.activationMarginY or height
+    local activationLeft = visibleLeft - activationMarginX
+    local activationRight = visibleRight + activationMarginX
+    local activationTop = visibleTop - activationMarginY
+    local activationBottom = visibleBottom + activationMarginY
     local targetX = cameraX + visibleWidth * 0.5 - parallaxX
     local targetY = cameraY + visibleHeight * 0.5 - parallaxY
     local baseCellX = math.floor(targetX / cloudCells.spacingX)
@@ -193,10 +184,10 @@ function Clouds:drawCloudLayer(layer, shadow)
                 local x = worldX + parallaxX - movement * (layer.driftX or 1) - width / 2
                 local y = worldY + parallaxY + movement * (layer.driftY or 0) - cloudHeight - height / 2
 
-                if x < visibleRight
-                    and x + width > visibleLeft
-                    and y < visibleBottom
-                    and y + height > visibleTop then
+                if x < activationRight
+                    and x + width > activationLeft
+                    and y < activationBottom
+                    and y + height > activationTop then
                     local candidate = {
                         key = i .. ":" .. cellX .. ":" .. cellY,
                         x = x,
@@ -219,11 +210,19 @@ function Clouds:drawCloudLayer(layer, shadow)
 
     local maxVisible = layer.maxVisible or #candidates
     while #activeClouds < maxVisible do
-        local candidate = getClosestCloudCandidate(candidates, activeClouds)
-        if not candidate then
-            break
+        local best, bestDist = nil, math.huge
+        for _, c in ipairs(candidates) do
+            if not hasActiveCloud(activeClouds, c.key) then
+                local offscreen = c.x + width <= visibleLeft or c.x >= visibleRight
+                    or c.y + height <= visibleTop or c.y >= visibleBottom
+                if offscreen and c.distanceSq < bestDist then
+                    best = c
+                    bestDist = c.distanceSq
+                end
+            end
         end
-        activeClouds[#activeClouds + 1] = candidate.key
+        if not best then break end
+        activeClouds[#activeClouds + 1] = best.key
     end
 
     for i = 1, math.min(#activeClouds, maxVisible) do

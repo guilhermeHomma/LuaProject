@@ -362,7 +362,7 @@ local function shouldCreateGrass(tile, collider, x, y)
         canUseTile = true
     end
 
-    return canUseTile and math.random() > 0.9
+    return canUseTile and math.random() > 0.86
 end
 
 local function getTileKey(x, y)
@@ -937,7 +937,7 @@ local function appendGrassState(entries, x, y, worldX, worldY, tile)
         tile = tile,
         index = randomGrassIndex(tile),
     }
-    if math.random() > 0.3 then
+    if tile ~= 1 and math.random() > 0.3 then
         entries[#entries + 1] = {
             x = x,
             y = y,
@@ -1915,7 +1915,9 @@ function DefaultTilemap:createTile(x, y, tile, collider)
     end
 
     if tile == 11 then
-        return Pole:new(x, y, 30, collider)
+        return Pole:new(x, y, 30, collider, {
+            ySortOffset = isSurroundedByNonWalkableTiles(x, y) and 10 or 0,
+        })
     end
 
     if tile == 10 then
@@ -2171,16 +2173,16 @@ function DefaultTilemap:load()
             end
 
             if generatingGrassState then
-                if shouldCreateGrass(tile, collider, x, y) then
-                    appendGrassState(grassState, x, y, worldX, worldY, tile)
-                end
-
                 if shouldCreateBigGrass(tile, collider, x, y, bigGrassOccupied) then
                     appendBigGrassCluster(bigGrassState, x, y, bigGrassOccupied, canCreateBigGrassAt, {yOffset = 0, ySortOffset = 2, interactive = true}, 2, 4)
                 end
 
                 if shouldCreateDecorativeBigGrass(tile, collider, x, y, bigGrassOccupied) then
                     appendBigGrassCluster(bigGrassState, x, y, bigGrassOccupied, canCreateDecorativeBigGrassAt, {yOffset = 16, ySortOffset = 10, interactive = false})
+                end
+
+                if not bigGrassOccupied[getTileKey(x, y)] and shouldCreateGrass(tile, collider, x, y) then
+                    appendGrassState(grassState, x, y, worldX, worldY, tile)
                 end
             end
 

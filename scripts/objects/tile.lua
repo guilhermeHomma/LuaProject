@@ -24,6 +24,11 @@ local boxPixelPalette = {
     {0.70, 0.66, 0.56, 1},
     {0.36, 0.35, 0.32, 1},
 }
+local mortarBallOptions = {
+    sizeMultiplier = 1.15,
+    speedMultiplier = 1.4,
+    speedDownMultiplier = 1.4,
+}
 
 local function getBoxParticleDropKey(tile)
     local FloorManager = require("scripts/managers/floorManager")
@@ -212,9 +217,9 @@ function Tile:explodeBox()
         
         local lifetime = math.random(40, 50) / 100
         local size = math.random(8, 10) / 10
-        local particle = Ball:new(self.xWorld, self.yWorld, 1,dx, dy, lifetime, size )
+        local particle = Ball:new(self.xWorld, self.yWorld, 1,dx, dy, lifetime, size, mortarBallOptions)
         table.insert(Game.particles, particle)
-        local particle = Ball:new(self.xWorld, self.yWorld, 1,-dx, -dy, lifetime, size )
+        local particle = Ball:new(self.xWorld, self.yWorld, 1,-dx, -dy, lifetime, size, mortarBallOptions)
         table.insert(Game.particles, particle)
     end
 

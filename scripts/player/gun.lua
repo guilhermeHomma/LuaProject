@@ -764,12 +764,16 @@ function Gun:update(dt, playerX, playerY)
         end
     end
 
+    if INPUT_BLOCK_PRIMARY_FIRE_UNTIL_RELEASE and not love.mouse.isDown(1) then
+        INPUT_BLOCK_PRIMARY_FIRE_UNTIL_RELEASE = false
+    end
+
     if not Dialog.breakMovements then
         if love.mouse.isDown(2) then
             self:aim()
         end
 
-        if love.mouse.isDown(1) then
+        if love.mouse.isDown(1) and not INPUT_BLOCK_PRIMARY_FIRE_UNTIL_RELEASE then
             self:shoot()
         end
     end
@@ -1140,15 +1144,15 @@ function Gun:drawParticles()
             particleX,
             particleY + i,
             self.angle,
-            1,
-            1,
+            1.4,
+            1.4,
             0,
             self.size / 2
         )
     end
 
     local weaponConfig = self:getCurrentWeapon()
-    GunStarDraw.draw(particleX, particleY, frameIndex, 1, 1, weaponConfig and weaponConfig.muzzleFlashSprite)
+    GunStarDraw.draw(particleX, particleY, frameIndex, 1.2, 1.2, weaponConfig and weaponConfig.muzzleFlashSprite)
 end
 
 function Gun:drawUI()

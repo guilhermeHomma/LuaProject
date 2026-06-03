@@ -73,13 +73,15 @@ function NoHeadBullet:new(x, y, angle, speed, damage, tileDamage)
     bullet.spriteTrailRemainder = 0
     bullet.spriteTrailMaxPerUpdate = 3
     bullet.timer = 0
-    bullet.lifeTime = 2.4
+    bullet.lifeTime = 1.1
     bullet.impactTimer = 0
     bullet.impactDuration = bulletAnimationDuration
     bullet.impactShockwave = defaultImpactShockwave
     bullet.colorParticles = defaultColorParticles
     bullet.colorParticleTimer = 0
     bullet.colorParticlePalette = BulletColorParticle.getPalette(bulletSpritePath)
+    bullet.arcPeak = 1
+    bullet.arcDrop = 6
     bullet.isDying = false
     bullet.isAlive = true
     bullet.isProjectile = true
@@ -107,7 +109,7 @@ end
 function NoHeadBullet:spawnSpriteTrailPoint(x, y)
     self.spriteTrail[#self.spriteTrail + 1] = {
         x = x,
-        y = y - self.height,
+        y = y - self.height - (self.arcOffset or 0),
         timer = 0,
     }
 end
@@ -238,7 +240,7 @@ function NoHeadBullet:death()
         Game:addWeaponShockwave(self.x, self.y - self.height, self.impactShockwave)
     end
 
-    table.insert(Game.particles, GunStarParticle:new(self.x, self.y, self.height, 1))
+    table.insert(Game.particles, GunStarParticle:new(self.x, self.y, self.height, 1.2))
     self:spawnColorParticles(math.max(self.colorParticles.count, 1))
 
     for _ = 1, 5 do
@@ -287,6 +289,8 @@ function NoHeadBullet:update(dt)
     self.timer = self.timer + dt
     self.x = self.x + self.dx * dt
     self.y = self.y + self.dy * dt
+    local _at = math.min(self.timer / self.lifeTime, 1)
+    self.arcOffset = math.sin(_at * math.pi) * (self.arcPeak + self.arcDrop * 0.5) - _at * self.arcDrop
     if Tilemap.markGrassNearPoint then
         Tilemap:markGrassNearPoint(self.x, self.y, 12, self.x)
     end
@@ -321,8 +325,9 @@ function NoHeadBullet:drawShadow()
 end
 
 function NoHeadBullet:draw()
+    local arc = self.arcOffset or 0
     local drawX = self.x
-    local drawY = self.y - self.height
+    local drawY = self.y - self.height - arc
     local frameIndex = math.floor(self.timer / bulletFrameDuration) % bulletFrameCount
     local bodyAlpha = 1
     local bodyScale = 1
@@ -378,12 +383,13 @@ function NoHeadBullet:draw()
 end
 
 function NoHeadBullet:drawXray()
+    local arc = self.arcOffset or 0
     local frameIndex = math.floor(self.timer / bulletFrameDuration) % bulletFrameCount
     love.graphics.draw(
         bulletSprite,
         getBulletQuad(frameIndex),
         self.x,
-        self.y - self.height,
+        self.y - self.height - arc,
         self.angle,
         1,
         1,

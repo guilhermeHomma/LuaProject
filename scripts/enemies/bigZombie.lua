@@ -91,7 +91,7 @@ end
 
 function BigZombie:new(x, y)
     local zombie = Zombie.new(self, x, y)
-    zombie.speed = math.random(57, 68)
+    zombie.speed = math.random(62, 72)
     zombie.damageTimer = 0.1
     zombie.totalLife = 65
     zombie.life = zombie.totalLife
@@ -111,6 +111,9 @@ function BigZombie:new(x, y)
     zombie.rushPendingDirX = 0
     zombie.rushPendingDirY = 0
     zombie.rushFacingLockTimer = 0
+    zombie.enemyRepulsionRadius = 24
+    zombie.enemyRepulsionForce = 8
+    zombie.enemyRepulsionWeight = 1.45
     return zombie
 end
 
@@ -123,6 +126,11 @@ function BigZombie:getSpriteKey()
 end
 
 function BigZombie:takeDamage(damage, dx, dy)
+    if self.life <= 0 or self.isAlive == false then
+        return
+    end
+
+    self:spawnDamageImpact(dx, dy)
     self.lastDamageDx = dx
     self.lastDamageDy = dy
     self.life = self.life - damage
@@ -130,8 +138,8 @@ function BigZombie:takeDamage(damage, dx, dy)
     if self.life > 0 then
         BloodDecal.spawn(self.x, self.y, dx, dy, {
             scaleMultiplier = 0.5,
-            volumeMultiplier = 0.5,
-            pitchMultiplier = 0.72,
+            volumeMultiplier = 0.78,
+            pitchMultiplier = 0.62,
         })
     else
         self:spawnDeathBloodDecal()
@@ -681,7 +689,7 @@ end
 function BigZombie:noiseCheck(dt)
     self.soundTimer = self.soundTimer + dt
 
-    if self.soundTimer >= 10 and Player.isAlive then
+    if self.soundTimer >= (self.soundInterval or 5) and Player.isAlive then
         self.soundTimer = 0
         local soundPositionX, soundPositionY = soundPosition(Player, self)
         local playerDistance = distance(Player, self) / 2

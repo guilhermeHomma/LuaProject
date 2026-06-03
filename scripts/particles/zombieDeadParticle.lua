@@ -7,6 +7,11 @@ ZombieParticle.__index = ZombieParticle
 local whiteShader = love.graphics.newShader("scripts/shaders/whiteShader.glsl")
 local spriteShadow = love.graphics.newImage("assets/sprites/enemy/zombie/enemyShadow.png")
 local deathSound = love.audio.newSource("assets/sfx/particles/particle-end.mp3", "static")
+local mortarBallOptions = {
+    sizeMultiplier = 1.1,
+    speedMultiplier = 1.2,
+    speedDownMultiplier = 1.2,
+}
 
 spriteShadow:setFilter("nearest", "nearest")
 
@@ -76,9 +81,9 @@ function ZombieParticle:death()
         
         local lifetime = math.random(40, 50) / 100
         local size = math.random(8, 10) / 10
-        local particle = Ball:new(self.x, self.y, 1,dx, dy, lifetime, size )
+        local particle = Ball:new(self.x, self.y, 1,dx, dy, lifetime, size, mortarBallOptions)
         table.insert(Game.particles, particle)
-        local particle = Ball:new(self.x, self.y, 1,-dx, -dy, lifetime, size )
+        local particle = Ball:new(self.x, self.y, 1,-dx, -dy, lifetime, size, mortarBallOptions)
         table.insert(Game.particles, particle)
     end
 end

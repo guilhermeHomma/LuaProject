@@ -50,18 +50,21 @@ local SettingsMenu = require("scripts/managers/menu/settingsMenu")
 local ConfirmMenu = require("scripts/managers/menu/confirmMenu")
 local LogoIntro = require("scripts/managers/menu/logoIntro")
 local TransitionManager = require("scripts.managers.transitionManager")
+local RoomScreenTransition = require("scripts/managers/roomScreenTransition")
 
 canvas = nil
 local menuCanvas = nil
+local fixedLayerCanvas = nil
 STATES = {mainMenu = 1, game = 2, gamePause = 3, gameDead = 4, gameIntro = 5, startLogo = 6, settings = 7, confirm = 8, floorIntro = 9}
 state = STATES.startLogo
 
 DEBUG = false
-FPS = true
-PERF.enabled = GAME_FLAGS and GAME_FLAGS.performanceOverlay == true
+FPS = false
+PERF.enabled = false
+PERF.overlayAvailable = GAME_FLAGS and GAME_FLAGS.performanceOverlay == true
 
-MUSIC_VOLUME = 0.3
-GAME_VOLUME = 0.95
+MUSIC_VOLUME = 0.7
+GAME_VOLUME = 1
 SOUND_VOLUME = 1
 GAME_PITCH = 1
 SCAPE_INTRO = GAME_FLAGS and GAME_FLAGS.skipIntro or false
@@ -73,6 +76,8 @@ local function rebuildCanvas()
     canvas:setFilter("nearest", "nearest")
     menuCanvas = love.graphics.newCanvas(baseWidth, baseHeight)
     menuCanvas:setFilter("nearest", "nearest")
+    fixedLayerCanvas = love.graphics.newCanvas(baseWidth, baseHeight)
+    fixedLayerCanvas:setFilter("nearest", "nearest")
 end
 
 local function refreshScreenScale()
@@ -167,12 +172,12 @@ local function drawScaledState()
     end
 end
 
-local function drawMenuWithDistortion()
+local function drawMenuWithDistortion(targetCanvas)
     love.graphics.setCanvas(menuCanvas)
     love.graphics.clear(0, 0, 0, 0)
     drawScaledState()
 
-    love.graphics.setCanvas({canvas, stencil = true})
+    love.graphics.setCanvas({targetCanvas or canvas, stencil = true})
     menuDistortionShader:send("u_time", love.timer.getTime())
     menuDistortionShader:send("u_strength", 0.00055)
     love.graphics.setShader(menuDistortionShader)
@@ -181,8 +186,16 @@ local function drawMenuWithDistortion()
     love.graphics.setShader()
 end
 
-local function presentCanvas()
-    local presentStart = PERF.enabled and love.timer.getTime() or nil
+local function presentCanvas(sourceCanvas, useRoomTransition, trackPerf)
+    sourceCanvas = sourceCanvas or canvas
+    if useRoomTransition == nil then
+        useRoomTransition = true
+    end
+    if trackPerf == nil then
+        trackPerf = true
+    end
+
+    local presentStart = trackPerf and PERF.enabled and love.timer.getTime() or nil
     local crtConfig = GAME_FLAGS and GAME_FLAGS.crt or {}
     local crtEnabled = crtConfig.enabled == true
 
@@ -227,13 +240,18 @@ local function presentCanvas()
         params[1], params[2], params[3], params[4] = 1, 0, 1, 0
     end
 
-    if PERF and PERF.enabled then
+    if trackPerf and PERF and PERF.enabled then
         PERF.presentPixels = math.floor((baseWidth or 0) * (baseHeight or 0) * (scale or 1) * (scale or 1))
         PERF.presentScale = scale or 1
     end
 
+    local presentationCanvas = useRoomTransition
+        and RoomScreenTransition:getPresentationCanvas(sourceCanvas)
+        or sourceCanvas
+
     if not crtEnabled and spotlightEnabled == 0 and shockwaveCount == 0 then
-        love.graphics.draw(canvas, viewportOffsetX, viewportOffsetY, 0, scale, scale)
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.draw(presentationCanvas, viewportOffsetX, viewportOffsetY, 0, scale, scale)
         if presentStart then
             PERF.presentMs = (love.timer.getTime() - presentStart) * 1000
         end
@@ -258,12 +276,47 @@ local function presentCanvas()
     presentationShader:send("u_shockwaveParams", unpackValues(shockwaveParams, 1, MAX_PRESENTATION_SHOCKWAVES))
 
     love.graphics.setShader(presentationShader)
-    love.graphics.draw(canvas, viewportOffsetX, viewportOffsetY, 0, scale, scale)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.draw(presentationCanvas, viewportOffsetX, viewportOffsetY, 0, scale, scale)
     love.graphics.setShader()
 
     if presentStart then
         PERF.presentMs = (love.timer.getTime() - presentStart) * 1000
     end
+end
+
+local function drawFixedRoomLayer()
+    if not fixedLayerCanvas then
+        return
+    end
+
+    love.graphics.setCanvas({fixedLayerCanvas, stencil = true})
+    love.graphics.clear(0, 0, 0, 0)
+
+    if isGameplayState() then
+        Game:drawHUD()
+    end
+
+    if isMenuState() then
+        drawMenuWithDistortion(fixedLayerCanvas)
+    else
+        drawScaledState()
+    end
+
+    love.graphics.setCanvas()
+    presentCanvas(fixedLayerCanvas, false, false)
+end
+
+local function drawRoomTransitionFade()
+    local alpha = RoomScreenTransition:getFadeAlpha()
+    if alpha <= 0 then
+        return
+    end
+
+    love.graphics.setShader()
+    love.graphics.setColor(0, 0, 0, alpha)
+    love.graphics.rectangle("fill", viewportOffsetX, viewportOffsetY, baseWidth * scale, baseHeight * scale)
+    love.graphics.setColor(1, 1, 1, 1)
 end
 
 function love.load()
@@ -517,7 +570,13 @@ function love.keypressed(key)
         ConfirmMenu:keypressed(key)
     end
     if key == "f5" then
-        PERF.enabled = not PERF.enabled
+        if PERF.overlayAvailable then
+            PERF.enabled = not PERF.enabled
+            FPS = false
+        else
+            PERF.enabled = false
+            FPS = not FPS
+        end
     end
 end
 
@@ -526,19 +585,24 @@ function love.mousepressed(x, y, button)
 
     local scaledX = (x - viewportOffsetX) / scale
     local scaledY = (y - viewportOffsetY) / scale
+    local consumedByMenu = false
 
     if state == STATES.mainMenu then
-        MainMenu:mousepressed(scaledX, scaledY, button)
+        consumedByMenu = MainMenu:mousepressed(scaledX, scaledY, button) == true
     elseif state == STATES.game then
         Game:mousepressed(scaledX, scaledY, button)
     elseif state == STATES.gamePause then
-        PauseMenu:mousepressed(scaledX, scaledY, button)
+        consumedByMenu = PauseMenu:mousepressed(scaledX, scaledY, button) == true
     elseif state == STATES.gameDead then
-        GameoverMenu:mousepressed(scaledX, scaledY, button)
+        consumedByMenu = GameoverMenu:mousepressed(scaledX, scaledY, button) == true
     elseif state == STATES.settings then
-        SettingsMenu:mousepressed(scaledX, scaledY, button)
+        consumedByMenu = SettingsMenu:mousepressed(scaledX, scaledY, button) == true
     elseif state == STATES.confirm then
-        ConfirmMenu:mousepressed(scaledX, scaledY, button)
+        consumedByMenu = ConfirmMenu:mousepressed(scaledX, scaledY, button) == true
+    end
+
+    if consumedByMenu and button == 1 then
+        INPUT_BLOCK_PRIMARY_FIRE_UNTIL_RELEASE = true
     end
 end
 
@@ -562,6 +626,7 @@ function love.update(dt)
     local updateStart = PERF.enabled and love.timer.getTime() or nil
     updateCurrentState(dt)
     TransitionManager:update(dt)
+    RoomScreenTransition:update(dt)
     AmbienceSound:update(dt)
     Music:update(dt)
     if updateStart then
@@ -588,7 +653,7 @@ local function drawPerformanceOverlay()
         return
     end
 
-    if not GAME_FLAGS.performanceOverlay then 
+    if not (PERF.overlayAvailable or DEBUG) then
         return
     end
 
@@ -722,6 +787,7 @@ end
 function love.draw()
     local drawStart = PERF.enabled and love.timer.getTime() or nil
     local phaseStart = PERF.enabled and love.timer.getTime() or nil
+    local keepRoomUiFixed = RoomScreenTransition:isCapturing() or RoomScreenTransition:isActive()
     love.graphics.clear(0, 0, 0)
     if phaseStart then
         PERF.backClearMs = (love.timer.getTime() - phaseStart) * 1000
@@ -739,7 +805,7 @@ function love.draw()
     if stateDrawStart then
         PERF.stateDrawMs = (love.timer.getTime() - stateDrawStart) * 1000
     end
-    if isGameplayState() then
+    if isGameplayState() and not keepRoomUiFixed then
         local hudStart = PERF.enabled and love.timer.getTime() or nil
         Game:drawHUD()
         if hudStart then
@@ -748,9 +814,9 @@ function love.draw()
     elseif PERF.enabled then
         PERF.hudDrawMs = 0
     end
-    if isMenuState() then
+    if not keepRoomUiFixed and isMenuState() then
         drawMenuWithDistortion()
-    else
+    elseif not keepRoomUiFixed then
         drawScaledState()
     end
     if PERF.enabled then
@@ -760,6 +826,7 @@ function love.draw()
         -- drawMenuWithDistortion is intentionally counted in canvas overhead for menus.
     end
     love.graphics.setCanvas()
+    RoomScreenTransition:captureOldFrame(canvas)
     if canvasStart then
         PERF.canvasMs = (love.timer.getTime() - canvasStart) * 1000
         PERF.canvasOtherMs = PERF.canvasMs
@@ -769,6 +836,10 @@ function love.draw()
     end
 
     presentCanvas()
+    if keepRoomUiFixed then
+        drawFixedRoomLayer()
+    end
+    drawRoomTransitionFade()
 
     local overlayStart = PERF.enabled and love.timer.getTime() or nil
     drawPerformanceOverlay()

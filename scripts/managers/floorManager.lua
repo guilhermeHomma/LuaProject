@@ -1435,14 +1435,27 @@ function FloorManager:isCurrentRoomObjectBroken(x, y)
     return state and state.brokenObjects and state.brokenObjects[x .. ":" .. y] == true
 end
 
-function FloorManager:enterRoom(roomId)
+function FloorManager:enterRoom(roomId, options)
     if not self.rooms or not self.rooms[roomId] then
         return false
     end
 
     self.currentRoomId = roomId
-    self.rooms[roomId].state.visited = true
-    self.rooms[roomId].state.discovered = true
+    if not (options and options.deferReveal) then
+        self.rooms[roomId].state.visited = true
+        self.rooms[roomId].state.discovered = true
+    end
+    return true
+end
+
+function FloorManager:revealRoom(roomId)
+    local room = self.rooms and self.rooms[roomId]
+    if not (room and room.state) then
+        return false
+    end
+
+    room.state.visited = true
+    room.state.discovered = true
     return true
 end
 

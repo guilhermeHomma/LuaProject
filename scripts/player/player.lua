@@ -37,7 +37,7 @@ end
 function Player:load(camera, spawnX, spawnY)
     self.x = spawnX or 30
     self.y = spawnY or 340
-    self.baseSpeed = 90
+    self.baseSpeed = 100
     self.speed = self.baseSpeed
     self.velocityX = 0
     self.velocityY = 0
@@ -123,6 +123,8 @@ function Player:load(camera, spawnX, spawnY)
     self.reloadBarFlashTimer = 0
     self.reloadBarWasReloading = false
     self.isXrayVisible = true
+    self.webSlowTimer = 0
+    self.webSlowMultiplier = 1
 
 end
 
@@ -240,6 +242,7 @@ function Player:update(dt)
     self.glitchTimer = math.max(0, self.glitchTimer - dt)
     self.whiteFlashTimer = math.max(0, self.whiteFlashTimer - dt)
     self.cardPickupFlashTimer = math.max(0, (self.cardPickupFlashTimer or 0) - dt)
+    self.webSlowTimer = math.max(0, (self.webSlowTimer or 0) - dt)
 
     self.mouseAngle = math.floor(mouseAngle() * 4) / 4
     local moveX, moveY = 0, 0
@@ -282,7 +285,11 @@ function Player:update(dt)
     end
 
     local speed = self.speed
-    if self.gun.showGun then speed = speed * 0.7 end
+    if (self.webSlowTimer or 0) > 0 then
+        speed = speed * (self.webSlowMultiplier or 0.6)
+    elseif self.gun.showGun then
+        speed = speed * 0.7
+    end
 
     local targetVelocityX = moveX * speed
     local targetVelocityY = moveY * speed
@@ -291,8 +298,10 @@ function Player:update(dt)
     self.velocityX = transitionValue(self.velocityX, targetVelocityX, movementSpeed, dt)
     self.velocityY = transitionValue(self.velocityY, targetVelocityY, movementSpeed, dt)
 
-    if math.abs(self.velocityX) < 2 then self.velocityX = 0 end
-    if math.abs(self.velocityY) < 2 then self.velocityY = 0 end
+    if moveX == 0 and moveY == 0 then
+        if math.abs(self.velocityX) < 2 then self.velocityX = 0 end
+        if math.abs(self.velocityY) < 2 then self.velocityY = 0 end
+    end
 
     local sumMoveX = self.velocityX * dt
     local sumMoveY = self.velocityY * dt
