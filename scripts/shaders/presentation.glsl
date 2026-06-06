@@ -15,6 +15,7 @@ extern number u_crtCurvature;
 extern number u_crtVignette;
 extern number u_crtChromatic;
 extern number u_crtFast;
+extern number u_brightness;
 
 vec2 applyShockwaves(vec2 sourceCoord) {
     vec2 coord = sourceCoord;
@@ -88,6 +89,17 @@ vec4 applyCrtLook(Image tex, vec2 sourceCoord, vec2 localCoord, vec4 color) {
     return sampled;
 }
 
+vec3 applyBrightness(vec3 rgb) {
+    float value = clamp(u_brightness, 0.0, 10.0);
+    if (value < 5.0) {
+        return mix(rgb * 0.58, rgb, value / 5.0);
+    }
+
+    float amount = (value - 5.0) / 5.0;
+    vec3 lifted = vec3(1.0) - (vec3(1.0) - rgb) * 0.78;
+    return mix(rgb, lifted, amount);
+}
+
 vec4 effect(vec4 color, Image tex, vec2 texCoord, vec2 screenCoord) {
     vec2 localCoord = screenCoord - u_viewportOffset;
 
@@ -120,5 +132,6 @@ vec4 effect(vec4 color, Image tex, vec2 texCoord, vec2 screenCoord) {
         sampled.rgb = mix(sampled.rgb, vec3(0.0), alpha);
     }
 
+    sampled.rgb = applyBrightness(sampled.rgb);
     return sampled;
 }

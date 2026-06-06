@@ -122,6 +122,34 @@ local function getFadeAreaConfig()
     return TreeConfig.fadeArea or {}
 end
 
+local function getForegroundDarkenConfig()
+    return TreeConfig.foregroundDarken or {}
+end
+
+local function smoothStep(value)
+    value = math.max(0, math.min(value, 1))
+    return value * value * (3 - 2 * value)
+end
+
+local function getTreeForegroundBrightness(tree)
+    local config = getForegroundDarkenConfig()
+    if config.enabled == false or not (camera and YSCALE) then
+        return 1
+    end
+
+    local minDistance = config.minDistance or 120
+    local maxDistance = config.maxDistance or 300
+    local range = math.max(1, maxDistance - minDistance)
+    local zoomY = camera.zoomY or 1
+    local screenY = ((tree.yWorld or 0) * YSCALE - (camera.y or 0)) * zoomY
+    local referenceY = (baseHeight or 720) * 0.5 + (config.referenceYOffset or 0)
+    local distance = screenY - referenceY
+    local progress = smoothStep((distance - minDistance) / range)
+    local minBrightness = math.max(0, math.min(config.minBrightness or 0, 1))
+
+    return 1 + (minBrightness - 1) * progress
+end
+
 local function hasDoorInsideBox(box, padding)
     local doors = getDoorTiles()
     if not doors then
@@ -418,7 +446,8 @@ function TreeTile:draw()
     self.alpha = self.alpha + (targetAlpha - self.alpha) * fadeStep
     
     local r, g, b, a = love.graphics.getColor()
-    love.graphics.setColor(r, g, b, self.alpha)
+    local foregroundBrightness = getTreeForegroundBrightness(self)
+    love.graphics.setColor(r * foregroundBrightness, g * foregroundBrightness, b * foregroundBrightness, self.alpha)
     
     love.graphics.draw(image, self.xWorld, self.yWorld, 0, 1, self.stretch, originX, originY)
     love.graphics.setColor(r, g, b, a) 

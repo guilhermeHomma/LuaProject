@@ -9,6 +9,7 @@ local BloodPixel = require("scripts/particles/bloodPixel")
 local FootStep = require("scripts/particles/footstep")
 local FloorManager = require("scripts/managers/floorManager")
 local DamageImpactParticle = require("scripts/particles/damageImpactParticle")
+local EnemyDeathProjectiles = require("scripts/enemies/enemyDeathProjectiles")
 
 require("scripts/utils")
 
@@ -164,6 +165,7 @@ function Scarecrow:breakApart()
         state.scarecrowDestroyed = true
     end
 
+    EnemyDeathProjectiles.spawn(self)
     self.isAlive = false
 end
 

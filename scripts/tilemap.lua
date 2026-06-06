@@ -119,10 +119,10 @@ function Tilemap:getRandomReachableSpawnPosition(reference, minDistance, avoidPo
     return system:getRandomSpawnPosition(reference, minDistance, avoidPoints)
 end
 
-function Tilemap:getPathBetweenWorldPoints(startX, startY, endX, endY)
+function Tilemap:getPathBetweenWorldPoints(startX, startY, endX, endY, options)
     local system = getSystem()
     if system.getPathBetweenWorldPoints then
-        return system:getPathBetweenWorldPoints(startX, startY, endX, endY)
+        return system:getPathBetweenWorldPoints(startX, startY, endX, endY, options)
     end
 
     return nil

@@ -64,6 +64,8 @@ local defaultColorParticles = {
     size = 1.1,
 }
 
+local GRASS_MARK_INTERVAL = 0.055
+
 local function copyTable(source)
     local result = {}
     for key, value in pairs(source) do
@@ -139,6 +141,28 @@ local function isPointInCircleSq(px, py, cx, cy, radius)
     return dx * dx + dy * dy < radius * radius
 end
 
+local function getTileCollisionNormal(x, y, tile)
+    local tileLeft = tile.xWorld - tile.size / 2
+    local tileTop = tile.yWorld - tile.size
+    local tileRight = tileLeft + tile.size
+    local tileBottom = tileTop + tile.size
+    local overlapLeft = x - tileLeft
+    local overlapRight = tileRight - x
+    local overlapTop = y - tileTop
+    local overlapBottom = tileBottom - y
+    local minOverlap = math.min(overlapLeft, overlapRight, overlapTop, overlapBottom)
+
+    if minOverlap == overlapLeft then
+        return -1, 0
+    elseif minOverlap == overlapRight then
+        return 1, 0
+    elseif minOverlap == overlapTop then
+        return 0, -1
+    end
+
+    return 0, 1
+end
+
 function Bullet:new(x, y, angle, height, speed, damage, options)
     if type(options) ~= "table" then
         options = { level = options }
@@ -190,6 +214,11 @@ function Bullet:new(x, y, angle, height, speed, damage, options)
     })
     bullet.isXrayVisible = false
     bullet.isXrayProjectile = false
+    bullet.ricochetCount = options.ricochetCount or 0
+    bullet.deathSpawnCount = options.deathSpawnCount or 0
+    bullet.onDeathSpawn = options.onDeathSpawn
+    bullet.ignoredEnemies = options.ignoredEnemies or {}
+    bullet.grassMarkTimer = GRASS_MARK_INTERVAL
 
     if bullet.colorParticles.enabled ~= false then
         bullet:spawnColorParticles(bullet.colorParticles.count)
@@ -233,6 +262,27 @@ function Bullet:checkCollisionWithEnemy(enemy)
         or isPointInCircleSq(self.x, self.y, enemy.x, enemy.y - 12, self.radius + 8)
 end
 
+function Bullet:getEnemyRicochetCollision(enemy)
+    local normalX = self.x - (enemy.x or self.x)
+    local normalY = self.y - (enemy.y or self.y)
+    local length = math.sqrt(normalX * normalX + normalY * normalY)
+
+    if length <= 0.001 then
+        normalX = -self.dx
+        normalY = -self.dy
+        length = math.sqrt(normalX * normalX + normalY * normalY)
+    end
+    if length <= 0.001 then
+        return { normalX = -1, normalY = 0, quiet = true }
+    end
+
+    return {
+        normalX = normalX / length,
+        normalY = normalY / length,
+        quiet = true,
+    }
+end
+
 function Bullet:isColliding(size)
     size = size or 4
     local halfSize = size / 2
@@ -252,6 +302,7 @@ function Bullet:isColliding(size)
             and top < tileTop + tile.size
             and bottom > tileTop then
             self.hitTileOnDeath = true
+            local normalX, normalY = getTileCollisionNormal(self.x, self.y, tile)
             local damaged = false
             if type(tile.onshoot) == "function" then
                 damaged = tile:onshoot(self.damage) == true
@@ -259,11 +310,57 @@ function Bullet:isColliding(size)
             if damaged then
                 DamageNumber.spawn(self.x, self.y, self.height, self.damage)
             end
-            return true
+            return { normalX = normalX, normalY = normalY }
         end
     end
 
     return false
+end
+
+function Bullet:tryRicochet(collision, previousX, previousY)
+    if (self.ricochetCount or 0) <= 0 or not collision then
+        return false
+    end
+
+    local normalX = collision.normalX or 0
+    local normalY = collision.normalY or 0
+    local normalLength = math.sqrt(normalX * normalX + normalY * normalY)
+    if normalLength <= 0.001 then
+        return false
+    end
+
+    normalX = normalX / normalLength
+    normalY = normalY / normalLength
+    local dot = self.dx * normalX + self.dy * normalY
+    self.dx = self.dx - 2 * dot * normalX
+    self.dy = self.dy - 2 * dot * normalY
+    self.angle = math.atan2(self.dy, self.dx)
+    self.x = previousX
+    self.y = previousY
+    self.lastTrailX = previousX
+    self.lastTrailY = previousY
+    self.ricochetCount = self.ricochetCount - 1
+    self.lifeTime = (self.lifeTime or 0) * 1.1
+    self.hitTileOnDeath = false
+    if not collision.quiet then
+        playWallImpactSound(0.08)
+    end
+    self:spawnColorParticles(1)
+    return true
+end
+
+function Bullet:markGrass(dt)
+    if not Tilemap.markGrassNearPoint then
+        return
+    end
+
+    self.grassMarkTimer = (self.grassMarkTimer or 0) + dt
+    if self.grassMarkTimer < GRASS_MARK_INTERVAL then
+        return
+    end
+
+    self.grassMarkTimer = 0
+    Tilemap:markGrassNearPoint(self.x, self.y, 12, self.x)
 end
 
 function Bullet:updateTrail(dt)
@@ -388,11 +485,11 @@ function Bullet:update(dt)
     self:updateTrail(dt)
 
     if self.isActive then
+        local previousX = self.x
+        local previousY = self.y
         self.x = self.x + self.dx * dt
         self.y = self.y + self.dy * dt
-        if Tilemap.markGrassNearPoint then
-            Tilemap:markGrassNearPoint(self.x, self.y, 12, self.x)
-        end
+        self:markGrass(dt)
         self.colorParticleTimer = self.colorParticleTimer + dt
         if self.colorParticleTimer >= self.colorParticles.spawnInterval then
             self.colorParticleTimer = 0
@@ -402,24 +499,39 @@ function Bullet:update(dt)
         self.timer = self.timer + dt
         if self.timer >= self.lifeTime then
             self:deactivate()
-            self:death()
+            self:death(nil, nil, "expired")
         end
 
-        if self.isActive and self:isColliding() then
-            self:deactivate()
-            self:death()
+        local collision = self.isActive and self:isColliding() or nil
+        if collision then
+            if not self:tryRicochet(collision, previousX, previousY) then
+                self:deactivate()
+                self:death(nil, nil, "wall")
+            end
         end
 
         self:recordTrailPoint()
 
-        local enemies = Game.getEnemiesNearPoint and Game:getEnemiesNearPoint(self.x, self.y, self.radius + 24) or Game.enemies
-        for _, enemy in ipairs(enemies) do
-            if self.isActive and enemy.isAlive and self:checkCollisionWithEnemy(enemy) then
+        local enemy = nil
+        if self.isActive and Game.findEnemyCollidingWithShot then
+            enemy = Game:findEnemyCollidingWithShot(self, self.radius + 24)
+        elseif self.isActive then
+            local enemies = Game.getEnemiesNearPoint and Game:getEnemiesNearPoint(self.x, self.y, self.radius + 24) or Game.enemies
+            for _, candidate in ipairs(enemies) do
+                if candidate.isAlive and not self.ignoredEnemies[candidate] and self:checkCollisionWithEnemy(candidate) then
+                    enemy = candidate
+                    break
+                end
+            end
+        end
+
+        if enemy and self.isActive then
+            DamageNumber.spawn(self.x, self.y, self.height, self.damage)
+            enemy:takeDamage(self.damage, self.dx, self.dy)
+            self.ignoredEnemies[enemy] = true
+            if not self:tryRicochet(self:getEnemyRicochetCollision(enemy), previousX, previousY) then
                 self:deactivate()
-                DamageNumber.spawn(self.x, self.y, self.height, self.damage)
-                enemy:takeDamage(self.damage, self.dx, self.dy)
-                self:death(0, 0)
-                break
+                self:death(0, 0, "enemy")
             end
         end
     end
@@ -429,7 +541,7 @@ function Bullet:update(dt)
     end
 end
 
-function Bullet:death(dx, dy)
+function Bullet:death(dx, dy, reason)
     if self.hitTileOnDeath then
         playWallImpactSound()
         self.hitTileOnDeath = false
@@ -456,6 +568,10 @@ function Bullet:death(dx, dy)
         table.insert(Game.particles, Ball:new(self.x, self.y, 5, -dx + 1, -dy + 1, lifetime, 0.6, {
             rgbShift = { duration = 0.1, shift = 1 }
         }))
+    end
+
+    if self.onDeathSpawn and reason == "expired" and (self.deathSpawnCount or 0) > 0 then
+        self:onDeathSpawn(reason or "expired")
     end
 end
 

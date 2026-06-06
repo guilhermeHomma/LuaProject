@@ -27,14 +27,31 @@ CardDefinitions.cards = {
     {
         id = "speed",
         name = "SPEED",
-        amount = "+5%",
+        amount = "+5",
         rarity = "common",
         visualType = "player",
         description = "Move faster.",
         requiresSecondary = false,
         apply = function()
             if Player then
-                Player.speed = Player.speed * 1.05
+                Player.speed = Player.speed + 5
+                return true
+            end
+
+            return false
+        end,
+    },
+    {
+        id = "speed_rare",
+        name = "SPEED",
+        amount = "+10",
+        rarity = "rare",
+        visualType = "player",
+        description = "Move much faster.",
+        requiresSecondary = false,
+        apply = function()
+            if Player then
+                Player.speed = Player.speed + 10
                 return true
             end
 
@@ -51,6 +68,18 @@ CardDefinitions.cards = {
         requiresSecondary = false,
         apply = function()
             return Player and Player.gun and Player.gun:applyCardUpgrade("primary_damage")
+        end,
+    },
+    {
+        id = "primary_damage_epic",
+        name = "DAMAGE",
+        amount = "+4",
+        rarity = "epic",
+        visualType = "weapon",
+        description = "Primary gun damage.",
+        requiresSecondary = false,
+        apply = function()
+            return Player and Player.gun and Player.gun:applyCardUpgrade("primary_damage_epic")
         end,
     },
     {
@@ -87,6 +116,86 @@ CardDefinitions.cards = {
         requiresSecondary = false,
         apply = function()
             return Player and Player.gun and Player.gun:applyCardUpgrade("primary_reload")
+        end,
+    },
+    {
+        id = "primary_ricochet",
+        name = "BOUNCE",
+        amount = "RICOCHET",
+        rarity = "rare",
+        visualType = "weapon",
+        description = "Primary shots bounce from walls and enemies.",
+        requiresSecondary = false,
+        getStacks = function()
+            return Player and Player.gun and Player.gun.primaryUpgradeState and (Player.gun.primaryUpgradeState.ricochetCount or 0) or 0
+        end,
+        maxStacks = 4,
+        apply = function()
+            return Player and Player.gun and Player.gun:applyCardUpgrade("primary_ricochet")
+        end,
+    },
+    {
+        id = "primary_death_shard",
+        name = "SPARK",
+        amount = "+2",
+        rarity = "rare",
+        visualType = "weapon",
+        description = "Missed primary shots split into short base-damage shots.",
+        requiresSecondary = false,
+        getStacks = function()
+            return Player and Player.gun and Player.gun.primaryUpgradeState and (Player.gun.primaryUpgradeState.deathSpawnCount or 0) or 0
+        end,
+        maxStacks = 8,
+        apply = function()
+            return Player and Player.gun and Player.gun:applyCardUpgrade("primary_death_shard")
+        end,
+    },
+    {
+        id = "primary_clean_split",
+        name = "SPLIT",
+        amount = "+4",
+        rarity = "epic",
+        visualType = "weapon",
+        description = "Missed primary shots split into more short base-damage shots.",
+        requiresSecondary = false,
+        getStacks = function()
+            return Player and Player.gun and Player.gun.primaryUpgradeState and (Player.gun.primaryUpgradeState.deathSpawnCount or 0) or 0
+        end,
+        maxStacks = 8,
+        apply = function()
+            return Player and Player.gun and Player.gun:applyCardUpgrade("primary_clean_split")
+        end,
+    },
+    {
+        id = "enemy_death_shard",
+        name = "BURST",
+        amount = "+2",
+        rarity = "rare",
+        visualType = "weapon",
+        description = "Enemies release short base-damage shots when they die.",
+        requiresSecondary = false,
+        getStacks = function()
+            return Player and Player.gun and Player.gun.primaryUpgradeState and (Player.gun.primaryUpgradeState.enemyDeathSpawnCount or 0) or 0
+        end,
+        maxStacks = 8,
+        apply = function()
+            return Player and Player.gun and Player.gun:applyCardUpgrade("enemy_death_shard")
+        end,
+    },
+    {
+        id = "enemy_death_split",
+        name = "BURST",
+        amount = "+4",
+        rarity = "epic",
+        visualType = "weapon",
+        description = "Enemies release more short base-damage shots when they die.",
+        requiresSecondary = false,
+        getStacks = function()
+            return Player and Player.gun and Player.gun.primaryUpgradeState and (Player.gun.primaryUpgradeState.enemyDeathSpawnCount or 0) or 0
+        end,
+        maxStacks = 8,
+        apply = function()
+            return Player and Player.gun and Player.gun:applyCardUpgrade("enemy_death_split")
         end,
     },
     {
@@ -147,12 +256,40 @@ function CardDefinitions:getRarity(card)
     return self.rarities[card.rarity] or self.rarities.common
 end
 
+function CardDefinitions:getCardStacks(card)
+    if card and card.getStacks then
+        return card.getStacks() or 0
+    end
+
+    return 0
+end
+
+function CardDefinitions:isCardEligible(card, hasSecondary)
+    if not card then
+        return false
+    end
+
+    if card.requiresSecondary and not hasSecondary then
+        return false
+    end
+
+    if card.maxStacks and self:getCardStacks(card) >= card.maxStacks then
+        return false
+    end
+
+    if card.isAvailable and not card.isAvailable() then
+        return false
+    end
+
+    return true
+end
+
 function CardDefinitions:getEligibleCards()
     local result = {}
     local hasSecondary = Player and Player.gun and Player.gun.secondary_weapon ~= nil
 
     for _, card in ipairs(self.cards) do
-        if not card.requiresSecondary or hasSecondary then
+        if self:isCardEligible(card, hasSecondary) then
             result[#result + 1] = card
         end
     end

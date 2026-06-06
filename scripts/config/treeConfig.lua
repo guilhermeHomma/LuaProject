@@ -19,6 +19,14 @@ TreeConfig.fadeArea = {
     fadeInStep = 0.075,
 }
 
+TreeConfig.foregroundDarken = {
+    enabled = true,
+    minDistance = 480,
+    maxDistance = 630,
+    minBrightness = 0.5,
+    referenceYOffset = 0,
+}
+
 TreeConfig.debug = {
     fadeAreaFillColor = {0.25, 0.8, 1, 0.12},
     fadeAreaLineColor = {0.25, 0.8, 1, 0.85},

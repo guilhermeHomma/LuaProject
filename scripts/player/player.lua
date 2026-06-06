@@ -11,10 +11,13 @@ local BloodPixel = require("scripts/particles/bloodPixel")
 local BloodDecal = require("scripts/particles/bloodDecal")
 local Tilemap = require("scripts/tilemap")
 local TransitionManager = require("scripts.managers.transitionManager")
+local Dash = require("scripts/player/dash")
 local playerGlitchShader = love.graphics.newShader("scripts/shaders/playerGlitch.glsl")
 local footstepBase = love.audio.newSource("assets/sfx/footsteps/foot-steps-0.mp3", "static")
-local damageBase = love.audio.newSource("assets/sfx/damage.mp3", "static")
+local damageBase = love.audio.newSource("assets/sfx/player/ow-damage.mp3", "static")
+local damageSplatBase = love.audio.newSource("assets/sfx/player/splat.mp3", "static")
 local electricBase = love.audio.newSource("assets/sfx/menu/eletric-transition.mp3", "static")
+local PLAYER_DAMAGE_HIT_AUDIO_DUCK_DELAY = 0.28
 local heartImage = love.graphics.newImage("assets/sprites/ui/heart.png")
 local heartWhiteShader = love.graphics.newShader("scripts/shaders/whiteShader.glsl")
 local heartFrameSize = 16
@@ -23,6 +26,12 @@ local heartFrames = {
     half = love.graphics.newQuad(heartFrameSize, 0, heartFrameSize, heartFrameSize, heartImage:getDimensions()),
     empty = love.graphics.newQuad(heartFrameSize * 2, 0, heartFrameSize, heartFrameSize, heartImage:getDimensions()),
 }
+local DAMAGE_KNOCKBACK_DURATION = 0.3
+local DAMAGE_KNOCKBACK_SPEED = 125
+local DAMAGE_HITSTOP_DURATION = 0.2
+local DAMAGE_HITSTOP_RECOVERY = 0.28
+local DAMAGE_AUDIO_DISTORTION_DURATION = 0.7
+local DAMAGE_AUDIO_VOLUME_DUCK_DURATION = 0.7
 
 heartImage:setFilter("nearest", "nearest")
 
@@ -125,7 +134,94 @@ function Player:load(camera, spawnX, spawnY)
     self.isXrayVisible = true
     self.webSlowTimer = 0
     self.webSlowMultiplier = 1
+    self.damageKnockbackTimer = 0
+    self.damageKnockbackDuration = DAMAGE_KNOCKBACK_DURATION
+    self.damageKnockbackSpeed = DAMAGE_KNOCKBACK_SPEED
+    self.damageKnockbackX = 0
+    self.damageKnockbackY = 0
+    self.dash = Dash:new(self)
 
+end
+
+function Player:isDashing()
+    return self.dash and self.dash:isActive()
+end
+
+function Player:isActionLocked()
+    return self:isDashing()
+end
+
+function Player:getDashVisualOffsetY()
+    if not (self.dash and self.dash.getVisualOffsetY) then
+        return 0
+    end
+
+    return self.dash:getVisualOffsetY()
+end
+
+function Player:getDashVisualStretch()
+    if not (self.dash and self.dash.getVisualStretch) then
+        return 0
+    end
+
+    return self.dash:getVisualStretch()
+end
+
+function Player:tryDash()
+    if not (self.isAlive and self.dash) then
+        return false
+    end
+
+    return self.dash:start()
+end
+
+function Player:cancelDash()
+    if self.dash and self.dash.reset then
+        self.dash:reset()
+    elseif self.dash and self.dash.cancel then
+        self.dash:cancel()
+    elseif self.dash and self.dash.stop then
+        self.dash:stop()
+    end
+end
+
+function Player:restartDashCooldown()
+    if self.dash and self.dash.restartCooldown then
+        self.dash:restartCooldown()
+    end
+end
+
+function Player:startDamageKnockback(damageDx, damageDy)
+    local dx = damageDx or 0
+    local dy = damageDy or 0
+    local length = math.sqrt(dx * dx + dy * dy)
+
+    if length <= 0.001 then
+        dx = -(self.moveX or 0)
+        dy = -(self.moveY or 0)
+        length = math.sqrt(dx * dx + dy * dy)
+    end
+    if length <= 0.001 then
+        dx, dy = 0, 1
+        length = 1
+    end
+
+    self.damageKnockbackX = dx / length
+    self.damageKnockbackY = dy / length
+    self.damageKnockbackTimer = self.damageKnockbackDuration or DAMAGE_KNOCKBACK_DURATION
+end
+
+function Player:updateDamageVignette(dt)
+    local damageAlphaTarget = 0
+    if self.life and self.life <= 1 then
+        damageAlphaTarget = 0.45
+    end
+
+    self.damageVignettePulse = transitionValue(self.damageVignettePulse or 0, 0, 2.4, dt)
+
+    local vignetteTarget = math.max(damageAlphaTarget, self.damageVignettePulse or 0)
+    local vignetteSpeed = self.damageAlha < vignetteTarget and 14 or 2.4
+    self.damageAlha = transitionValue(self.damageAlha or 0, vignetteTarget, vignetteSpeed, dt)
 end
 
 function Player:updateAnimation(dt, moving)
@@ -154,8 +250,11 @@ function Player:updateAnimation(dt, moving)
     if not moving then
         self.currentFrame = 1
         self.animationTimer = 0
-        self.idleHandFrame = 1
-        self.idleHandTimer = 0
+        self.idleHandTimer = self.idleHandTimer + dt
+        if self.idleHandTimer >= 0.6 then
+            self.idleHandTimer = self.idleHandTimer - 0.6
+            self.idleHandFrame = self.idleHandFrame == 1 and 2 or 1
+        end
         self.footStepTimer = 0
         return
     end
@@ -221,18 +320,7 @@ function Player:updateAnimation(dt, moving)
 end
 
 function Player:update(dt)
-
-    local damageAlphaTarget = 0
     self.sideChangeTimer = self.sideChangeTimer + dt
-    if self.life <= 1 then
-        damageAlphaTarget = 1
-    end
-
-    self.damageVignettePulse = transitionValue(self.damageVignettePulse or 0, 0, 2.4, dt)
-    
-    local vignetteTarget = math.max(damageAlphaTarget, self.damageVignettePulse or 0)
-    local vignetteSpeed = self.damageAlha < vignetteTarget and 14 or 2.4
-    self.damageAlha = transitionValue(self.damageAlha, vignetteTarget, vignetteSpeed, dt)
 
     if not self.isAlive then
         return
@@ -243,12 +331,17 @@ function Player:update(dt)
     self.whiteFlashTimer = math.max(0, self.whiteFlashTimer - dt)
     self.cardPickupFlashTimer = math.max(0, (self.cardPickupFlashTimer or 0) - dt)
     self.webSlowTimer = math.max(0, (self.webSlowTimer or 0) - dt)
+    local dashMoveX, dashMoveY, dashActive = 0, 0, false
+    if self.dash then
+        dashMoveX, dashMoveY, dashActive = self.dash:update(dt)
+    end
 
     self.mouseAngle = math.floor(mouseAngle() * 4) / 4
     local moveX, moveY = 0, 0
+    local knockbackActive = (self.damageKnockbackTimer or 0) > 0
 
     -- Input WASD
-    if not Dialog.breakMovements then
+    if not Dialog.breakMovements and not knockbackActive and not dashActive then
         if love.keyboard.isDown("w") then
             moveY = moveY - 1
         end
@@ -268,9 +361,11 @@ function Player:update(dt)
         moveY = moveY * diagFactor
     end
 
-    local assistX, assistY = self:getCornerAssistInput(moveX, moveY)
-    moveX = moveX + assistX
-    moveY = moveY + assistY
+    if not dashActive then
+        local assistX, assistY = self:getCornerAssistInput(moveX, moveY)
+        moveX = moveX + assistX
+        moveY = moveY + assistY
+    end
 
     if moveX ~= 0 and moveY ~= 0 then
         local length = math.sqrt(moveX * moveX + moveY * moveY)
@@ -291,9 +386,9 @@ function Player:update(dt)
         speed = speed * 0.7
     end
 
-    local targetVelocityX = moveX * speed
-    local targetVelocityY = moveY * speed
-    local movementSpeed = (moveX ~= 0 or moveY ~= 0) and self.acceleration or self.friction
+    local targetVelocityX = (knockbackActive or dashActive) and 0 or moveX * speed
+    local targetVelocityY = (knockbackActive or dashActive) and 0 or moveY * speed
+    local movementSpeed = knockbackActive and self.friction or ((moveX ~= 0 or moveY ~= 0) and self.acceleration or self.friction)
 
     self.velocityX = transitionValue(self.velocityX, targetVelocityX, movementSpeed, dt)
     self.velocityY = transitionValue(self.velocityY, targetVelocityY, movementSpeed, dt)
@@ -305,26 +400,58 @@ function Player:update(dt)
 
     local sumMoveX = self.velocityX * dt
     local sumMoveY = self.velocityY * dt
+    if dashActive then
+        sumMoveX = dashMoveX
+        sumMoveY = dashMoveY
+    end
+    if not dashActive and (self.damageKnockbackTimer or 0) > 0 then
+        local duration = self.damageKnockbackDuration or DAMAGE_KNOCKBACK_DURATION
+        local progress = math.max(0, math.min(self.damageKnockbackTimer / math.max(duration, 0.001), 1))
+        local knockbackSpeed = (self.damageKnockbackSpeed or DAMAGE_KNOCKBACK_SPEED) * progress * progress
+        sumMoveX = sumMoveX + (self.damageKnockbackX or 0) * knockbackSpeed * dt
+        sumMoveY = sumMoveY + (self.damageKnockbackY or 0) * knockbackSpeed * dt
+        self.damageKnockbackTimer = math.max(0, self.damageKnockbackTimer - dt)
+    end
 
     self:resolveStuckCollision()
 
     local resolvedMoveX, resolvedMoveY = self:resolveCollisionMove(sumMoveX, sumMoveY)
+    local dashCollided = dashActive and (resolvedMoveX ~= sumMoveX or resolvedMoveY ~= sumMoveY)
 
-    if resolvedMoveX ~= sumMoveX then
+    if dashCollided then
+        if self.dash then
+            self.dash:stop()
+        end
+        sumMoveX = 0
+        sumMoveY = 0
+        self.velocityX = 0
+        self.velocityY = 0
+    elseif resolvedMoveX ~= sumMoveX then
+        if dashActive and self.dash then
+            self.dash:stop()
+        end
         sumMoveX = resolvedMoveX
         if sumMoveX == 0 then
             self.velocityX = 0
         end
     end
-    if resolvedMoveY ~= sumMoveY then
+    if not dashCollided and resolvedMoveY ~= sumMoveY then
+        if dashActive and self.dash then
+            self.dash:stop()
+        end
         sumMoveY = resolvedMoveY
         if sumMoveY == 0 then
             self.velocityY = 0
         end
     end
 
+    local previousX = self.x
+    local previousY = self.y
     self.x = self.x + sumMoveX
     self.y = self.y + sumMoveY
+    if dashActive and self.dash and self.dash.spawnLineSegment then
+        self.dash:spawnLineSegment(previousX, previousY, self.x, self.y)
+    end
 
     addToDrawQueue(self.y + 6, Player)
 
@@ -395,10 +522,27 @@ function Player:update(dt)
 end
 
 function Player:takeDamage(amount, damageDx, damageDy)
+    if self:isDashing() then return false end
     if self.damageTimer < 1.2 then return false end
 
+    self:restartDashCooldown()
+    if Game and Game.startHitStop then
+        Game:startHitStop(DAMAGE_HITSTOP_DURATION, DAMAGE_HITSTOP_RECOVERY)
+    end
+    if Game and Game.startDamageAudioDistortion then
+        Game:startDamageAudioDistortion(
+            DAMAGE_AUDIO_DISTORTION_DURATION,
+            0.58,
+            PLAYER_DAMAGE_HIT_AUDIO_DUCK_DELAY,
+            DAMAGE_AUDIO_VOLUME_DUCK_DURATION
+        )
+    end
     damageDx = damageDx or self.velocityX or 0
     damageDy = damageDy or self.velocityY or 0
+    if Game and Game.showPlayerDamageFlash then
+        Game:showPlayerDamageFlash(damageDx, damageDy)
+    end
+    self:startDamageKnockback(damageDx, damageDy)
     BloodPixel.spawnBurst(self.x, self.y - 2, damageDx, damageDy, 5, 7)
     camera:shake(10, 0.97)
     camera:damageZoom(0.85, 16, 8, 0.06)
@@ -410,19 +554,20 @@ function Player:takeDamage(amount, damageDx, damageDy)
             pitchMultiplier = 0.78,
         })
     end
-    playClonedSound(electricBase, 0.9, (1.5 + math.random() * 0.1) * GAME_PITCH)
+    --playClonedSound(electricBase, 0.2, (1.5 + math.random() * 0.1) * GAME_PITCH)
     TransitionManager:setDistortion(1)
     TransitionManager.distortionTimer = 0.5
     self.damageTimer = 0
     self.glitchTimer = self.glitchDuration
     self.whiteFlashTimer = self.whiteFlashDuration
-    playClonedSound(damageBase, 1.8, (0.9 + math.random() * 0.2) * GAME_PITCH)
-    self.damageVignettePulse = self.life <= 1 and 0.85 or 0
-    if self.life == 1 then
-        GAME_PITCH = 0.6
-    elseif self.life > 0 then
-        GAME_PITCH = math.max(GAME_PITCH, 1)
-    else
+    local duckMultiplier = 1
+    if Game and Game.getDamageAudioVolumeMultiplier then
+        duckMultiplier = math.max(Game:getDamageAudioVolumeMultiplier() or 1, 0.001)
+    end
+    playClonedSound(damageSplatBase, (0.9 * (SOUND_VOLUME or 1)) , (0.96 + math.random() * 0.08) * (GAME_PITCH or 1))
+    playClonedSound(damageBase, (0.65 * (SOUND_VOLUME or 1)) , (0.95 + math.random() * 0.36))
+    self.damageVignettePulse = self.life <= 1 and 1.45 or 1.25
+    if self.life <= 0 then
         TransitionManager.distortionTimer = 1
     end
 
@@ -430,6 +575,7 @@ function Player:takeDamage(amount, damageDx, damageDy)
 end
 
 function Player:checkDamage()
+    if self:isDashing() then return end
     if self.damageTimer < 1.2 then return end 
 
     for _, enemy in ipairs(Game.enemies) do
@@ -839,6 +985,7 @@ function Player:drawSight()
     if not self.isAlive then
         return
     end
+    if self:isActionLocked() then return end
     if Dialog.breakMovements then return end
 
 
@@ -937,7 +1084,14 @@ function Player:drawHand()
         0,
         16
     )
-    self.gun:draw()
+    local visualOffsetY = self:getDashVisualOffsetY()
+    if visualOffsetY ~= 0 then
+        self.gun.y = self.gun.y + visualOffsetY
+        self.gun:draw()
+        self.gun.y = self.gun.y - visualOffsetY
+    else
+        self.gun:draw()
+    end
 
 end
 
@@ -951,7 +1105,7 @@ function Player:drawIdleHand(quad, scaleX, originX)
         self.y,
         0,
         scaleX,
-        1.5,
+        1.4,
         originX,
         self.spriteSize
     )
@@ -986,6 +1140,11 @@ end
 
 function Player:drawPlayerImage(image, quad, x, y, rotation, scaleX, scaleY, originX, originY)
     local hasGlitch = self:applyGlitchShader(image)
+    local visualOffsetY = self:getDashVisualOffsetY()
+    local visualStretch = self:getDashVisualStretch()
+    y = y + visualOffsetY
+    scaleX = (scaleX or 1) * (1 - visualStretch * 0.5)
+    scaleY = (scaleY or 1) * (1 + visualStretch)
 
     local function drawImageWithCurrentColor()
         if quad then
@@ -1014,8 +1173,16 @@ function Player:drawPlayerImage(image, quad, x, y, rotation, scaleX, scaleY, ori
         end
     end
 
-    love.graphics.setColor(1, 1, 1, 1)
+    local dashTint = self:isDashing() and self.dash
+    if dashTint then
+        self.dash:beginPlayerTint()
+    else
+        love.graphics.setColor(1, 1, 1, 1)
+    end
     drawImageWithCurrentColor()
+    if dashTint then
+        self.dash:endTint()
+    end
 
     if quad then
         local flashProgress = math.max(0, math.min((self.cardPickupFlashTimer or 0) / (self.cardPickupFlashDuration or 0.55), 1))
@@ -1037,6 +1204,10 @@ end
 
 function Player:draw()
     if not self.isAlive then return end
+
+    if self.dash then
+        self.dash:drawAfterimages(self)
+    end
 
     if self.damageTimer > (self.damageBlinkDelay or 0) and self.damageTimer < 1 then
         if math.floor(self.damageTimer * 15) % 2 == 0 then
@@ -1094,7 +1265,7 @@ function Player:draw()
     end
 
     local scaleX = (self.flipH and -1 or 1) * walkStretchX
-    local scaleY = 1.5 * walkStretchY
+    local scaleY = 1.4 * walkStretchY
     local originX = self.flipH and (self.spriteSize - self.spriteSize / 2) or (self.spriteSize / 2)
     
     local mouseX, mouseY = mousePosition()
@@ -1170,7 +1341,7 @@ function Player:drawXray()
 
     local quad, handQuad = self:getCurrentDrawQuads()
     local scaleX = self.flipH and -1 or 1
-    local scaleY = 1.5
+    local scaleY = 1.4
     local originX = self.flipH and (self.spriteSize - self.spriteSize / 2) or (self.spriteSize / 2)
 
     love.graphics.draw(self.playerSheet, quad, self.x, self.y, 0, scaleX, scaleY, originX, self.spriteSize)
@@ -1205,7 +1376,7 @@ function Player:drawXray()
             )
         end
     elseif not self.gun or not self.gun.showGun then
-        love.graphics.draw(self.idleHandSheet, handQuad, self.x, self.y, 0, scaleX, 1.5, originX, self.spriteSize)
+        love.graphics.draw(self.idleHandSheet, handQuad, self.x, self.y, 0, scaleX, 1.4, originX, self.spriteSize)
     end
 end
 

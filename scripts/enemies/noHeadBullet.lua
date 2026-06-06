@@ -32,6 +32,8 @@ local defaultColorParticles = {
     size = 1,
 }
 
+local GRASS_MARK_INTERVAL = 0.055
+
 bulletSprite:setFilter("nearest", "nearest")
 
 local function playWallImpactSound()
@@ -53,6 +55,35 @@ local function getBulletQuad(frameIndex)
     end
 
     return bulletQuads[frameIndex]
+end
+
+local function drawBulletSprite(frameIndex, x, y, angle, scale, alpha)
+    love.graphics.setColor(1, 1, 1, alpha or 1)
+    love.graphics.draw(
+        bulletSprite,
+        getBulletQuad(frameIndex),
+        x,
+        y,
+        angle,
+        scale,
+        scale,
+        bulletFrameSize / 2,
+        bulletFrameSize / 2
+    )
+
+    for overlayFrame = frameIndex - 1, 0, -1 do
+        love.graphics.draw(
+            bulletSprite,
+            getBulletQuad(overlayFrame),
+            x,
+            y,
+            angle,
+            scale,
+            scale,
+            bulletFrameSize / 2,
+            bulletFrameSize / 2
+        )
+    end
 end
 
 function NoHeadBullet:new(x, y, angle, speed, damage, tileDamage)
@@ -87,6 +118,7 @@ function NoHeadBullet:new(x, y, angle, speed, damage, tileDamage)
     bullet.isProjectile = true
     bullet.isXrayVisible = true
     bullet.isXrayProjectile = true
+    bullet.grassMarkTimer = GRASS_MARK_INTERVAL
     bullet:spawnColorParticles(bullet.colorParticles.count)
     return bullet
 end
@@ -104,6 +136,20 @@ function NoHeadBullet:spawnColorParticles(count)
         count or self.colorParticles.count,
         self.colorParticles
     )
+end
+
+function NoHeadBullet:markGrass(dt)
+    if not Tilemap.markGrassNearPoint then
+        return
+    end
+
+    self.grassMarkTimer = (self.grassMarkTimer or 0) + dt
+    if self.grassMarkTimer < GRASS_MARK_INTERVAL then
+        return
+    end
+
+    self.grassMarkTimer = 0
+    Tilemap:markGrassNearPoint(self.x, self.y, 12, self.x)
 end
 
 function NoHeadBullet:spawnSpriteTrailPoint(x, y)
@@ -291,9 +337,7 @@ function NoHeadBullet:update(dt)
     self.y = self.y + self.dy * dt
     local _at = math.min(self.timer / self.lifeTime, 1)
     self.arcOffset = math.sin(_at * math.pi) * (self.arcPeak + self.arcDrop * 0.5) - _at * self.arcDrop
-    if Tilemap.markGrassNearPoint then
-        Tilemap:markGrassNearPoint(self.x, self.y, 12, self.x)
-    end
+    self:markGrass(dt)
     self:spawnSpriteTrail(previousX, previousY)
     self.colorParticleTimer = self.colorParticleTimer + dt
     if self.colorParticleTimer >= self.colorParticles.spawnInterval then
@@ -329,45 +373,38 @@ function NoHeadBullet:draw()
     local drawX = self.x
     local drawY = self.y - self.height - arc
     local frameIndex = math.floor(self.timer / bulletFrameDuration) % bulletFrameCount
+    local vs = self.visualScale or 1.2
     local bodyAlpha = 1
-    local bodyScale = 1
+    local bodyScale = vs
 
     if self.isDying then
         local progress = math.min(self.impactTimer / self.impactDuration, 1)
         frameIndex = math.min(bulletFrameCount - 1, math.floor(progress * bulletFrameCount))
         bodyAlpha = 1 - progress
-        bodyScale = 1 + progress * 0.5
+        bodyScale = vs + progress * 0.5
     end
 
     love.graphics.setColor(1, 1, 1, 1)
     for _, point in ipairs(self.spriteTrail) do
         local trailFrame = math.min(bulletFrameCount - 1, math.floor(point.timer / bulletFrameDuration))
         local alpha = 1 - point.timer / bulletAnimationDuration
-        love.graphics.setColor(1, 1, 1, alpha)
-        love.graphics.draw(
-            bulletSprite,
-            getBulletQuad(trailFrame),
+        drawBulletSprite(
+            trailFrame,
             point.x,
             point.y,
             self.angle,
-            1,
-            1,
-            bulletFrameSize / 2,
-            bulletFrameSize / 2
+            vs,
+            alpha
         )
     end
 
-    love.graphics.setColor(1, 1, 1, bodyAlpha)
-    love.graphics.draw(
-        bulletSprite,
-        getBulletQuad(frameIndex),
+    drawBulletSprite(
+        frameIndex,
         drawX,
         drawY,
         self.angle,
         bodyScale,
-        bodyScale,
-        bulletFrameSize / 2,
-        bulletFrameSize / 2
+        bodyAlpha
     )
 
     if DEBUG then
@@ -385,16 +422,13 @@ end
 function NoHeadBullet:drawXray()
     local arc = self.arcOffset or 0
     local frameIndex = math.floor(self.timer / bulletFrameDuration) % bulletFrameCount
-    love.graphics.draw(
-        bulletSprite,
-        getBulletQuad(frameIndex),
+    drawBulletSprite(
+        frameIndex,
         self.x,
         self.y - self.height - arc,
         self.angle,
-        1,
-        1,
-        bulletFrameSize / 2,
-        bulletFrameSize / 2
+        0.8,
+        1
     )
 end
 

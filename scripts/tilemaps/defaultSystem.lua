@@ -7,12 +7,15 @@ local RoomTemplates = require("scripts/rooms/roomTemplates")
 local Moonbeam = require("scripts/objects/moonbeam")
 local AmbientDust = require("scripts/objects/ambientDust")
 local VisualThemes = require("scripts/config/visualThemes")
+local PathCache = require("scripts/tilemaps/pathCache")
 local Grid = require("jumperj.grid")
 local Pathfinder = require("jumperj.pathfinder")
 
 local tileSize = 16
 local treeFadeCellSize = 64
 local tileUpdateCellSize = 128
+local pathCacheMaxEntries = 96
+local pathCacheTTL = 0.6
 local tilemap = nil
 local tilemapWorldX = -40 * tileSize
 local tilemapWorldY = -40 * tileSize
@@ -62,7 +65,14 @@ local TILE_CONTAINER = 13
 local TILE_CHEST = 15
 local TILE_CHEST_MARKER = 6
 local GRASS_WALKABLE_RADIUS = 4
-local TILE_OBJECT_BORDER_CULL_LAYERS = 3
+local DEFAULT_OBJECT_BORDER_CULL_LAYERS_X = 3
+local DEFAULT_OBJECT_BORDER_CULL_LAYERS_TOP = 5
+local DEFAULT_OBJECT_BORDER_CULL_LAYERS_BOTTOM = 3
+local objectBorderCullLayers = {
+    x = DEFAULT_OBJECT_BORDER_CULL_LAYERS_X,
+    top = DEFAULT_OBJECT_BORDER_CULL_LAYERS_TOP,
+    bottom = DEFAULT_OBJECT_BORDER_CULL_LAYERS_BOTTOM,
+}
 
 local function isWalkableTile(tile)
     return tile == TILE_FLOOR or tile == TILE_DOOR_BACK
@@ -280,6 +290,35 @@ local function getActiveTilemapConfig()
     return FloorManager:getCurrentTilemapConfig() or GameConfig.tilemapConfig
 end
 
+local function resolveObjectBorderCullLayers(tilemapConfig)
+    local config = tilemapConfig and tilemapConfig.objectBorderCullLayers
+    local x = DEFAULT_OBJECT_BORDER_CULL_LAYERS_X
+    local top = DEFAULT_OBJECT_BORDER_CULL_LAYERS_TOP
+    local bottom = DEFAULT_OBJECT_BORDER_CULL_LAYERS_BOTTOM
+
+    if type(config) == "number" then
+        x = config
+        top = config
+        bottom = config
+    elseif type(config) == "table" then
+        x = config.x or config[1] or x
+        top = config.top or config.y or config[2] or top
+        bottom = config.bottom or config.y or config[3] or bottom
+    end
+
+    if tilemapConfig then
+        x = tilemapConfig.objectBorderCullLayersX or x
+        top = tilemapConfig.objectBorderCullLayersTop or tilemapConfig.objectBorderCullLayersY or top
+        bottom = tilemapConfig.objectBorderCullLayersBottom or tilemapConfig.objectBorderCullLayersY or bottom
+    end
+
+    return {
+        x = math.max(0, math.floor(x or 0)),
+        top = math.max(0, math.floor(top or 0)),
+        bottom = math.max(0, math.floor(bottom or 0)),
+    }
+end
+
 local function currentThemeAllowsWallGrass()
     local theme = FloorManager:getCurrentRoomTheme()
     return not theme or theme.wallGrass ~= false
@@ -322,8 +361,10 @@ local function shouldCreateTileObject(tile, x, y)
 
     local mapHeight = #tilemap
     local mapWidth = tilemap[1] and #tilemap[1] or 0
-    local border = TILE_OBJECT_BORDER_CULL_LAYERS
-    if x <= border or y <= border or x > mapWidth - border or y > mapHeight - border then
+    local borderX = objectBorderCullLayers.x or DEFAULT_OBJECT_BORDER_CULL_LAYERS_X
+    local borderTop = objectBorderCullLayers.top or DEFAULT_OBJECT_BORDER_CULL_LAYERS_TOP
+    local borderBottom = objectBorderCullLayers.bottom or DEFAULT_OBJECT_BORDER_CULL_LAYERS_BOTTOM
+    if x <= borderX or y <= borderTop or x > mapWidth - borderX or y > mapHeight - borderBottom then
         return false
     end
 
@@ -413,6 +454,15 @@ local function applyRoomShopState()
             {x = 19, y = 13, product = "squaregun"},
             {x = 23, y = 13, product = "longshot"},
             {x = 21, y = 13, product = "cakegun"},
+            {x = 15, y = 15, product = "card_upgrade"},
+        }
+
+        testStores = {
+            {x = 12, y = 13, product = "card_upgrade"},
+            {x = 14, y = 13, product = "card_upgrade"},
+            {x = 19, y = 13, product = "card_upgrade"},
+            {x = 23, y = 13, product = "card_upgrade"},
+            {x = 21, y = 13, product = "card_upgrade"},
             {x = 15, y = 15, product = "card_upgrade"},
         }
 
@@ -1796,10 +1846,27 @@ function DefaultTilemap:getNearestWalkableWorldPosition(worldX, worldY, maxRadiu
     return x, y - 8
 end
 
-function DefaultTilemap:getPathBetweenWorldPoints(startX, startY, endX, endY)
+function DefaultTilemap:clearPathCache()
+    self.pathCache = self.pathCache or PathCache:new({
+        maxEntries = pathCacheMaxEntries,
+        ttl = pathCacheTTL,
+    })
+    self.pathCache:clear()
+end
+
+function DefaultTilemap:getPathCache()
+    self.pathCache = self.pathCache or PathCache:new({
+        maxEntries = pathCacheMaxEntries,
+        ttl = pathCacheTTL,
+    })
+    return self.pathCache
+end
+
+function DefaultTilemap:getPathBetweenWorldPoints(startX, startY, endX, endY, options)
     if not self.finder then
-        return nil
+        return nil, false
     end
+    options = options or {}
 
     local startMapX, startMapY = self:worldToMap(startX, startY)
     local endMapX, endMapY = self:worldToMap(endX, endY)
@@ -1807,7 +1874,16 @@ function DefaultTilemap:getPathBetweenWorldPoints(startX, startY, endX, endY)
     startMapX, startMapY = self:getNearestWalkableMapPosition(startMapX, startMapY, 4)
     endMapX, endMapY = self:getNearestWalkableMapPosition(endMapX, endMapY, 8)
     if not startMapX or not endMapX then
-        return nil
+        return nil, false
+    end
+
+    local pathCache = self:getPathCache()
+    local cachedPath, cacheHit = pathCache:get(startMapX, startMapY, endMapX, endMapY)
+    if cacheHit then
+        return cachedPath, true
+    end
+    if options.cacheOnly then
+        return nil, false
     end
 
     local ok, path = pcall(function()
@@ -1815,18 +1891,22 @@ function DefaultTilemap:getPathBetweenWorldPoints(startX, startY, endX, endY)
     end)
 
     if ok and path then
-        return path
+        pathCache:put(startMapX, startMapY, endMapX, endMapY, path)
+        return path, false
     end
 
     if not self.finderAstar then
-        return nil
+        pathCache:put(startMapX, startMapY, endMapX, endMapY, nil)
+        return nil, false
     end
 
     ok, path = pcall(function()
         return self.finderAstar:getPath(startMapX, startMapY, endMapX, endMapY)
     end)
 
-    return ok and path or nil
+    path = ok and path or nil
+    pathCache:put(startMapX, startMapY, endMapX, endMapY, path)
+    return path, false
 end
 
 function DefaultTilemap:hasTileClose(x, y, tileIndex)
@@ -1847,6 +1927,7 @@ function DefaultTilemap:loadfinders()
         or (tilemap[1] and self.pathfinderMap[1] and #self.pathfinderMap[1] ~= #tilemap[1])
 
     if needsRebuild then
+        self:clearPathCache()
         self.pathfinderMap = buildPathfinderMap(tilemap)
         self.sharedGrid = Grid(self.pathfinderMap)
         self.finder = Pathfinder(self.sharedGrid, "JPS", 0)
@@ -1865,10 +1946,12 @@ function DefaultTilemap:loadfinders()
             pathRow[x] = isWalkableTile(sourceRow[x]) and 0 or 1
         end
     end
+    self:clearPathCache()
 end
 
 function DefaultTilemap:updatePathfinderTile(x, y)
     self:updateTileQueryCacheAt(x, y)
+    self:clearPathCache()
 
     if not (self.pathfinderMap and self.pathfinderMap[y]) then
         self:loadfinders()
@@ -2079,6 +2162,7 @@ end
 
 function DefaultTilemap:load()
     local tilemapConfig = getActiveTilemapConfig()
+    objectBorderCullLayers = resolveObjectBorderCullLayers(tilemapConfig)
     local visualTheme = FloorManager:getCurrentRoomTheme() or VisualThemes:getDefault()
     tilemap, self.mapWidth, self.mapHeight = loadTilemapFromImage(tilemapConfig.mapImage)
     local transitions = RoomBuilder:build(tilemap, FloorManager:getCurrentRoom())
@@ -2481,6 +2565,31 @@ function DefaultTilemap:getVisibleObjectsFromGrid(gridName, margin)
     return result
 end
 
+local function markGrassInteractionGrid(grid, yField, minCellX, maxCellX, minCellY, maxCellY, stamp, x, y, radiusSq, sourceX)
+    if not grid then
+        return
+    end
+
+    for cellY = minCellY, maxCellY do
+        for cellX = minCellX, maxCellX do
+            local bucket = grid[getSpatialCellKey(cellX, cellY)]
+            if bucket then
+                for _, grass in ipairs(bucket) do
+                    if grass.__grassInteractionStamp ~= stamp then
+                        grass.__grassInteractionStamp = stamp
+                        local grassY = grass[yField] or grass.y
+                        local dx = grass.x - x
+                        local dy = grassY - y
+                        if dx * dx + dy * dy <= radiusSq and grass.markInteraction then
+                            grass:markInteraction(sourceX)
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
 function DefaultTilemap:markGrassNearPoint(x, y, radius, sourceX)
     local grids = self.updateSpatialGrids
     if not (grids and x and y) then
@@ -2497,34 +2606,8 @@ function DefaultTilemap:markGrassNearPoint(x, y, radius, sourceX)
     self.grassInteractionStamp = (self.grassInteractionStamp or 0) + 1
     local stamp = self.grassInteractionStamp
 
-    local function markGrid(gridName, yField)
-        local grid = grids[gridName]
-        if not grid then
-            return
-        end
-
-        for cellY = minCellY, maxCellY do
-            for cellX = minCellX, maxCellX do
-                local bucket = grid[getSpatialCellKey(cellX, cellY)]
-                if bucket then
-                    for _, grass in ipairs(bucket) do
-                        if grass.__grassInteractionStamp ~= stamp then
-                            grass.__grassInteractionStamp = stamp
-                            local grassY = grass[yField] or grass.y
-                            local dx = grass.x - x
-                            local dy = grassY - y
-                            if dx * dx + dy * dy <= radiusSq and grass.markInteraction then
-                                grass:markInteraction(sourceX)
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    markGrid("grassInteraction", "y")
-    markGrid("bigGrassInteraction", "interactionY")
+    markGrassInteractionGrid(grids.grassInteraction, "y", minCellX, maxCellX, minCellY, maxCellY, stamp, x, y, radiusSq, sourceX)
+    markGrassInteractionGrid(grids.bigGrassInteraction, "interactionY", minCellX, maxCellX, minCellY, maxCellY, stamp, x, y, radiusSq, sourceX)
 end
 
 local function getObjectFadeBox(object, defaultSize)

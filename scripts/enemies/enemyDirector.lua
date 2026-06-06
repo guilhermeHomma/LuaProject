@@ -31,12 +31,18 @@ function EnemyDirector:canRequestPath()
 end
 
 function EnemyDirector:requestPath(startX, startY, targetX, targetY)
+    local path, cacheHit = Tilemap:getPathBetweenWorldPoints(startX, startY, targetX, targetY, { cacheOnly = true })
+    if cacheHit then
+        return path, true
+    end
+
     if not self:canRequestPath() then
         return nil, false
     end
 
     self.pathRequestsThisFrame = (self.pathRequestsThisFrame or 0) + 1
-    return Tilemap:getPathBetweenWorldPoints(startX, startY, targetX, targetY), true
+    path = Tilemap:getPathBetweenWorldPoints(startX, startY, targetX, targetY)
+    return path, true
 end
 
 function EnemyDirector:shouldUsePathfinding(enemy)

@@ -7,6 +7,7 @@ local Tilemap = require("scripts/tilemap")
 local DamageStretch = require("scripts/effects/damageStretch")
 local BloodPixel = require("scripts/particles/bloodPixel")
 local DamageImpactParticle = require("scripts/particles/damageImpactParticle")
+local EnemyDeathProjectiles = require("scripts/enemies/enemyDeathProjectiles")
 
 require("scripts/utils")
 
@@ -72,6 +73,7 @@ function Enemy:death()
     end
 
     Game:increasePlayerPoints(self.dropPoints)
+    EnemyDeathProjectiles.spawn(self)
     BloodPixel.spawnBurst(self.x, self.y - 2, 0, -1, 9, 12)
     self.isAlive = false
 end

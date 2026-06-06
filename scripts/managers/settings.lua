@@ -1,6 +1,15 @@
 local Settings = {}
 local SettingsStorage = require("scripts/managers/settingsStorage")
 
+local BRIGHTNESS_MIN = 0
+local BRIGHTNESS_MAX = 10
+local BRIGHTNESS_DEFAULT = 5
+
+local function clampInteger(value, minValue, maxValue)
+    value = math.floor((tonumber(value) or minValue) + 0.5)
+    return math.max(minValue, math.min(maxValue, value))
+end
+
 local function containsResolution(presets, width, height)
     for _, preset in ipairs(presets) do
         if preset.width == width and preset.height == height then
@@ -74,6 +83,7 @@ function Settings:save()
         vsyncEnabled = self.vsyncEnabled,
         crtEnabled = self.crtEnabled,
         cameraShakeEnabled = self.cameraShakeEnabled,
+        brightness = self.brightness,
         masterVolume = self.masterVolume,
         musicVolume = self.musicVolume,
     })))
@@ -91,6 +101,7 @@ function Settings:loadSavedSettings()
     self.vsyncEnabled = saved.vs == "1"
     self.crtEnabled = saved.crt == "1"
     self.cameraShakeEnabled = saved.shake ~= "0"
+    self.brightness = clampInteger(saved.brightness or self.brightness, BRIGHTNESS_MIN, BRIGHTNESS_MAX)
 
     local width = tonumber(saved.w)
     local height = tonumber(saved.h)
@@ -131,6 +142,7 @@ function Settings:load()
     self.crtEnabled = GAME_FLAGS and GAME_FLAGS.crt and GAME_FLAGS.crt.enabled == true
     self.cameraShakeEnabled = not (GAME_FLAGS and GAME_FLAGS.cameraShake == false)
     self.vsyncEnabled = GAME_FLAGS and GAME_FLAGS.vsync == true
+    self.brightness = GAME_FLAGS and GAME_FLAGS.brightness or BRIGHTNESS_DEFAULT
     self:buildResolutionPresets()
     self.resolutionIndex = 1
     self:syncResolutionIndex()
@@ -178,6 +190,14 @@ end
 
 function Settings:getVsyncLabel()
     return self.vsyncEnabled and "on" or "off"
+end
+
+function Settings:getBrightnessValue()
+    return self.brightness or BRIGHTNESS_DEFAULT
+end
+
+function Settings:getBrightnessLabel()
+    return tostring(self:getBrightnessValue())
 end
 
 function Settings:getMasterPercent()
@@ -244,6 +264,7 @@ function Settings:applyVideoEffects()
     GAME_FLAGS.crt.enabled = self.crtEnabled == true
     GAME_FLAGS.cameraShake = self.cameraShakeEnabled ~= false
     GAME_FLAGS.vsync = self.vsyncEnabled == true
+    GAME_FLAGS.brightness = clampInteger(self.brightness, BRIGHTNESS_MIN, BRIGHTNESS_MAX)
 
     if GAME_FLAGS.cameraShake == false and camera then
         camera.shakeIntensity = 0
@@ -281,6 +302,16 @@ end
 
 function Settings:toggleVsync()
     self:setVsyncEnabled(not self.vsyncEnabled)
+end
+
+function Settings:setBrightness(value)
+    self.brightness = clampInteger(value, BRIGHTNESS_MIN, BRIGHTNESS_MAX)
+    self:applyVideoEffects()
+    self:save()
+end
+
+function Settings:adjustBrightness(step)
+    self:setBrightness((self.brightness or BRIGHTNESS_DEFAULT) + step)
 end
 
 function Settings:setMasterVolume(value)

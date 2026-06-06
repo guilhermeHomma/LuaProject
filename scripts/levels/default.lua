@@ -83,8 +83,8 @@ DefaultLevel.followCameraSize = {
 }
 
 DefaultLevel.fixedCameraSize = {
-    width =  1120,-- 960,
-    height = 630, --540,
+    width =  1088,--1120,-- 960,
+    height = 612--630, --540,
 }
 
 DefaultLevel.playerSpawn = {

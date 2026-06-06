@@ -3,10 +3,34 @@ local Tilemap = require("scripts/tilemap")
 local EnemyDirector = require("scripts/enemies/enemyDirector")
 local SpiderWeb = require("scripts/particles/spiderWeb")
 
+local spiderSoundBase = love.audio.newSource("assets/sfx/enemies/spider.mp3", "static")
 local footstepSounds = {
     love.audio.newSource("assets/sfx/footsteps/foot-steps-1.mp3", "static"),
     love.audio.newSource("assets/sfx/footsteps/foot-steps-0.mp3", "static"),
 }
+
+local function setSourcePositionIfMono(source, x, y, z)
+    if not source then
+        return false
+    end
+
+    if source.getChannelCount then
+        local ok, channelCount = pcall(source.getChannelCount, source)
+        if ok and channelCount and channelCount > 1 then
+            return false
+        end
+    elseif source.getChannels then
+        local ok, channelCount = pcall(source.getChannels, source)
+        if ok and channelCount and channelCount > 1 then
+            return false
+        end
+    end
+
+    local ok = pcall(function()
+        source:setPosition(x, y, z or 0)
+    end)
+    return ok
+end
 
 local Spider = setmetatable({}, {__index = Zombie})
 Spider.__index = Spider
@@ -51,6 +75,8 @@ function Spider:new(x, y)
     enemy.footStepAlpha = 0.18
     enemy.footStepVisualInterval = 0.5
     enemy.animationSpeed = 0.1
+    enemy.noise = spiderSoundBase:clone()
+    enemy.soundInterval = 3.8 + math.random() * 2.4
     enemy.damageImpactHeightRatio = 0.62
     enemy.bloodSpawnYOffset = -2
     enemy.hitBloodPixelMin = 2
@@ -83,6 +109,22 @@ function Spider:drawMouth()
 end
 
 function Spider:noiseCheck(dt)
+    self.soundTimer = self.soundTimer + dt
+
+    if self.soundTimer < (self.soundInterval or 5) or not Player.isAlive then
+        return
+    end
+
+    self.soundTimer = 0
+    self.soundInterval = 3.8 + math.random() * 2.4
+    local soundPositionX, soundPositionY = soundPosition(Player, self)
+    local playerDistance = distance(Player, self) / 2
+    local volume = getDistanceVolume(playerDistance, 0.18, 180)
+    self.noise:stop()
+    setSourcePositionIfMono(self.noise, soundPositionX, soundPositionY, 0)
+    self.noise:setVolume(volume)
+    self.noise:setPitch((1.1 + math.random() * 0.1) * (GAME_PITCH or 1))
+    self.noise:play()
 end
 
 function Spider:playFootstepSound(playerDistance)

@@ -2,6 +2,7 @@ local RoomScreenTransition = {}
 
 local SLIDE_DURATION = 0.4
 local FADE_MAX_ALPHA = 1
+local whooshSoundBase = love.audio.newSource("assets/sfx/effects/whoosh-room.mp3", "static")
 
 local directionVectors = {
     left = { x = -1, y = 0 },
@@ -71,6 +72,13 @@ local function getSlideOffsets(self)
     return slideX, slideY, newX, newY
 end
 
+local function playTransitionWhoosh()
+    local sound = whooshSoundBase:clone()
+    sound:setVolume(0.7 * (SOUND_VOLUME or 1))
+    sound:setPitch((1 + math.random() * 0.3) * (GAME_PITCH or 1))
+    sound:play()
+end
+
 function RoomScreenTransition:beginCapture(direction)
     self.captureDirection = direction
     self.capturing = true
@@ -98,6 +106,7 @@ function RoomScreenTransition:startSlide(direction)
         return
     end
 
+    playTransitionWhoosh()
     self.direction = resolveDirection(direction or self.captureDirection or "right")
     self.timer = 0
     self.duration = SLIDE_DURATION

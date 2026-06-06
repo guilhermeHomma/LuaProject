@@ -13,8 +13,8 @@ local EnemyDirector = require("scripts/enemies/enemyDirector")
 local PointsManager = require("scripts/managers/pointsManager")
 local DoorsManager = require("scripts/managers/doorsManager")
 local FloorManager = require("scripts/managers/floorManager")
-local MinimapConfig = require("scripts/config/minimapConfig")
 local LightConfig = require("scripts/config/lightConfig")
+local Minimap = require("scripts/ui/minimap")
 local HeartSound = require("scripts/player/heartSound")
 local CreatorManager = require "scripts.managers.CreatorManager"
 local Trail = require("scripts.objects.trails")
@@ -29,6 +29,8 @@ local Hollow = require("scripts/objects/hollow")
 local FloorIntroManager = require("scripts/managers/floorIntroManager")
 local SpiderWeb = require("scripts/particles/spiderWeb")
 local RoomScreenTransition = require("scripts/managers/roomScreenTransition")
+local AmbienceSound = require("scripts/managers/ambienceSound")
+local PlayerDamageFlash = require("scripts/effects/playerDamageFlash")
 
 local font = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 32)
 local hudDistortionShader = love.graphics.newShader("scripts/shaders/hudWater.glsl")
@@ -44,23 +46,7 @@ local pixelImageData = love.image.newImageData(1, 1)
 pixelImageData:setPixel(0, 0, 1, 1, 1, 1)
 local pixelImage = love.graphics.newImage(pixelImageData)
 pixelImage:setFilter("nearest", "nearest")
-local minimapSprites = {
-    panel = love.graphics.newImage("assets/sprites/ui/map/map.png"),
-    room32x32 = love.graphics.newImage("assets/sprites/ui/map/32x32.png"),
-    room32x48 = love.graphics.newImage("assets/sprites/ui/map/32x48.png"),
-    room48x32 = love.graphics.newImage("assets/sprites/ui/map/48x32.png"),
-    room48x48 = love.graphics.newImage("assets/sprites/ui/map/48x48.png"),
-    connection = love.graphics.newImage("assets/sprites/ui/map/connection.png"),
-    player = love.graphics.newImage("assets/sprites/ui/map/player.png"),
-    store = love.graphics.newImage("assets/sprites/ui/map/store.png"),
-    cards = love.graphics.newImage("assets/sprites/ui/map/cards.png"),
-    unknown = love.graphics.newImage("assets/sprites/ui/map/unknown.png"),
-}
-
-for _, image in pairs(minimapSprites) do
-    image:setFilter("nearest", "nearest")
-end
-
+local playerDamageFlash = PlayerDamageFlash:new()
 local function sortDrawQueue(a, b)
     if a.priority == b.priority then
         local aSort = a.object and a.object.drawSortOrder or 0
@@ -251,6 +237,32 @@ local function primePlayerWalkAnimation(vector)
     if vector.x ~= 0 then
         Player.flipH = vector.x > 0
     end
+end
+
+local function queuePlayerTransitionFrame(vector, moving)
+    if not (Player and Player.isAlive) then
+        return
+    end
+
+    vector = vector or { x = 0, y = 0 }
+    local moveX = vector.x or 0
+    local moveY = vector.y or 0
+    if moving == nil then
+        moving = moveX ~= 0 or moveY ~= 0
+    end
+
+    Player.velocityX = 0
+    Player.velocityY = 0
+    Player.moveX = moveX
+    Player.moveY = moveY
+    if Player.moveX ~= 0 then
+        Player.flipH = Player.moveX > 0
+    end
+    Player:updateAnimation(0, moving)
+    if Player.gun then
+        Player.gun:update(0, Player.x, Player.y)
+    end
+    addToDrawQueue(Player.y + 6, Player, false)
 end
 
 local function getEncounterConfig()
@@ -708,105 +720,6 @@ local function getRoomCells(room)
     return cells
 end
 
-local function getRoomCenterCell(room)
-    local cells = getRoomCells(room)
-    local x, y = 0, 0
-    for _, cell in ipairs(cells) do
-        x = x + cell.x
-        y = y + cell.y
-    end
-
-    local count = math.max(1, #cells)
-    return x / count, y / count
-end
-
-local function getRoomMinimapCells(room)
-    if room.state and room.state.visited then
-        return getRoomCells(room)
-    end
-
-    if room.state and room.state.minimapPreviewCell then
-        return {
-            {
-                x = room.state.minimapPreviewCell.x,
-                y = room.state.minimapPreviewCell.y,
-            },
-        }
-    end
-
-    local centerX, centerY = getRoomCenterCell(room)
-    return {
-        {
-            x = math.floor(centerX + 0.5),
-            y = math.floor(centerY + 0.5),
-        },
-    }
-end
-
-local function getRoomMinimapBounds(room)
-    local cells = getRoomMinimapCells(room)
-    local minX, maxX = cells[1].x, cells[1].x
-    local minY, maxY = cells[1].y, cells[1].y
-
-    for _, cell in ipairs(cells) do
-        minX = math.min(minX, cell.x)
-        maxX = math.max(maxX, cell.x)
-        minY = math.min(minY, cell.y)
-        maxY = math.max(maxY, cell.y)
-    end
-
-    return minX, minY, maxX, maxY
-end
-
-local function getRoomMinimapRects(room)
-    local cells = getRoomMinimapCells(room)
-    local minX, minY, maxX, maxY = getRoomMinimapBounds(room)
-    local expectedRectCells = (maxX - minX + 1) * (maxY - minY + 1)
-
-    if #cells == expectedRectCells then
-        return {
-            {
-                minX = minX,
-                minY = minY,
-                maxX = maxX,
-                maxY = maxY,
-            },
-        }
-    end
-
-    local rects = {}
-    for _, cell in ipairs(cells) do
-        rects[#rects + 1] = {
-            minX = cell.x,
-            minY = cell.y,
-            maxX = cell.x,
-            maxY = cell.y,
-        }
-    end
-    return rects
-end
-
-local function isRoomKnown(room, rooms)
-    return room.state and room.state.discovered == true
-end
-
-local function findAdjacentCells(roomA, roomB, direction)
-    local vector = gridDirectionVectors[direction]
-    if not vector then
-        return nil, nil
-    end
-
-    for _, cellA in ipairs(getRoomCells(roomA)) do
-        for _, cellB in ipairs(getRoomCells(roomB)) do
-            if cellB.x == cellA.x + vector.x and cellB.y == cellA.y + vector.y then
-                return cellA, cellB
-            end
-        end
-    end
-
-    return nil, nil
-end
-
 local function getOppositeDirection(direction)
     return oppositeDirections[direction]
 end
@@ -855,24 +768,6 @@ local function getRoomEdgeCell(room, direction)
     return selected
 end
 
-local function getMinimapConnectionCells(roomA, roomB, direction)
-    local cellA, cellB = findAdjacentCells(roomA, roomB, direction)
-    cellA = getRoomEdgeCell(roomA, direction) or cellA
-    cellB = getRoomEdgeCell(roomB, getOppositeDirection(direction)) or cellB
-    if roomA.state and not roomA.state.visited and roomA.state.minimapPreviewCell then
-        cellA = roomA.state.minimapPreviewCell
-    end
-    if roomB.state and not roomB.state.visited and roomB.state.minimapPreviewCell then
-        cellB = roomB.state.minimapPreviewCell
-    end
-
-    return cellA, cellB
-end
-
-local function pixel(value)
-    return math.floor(value + 0.5)
-end
-
 local function isStartRoom(room)
     local level = FloorManager.level
     local startRoomId = level and level.floorConfig and level.floorConfig.startRoomId or "0:0"
@@ -897,60 +792,6 @@ local function playWaveClearFeedback()
     waveClearFeedbackSound:setVolume(0.35 * (SOUND_VOLUME or 1))
     waveClearFeedbackSound:setPitch((1.08 + math.random() * 0.12) * GAME_PITCH)
     waveClearFeedbackSound:play()
-end
-
-local function shouldShowShopIcon(room)
-    local state = room and room.state
-    return state
-        and state.visited == true
-        and state.shopProduct ~= nil
-        and not isStartRoom(room)
-        and not room.isCardRoom
-end
-
-local function shouldShowCardIcon(room)
-    local state = room and room.state
-    return room
-        and room.isCardRoom
-        and state
-        and state.visited == true
-        and not isStartRoom(room)
-end
-
-local function getMinimapRoomSprite(rect, room)
-    if room and room.state and not room.state.visited then
-        return minimapSprites.unknown
-    end
-
-    local widthCells = rect.maxX - rect.minX + 1
-    local heightCells = rect.maxY - rect.minY + 1
-
-    if widthCells == 2 and heightCells == 2 then
-        return minimapSprites.room48x48
-    elseif widthCells == 2 then
-        return minimapSprites.room48x32
-    elseif heightCells == 2 then
-        return minimapSprites.room32x48
-    end
-
-    return minimapSprites.room32x32
-end
-
-local function drawMinimapSprite(image, centerX, centerY, width, height)
-    if not image then
-        return
-    end
-
-    love.graphics.draw(
-        image,
-        pixel(centerX),
-        pixel(centerY),
-        0,
-        width / image:getWidth(),
-        height / image:getHeight(),
-        image:getWidth() / 2,
-        image:getHeight() / 2
-    )
 end
 
 local function getLightCalculationDistance(config)
@@ -1143,10 +984,27 @@ function Game:resetRuntimeState()
     self.playerRoomExitTransition = nil
     self.pendingRoomRevealId = nil
     self.minimapRoomOverrideId = nil
+    self.minimapForcePlayerIconRefresh = false
     self.currentEntryDoorAvoidPoint = nil
     self.playerCombatRoomsEntered = 0
     self.roomFadeAlpha = 0
     self.floorChanging = false
+    self.hitStopTimer = 0
+    self.hitStopDuration = 0
+    self.hitStopRecoveryTimer = 0
+    self.hitStopRecoveryDuration = 0
+    self.damageAudioPitchTimer = 0
+    self.damageAudioPitchDuration = 1
+    self.damageAudioPitch = 0.58
+    self.damageAudioVolumeDuckTimer = 0
+    self.damageAudioVolumeDuckDuration = 1
+    self.damageAudioVolumeDuckDelayTimer = 0
+    self.damageAudioVolumeDuckMultiplier = 1
+    self.currentDamageAudioVolumeMultiplier = 1
+    love.audio.setVolume(SOUND_VOLUME or 1)
+    if playerDamageFlash then
+        playerDamageFlash.instances = {}
+    end
     Dialog.breakMovements = false
 end
 
@@ -1229,6 +1087,61 @@ function Game:getEnemiesNearPoint(x, y, radius)
     end
 
     return result
+end
+
+function Game:findEnemyCollidingWithShot(shot, radius)
+    if not (shot and shot.x and shot.y and shot.checkCollisionWithEnemy) then
+        return nil
+    end
+
+    local ignoredEnemies = shot.ignoredEnemies
+
+    local grid = self.enemySpatialGrid
+    if not grid then
+        for i = 1, #(self.enemies or {}) do
+            local enemy = self.enemies[i]
+            if enemy
+                and enemy.isAlive
+                and (not ignoredEnemies or not ignoredEnemies[enemy])
+                and shot:checkCollisionWithEnemy(enemy) then
+                return enemy
+            end
+        end
+        return nil
+    end
+
+    radius = radius or ENEMY_SPATIAL_CELL_SIZE
+    local x = shot.x
+    local y = shot.y
+    local minCellX = getSpatialCell(x - radius)
+    local maxCellX = getSpatialCell(x + radius)
+    local minCellY = getSpatialCell(y - radius)
+    local maxCellY = getSpatialCell(y + radius)
+    local radiusSq = radius * radius
+
+    for cellY = minCellY, maxCellY do
+        local row = grid[cellY]
+        if row then
+            for cellX = minCellX, maxCellX do
+                local bucket = row[cellX]
+                if bucket then
+                    for i = 1, #bucket do
+                        local enemy = bucket[i]
+                        local dx = enemy.x - x
+                        local dy = enemy.y - y
+                        if dx * dx + dy * dy <= radiusSq
+                            and enemy.isAlive
+                            and (not ignoredEnemies or not ignoredEnemies[enemy])
+                            and shot:checkCollisionWithEnemy(enemy) then
+                            return enemy
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return nil
 end
 
 function Game:getEnemiesNearBox(box, padding)
@@ -1436,7 +1349,8 @@ function Game:setupCurrentRoom(options)
         Tilemap:setAllRoomDoorsOpen(false)
     end
 
-    if currentRoom.templateId == "start_32x32" or isStartRoom(currentRoom) then
+    if not (CURRENT_LEVEL and CURRENT_LEVEL.skipStartRoomSafetyLogic)
+        and (currentRoom.templateId == "start_32x32" or isStartRoom(currentRoom)) then
         setBattleMusicActive(false)
         self.enemies = {}
         self.nearbyEnemies = {}
@@ -1714,7 +1628,8 @@ function Game:checkCurrentRoomClear()
         return
     end
 
-    if currentRoom.templateId == "start_32x32" or isStartRoom(currentRoom) then
+    if not (CURRENT_LEVEL and CURRENT_LEVEL.skipStartRoomSafetyLogic)
+        and (currentRoom.templateId == "start_32x32" or isStartRoom(currentRoom)) then
         state.activeEncounterWaves = {}
         state.encounterSpawnedWaves = 0
 
@@ -1776,6 +1691,10 @@ function Game:checkCurrentRoomClear()
 end
 
 function Game:startEntryMove(entryDirection)
+    if Player and Player.cancelDash then
+        Player:cancelDash()
+    end
+
     local vector = entryMoveVectors[entryDirection] or {x = 0, y = 0}
     local targetX, targetY = getEntryMoveTarget(entryDirection, Player.x, Player.y)
     local dx = targetX - Player.x
@@ -1864,6 +1783,10 @@ function Game:updateEntryMove(dt)
 end
 
 function Game:loadRoomFromDirection(direction)
+    if Player and Player.cancelDash then
+        Player:cancelDash()
+    end
+
     local currentRoom = FloorManager:getCurrentRoom()
     local targetRoomId = currentRoom and currentRoom.neighbors and currentRoom.neighbors[direction]
 
@@ -1910,6 +1833,7 @@ function Game:loadRoomFromDirection(direction)
     self.roomTransitionCooldown = 0.28
     self.pendingRoomRevealId = targetRoomId
     self:startEntryMove(entryDirection)
+    queuePlayerTransitionFrame(entryVector)
     self:setupCurrentRoom({
         keepEntryDoorOpen = true,
         deferMinimapReveal = true,
@@ -1936,6 +1860,10 @@ function Game:startRoomExitTransition(direction)
         return false
     end
 
+    if Player and Player.cancelDash then
+        Player:cancelDash()
+    end
+
     local vector = getWorldDirectionVector(direction)
     local exitMoveDistance = math.min(EXIT_PRE_SLIDE_DISTANCE, EXIT_RUN_DISTANCE)
     self.playerRoomExitTransition = {
@@ -1951,6 +1879,7 @@ function Game:startRoomExitTransition(direction)
         targetY = Player.y + vector.y * exitMoveDistance,
     }
     self.minimapRoomOverrideId = currentRoom.id
+    self.minimapForcePlayerIconRefresh = false
     Player.moveX = vector.x
     Player.moveY = vector.y
     primePlayerWalkAnimation(vector)
@@ -2053,23 +1982,15 @@ function Game:updateRoomExitTransition(dt)
         if not transition.minimapRevealed
             and transition.timer >= transition.duration * 0.5 then
             transition.minimapRevealed = true
-            if self.pendingRoomRevealId then
-                FloorManager:revealRoom(self.pendingRoomRevealId)
-                revealRoomConnections(FloorManager:getRoom(self.pendingRoomRevealId))
-                self.pendingRoomRevealId = nil
-            end
-            self.minimapRoomOverrideId = nil
+            self:commitPendingMinimapRoomReveal()
         end
 
         if transition.timer >= transition.duration then
             self.roomFadeAlpha = 0
             self.playerRoomExitTransition = nil
-            if self.pendingRoomRevealId then
-                FloorManager:revealRoom(self.pendingRoomRevealId)
-                revealRoomConnections(FloorManager:getRoom(self.pendingRoomRevealId))
-                self.pendingRoomRevealId = nil
+            if self.pendingRoomRevealId or self.minimapRoomOverrideId then
+                self:commitPendingMinimapRoomReveal()
             end
-            self.minimapRoomOverrideId = nil
             Dialog.breakMovements = self.playerRoomEntryMove ~= nil
             if self.playerRoomEntryMove then
                 primePlayerWalkAnimation({
@@ -2081,6 +2002,19 @@ function Game:updateRoomExitTransition(dt)
     end
 
     return true
+end
+
+function Game:commitPendingMinimapRoomReveal()
+    if self.pendingRoomRevealId then
+        FloorManager:revealRoom(self.pendingRoomRevealId)
+        revealRoomConnections(FloorManager:getRoom(self.pendingRoomRevealId))
+        self.pendingRoomRevealId = nil
+    end
+
+    self.minimapRoomOverrideId = nil
+    self.minimapForcePlayerIconRefresh = true
+    self.minimapPlayerIconX = nil
+    self.minimapPlayerIconY = nil
 end
 
 function Game:enterRoomFrom(direction)
@@ -2097,6 +2031,7 @@ function Game:startFloorIntro(floorIndex, onComplete)
     end
     FloorIntroManager:startFloor(floorIndex, function()
         Dialog.breakMovements = self.playerRoomEntryMove ~= nil
+        queuePlayerTransitionFrame({ x = 0, y = 0 }, false)
         if onComplete then
             onComplete()
         end
@@ -2255,6 +2190,7 @@ end
 function Game:close()
     HeartSound:stop()
     CardChoice:load()
+    love.audio.setVolume(SOUND_VOLUME or 1)
     self = {}
 end
 
@@ -2340,7 +2276,87 @@ function Game:updatePitch(dt)
     if Player.life <= 1 then
         targetPitch = 0.9
     end
-    GAME_PITCH = transitionValue(GAME_PITCH, targetPitch, 1.3, dt)
+
+    if (self.damageAudioPitchTimer or 0) > 0 then
+        self.damageAudioPitchTimer = math.max(0, self.damageAudioPitchTimer - dt)
+        local duration = math.max(self.damageAudioPitchDuration or 1, 0.001)
+        local progress = 1 - (self.damageAudioPitchTimer / duration)
+        local eased = progress * progress * (3 - 2 * progress)
+        local damagePitch = self.damageAudioPitch or 0.58
+        GAME_PITCH = damagePitch + (targetPitch - damagePitch) * eased
+        return
+    end
+
+    GAME_PITCH = transitionValue(GAME_PITCH, targetPitch, 4.5, dt)
+end
+
+function Game:startDamageAudioDistortion(duration, pitch, volumeDuckDelay, volumeDuckDuration)
+    self.damageAudioPitchDuration = duration or 1
+    self.damageAudioPitchTimer = self.damageAudioPitchDuration
+    self.damageAudioPitch = pitch or 0.58
+    GAME_PITCH = self.damageAudioPitch
+    self.damageAudioVolumeDuckDuration = volumeDuckDuration or self.damageAudioPitchDuration
+    self.damageAudioVolumeDuckTimer = self.damageAudioVolumeDuckDuration
+    self.damageAudioVolumeDuckDelayTimer = volumeDuckDelay or 0.28
+    self.damageAudioVolumeDuckMultiplier = 0.1
+    self.currentDamageAudioVolumeMultiplier = 1
+    love.audio.setVolume(SOUND_VOLUME or 1)
+
+    if Music and Music.startDamageDistortion then
+        Music:startDamageDistortion(self.damageAudioPitchDuration, self.damageAudioPitch)
+    end
+
+    if AmbienceSound and AmbienceSound.startWindBoost then
+        AmbienceSound:startWindBoost(self.damageAudioPitchDuration, 2)
+    end
+end
+
+function Game:updateDamageAudioVolumeDuck(dt)
+    if state ~= STATES.game then
+        self.damageAudioVolumeDuckTimer = 0
+        self.damageAudioVolumeDuckDelayTimer = 0
+        self.currentDamageAudioVolumeMultiplier = 1
+        love.audio.setVolume(SOUND_VOLUME or 1)
+        return
+    end
+
+    if (self.damageAudioVolumeDuckDelayTimer or 0) > 0 then
+        self.damageAudioVolumeDuckDelayTimer = math.max(0, self.damageAudioVolumeDuckDelayTimer - dt)
+        self.currentDamageAudioVolumeMultiplier = 1
+        love.audio.setVolume(SOUND_VOLUME or 1)
+        return
+    end
+
+    if (self.damageAudioVolumeDuckTimer or 0) <= 0 then
+        self.currentDamageAudioVolumeMultiplier = 1
+        love.audio.setVolume(SOUND_VOLUME or 1)
+        return
+    end
+
+    self.damageAudioVolumeDuckTimer = math.max(0, self.damageAudioVolumeDuckTimer - dt)
+    local duration = math.max(self.damageAudioVolumeDuckDuration or 1, 0.001)
+    local progress = 1 - (self.damageAudioVolumeDuckTimer / duration)
+    local eased = progress * progress * (3 - 2 * progress)
+    local minMultiplier = self.damageAudioVolumeDuckMultiplier or 0.1
+    local multiplier = minMultiplier + (1 - minMultiplier) * eased
+    self.currentDamageAudioVolumeMultiplier = multiplier
+    love.audio.setVolume((SOUND_VOLUME or 1) * multiplier)
+end
+
+function Game:getDamageAudioVolumeMultiplier()
+    return self.currentDamageAudioVolumeMultiplier or 1
+end
+
+function Game:showPlayerDamageFlash(dx, dy)
+    if playerDamageFlash then
+        playerDamageFlash:spawn(Player and Player.x or 0, Player and Player.y or 0, dx, dy)
+    end
+end
+
+function Game:drawPlayerDamageFlash(viewportScale)
+    if playerDamageFlash then
+        playerDamageFlash:draw(camera, viewportScale)
+    end
 end
 
 function Game:updateEntityList(list, dt)
@@ -2407,10 +2423,16 @@ function Game:refreshNearbyEnemies()
     end
 end
 
-function Game:markGrassNearEnemies()
+function Game:markGrassNearEnemies(dt)
     if not (Tilemap and Tilemap.markGrassNearPoint) then
         return
     end
+
+    self.enemyGrassMarkTimer = (self.enemyGrassMarkTimer or 0) + (dt or 0)
+    if self.enemyGrassMarkTimer < 0.06 then
+        return
+    end
+    self.enemyGrassMarkTimer = 0
 
     for _, enemy in ipairs(self.nearbyEnemies or {}) do
         if enemy.isAlive ~= false then
@@ -2459,6 +2481,32 @@ end
 
 function Game:getWeaponShockwaves()
     return self.weaponShockwaves or {}
+end
+
+function Game:startHitStop(duration, recoveryDuration)
+    self.hitStopTimer = math.max(self.hitStopTimer or 0, duration or 0.1)
+    self.hitStopDuration = self.hitStopTimer
+    self.hitStopRecoveryTimer = recoveryDuration or 0.08
+    self.hitStopRecoveryDuration = self.hitStopRecoveryTimer
+end
+
+function Game:getHitStopTimeScale(dt)
+    if (self.hitStopTimer or 0) > 0 then
+        self.hitStopTimer = math.max(0, self.hitStopTimer - dt)
+        self.hitStopActive = true
+        return 0
+    end
+
+    self.hitStopActive = false
+    if (self.hitStopRecoveryTimer or 0) <= 0 then
+        return 1
+    end
+
+    self.hitStopRecoveryTimer = math.max(0, self.hitStopRecoveryTimer - dt)
+    local duration = math.max(self.hitStopRecoveryDuration or 0.001, 0.001)
+    local progress = 1 - (self.hitStopRecoveryTimer / duration)
+    local eased = progress * progress * (3 - 2 * progress)
+    return math.max(0, math.min(1, eased))
 end
 
 function Game:updateManagers(dt)
@@ -2535,6 +2583,12 @@ function Game:update(dt)
     self:updateSpotlight(dt)
     self:updateAmbientTimers(dt)
     self:updatePitch(dt)
+    if playerDamageFlash then
+        playerDamageFlash:update(dt)
+    end
+    if Player and Player.updateDamageVignette then
+        Player:updateDamageVignette(dt)
+    end
     local showingThanks = FloorIntroManager:hasThanksScreen()
 
     self.textAlpha = transitionValue(self.textAlpha, self.textAlphaTarget, 5, dt)
@@ -2549,8 +2603,12 @@ function Game:update(dt)
         phaseStart = love.timer.getTime()
     end
 
+    local worldDt = dt * self:getHitStopTimeScale(dt)
+
     local currentRoom = FloorManager:getCurrentRoom()
-    if currentRoom and (currentRoom.templateId == "start_32x32" or isStartRoom(currentRoom)) then
+    if not (CURRENT_LEVEL and CURRENT_LEVEL.skipStartRoomSafetyLogic)
+        and currentRoom
+        and (currentRoom.templateId == "start_32x32" or isStartRoom(currentRoom)) then
         for index = #(self.enemies or {}), 1, -1 do
             if getmetatable(self.enemies[index]) ~= Scarecrow then
                 table.remove(self.enemies, index)
@@ -2559,10 +2617,14 @@ function Game:update(dt)
     end
 
     if not showingThanks then
+        if CURRENT_LEVEL and CURRENT_LEVEL.update then
+            CURRENT_LEVEL:update(self, worldDt)
+        end
+
         if EnemyDirector and EnemyDirector.beginFrame then
             EnemyDirector:beginFrame(#(self.enemies or {}))
         end
-        self:updateEntityList(self.enemies, dt)
+        self:updateEntityList(self.enemies, worldDt)
         if perfEnabled then
             PERF.enemiesUpdateMs = (love.timer.getTime() - phaseStart) * 1000
             PERF.enemiesMs = PERF.enemiesUpdateMs
@@ -2572,30 +2634,30 @@ function Game:update(dt)
         self:checkCurrentRoomClear()
         self:updateBattleMusicForCurrentRoom()
         self:refreshNearbyEnemies()
-        self:markGrassNearEnemies()
+        self:markGrassNearEnemies(worldDt)
         PlayerCloseStore = false
         if perfEnabled then
             PERF.enemyPostUpdateMs = (love.timer.getTime() - phaseStart) * 1000
             phaseStart = love.timer.getTime()
         end
-        self:updateEntityList(self.objects, dt)
+        self:updateEntityList(self.objects, worldDt)
         if perfEnabled then
             PERF.objectsMs = (love.timer.getTime() - phaseStart) * 1000
             PERF.objectsUpdateMs = PERF.objectsMs
             phaseStart = love.timer.getTime()
         end
-        self:updateParticleList(dt)
+        self:updateParticleList(worldDt)
         if perfEnabled then
             PERF.particlesMs = (love.timer.getTime() - phaseStart) * 1000
             phaseStart = love.timer.getTime()
         end
-        self:updateFootsteps(dt)
-        self:updateWeaponShockwaves(dt)
+        self:updateFootsteps(worldDt)
+        self:updateWeaponShockwaves(worldDt)
         if perfEnabled then
             PERF.miscUpdateMs = (love.timer.getTime() - phaseStart) * 1000
             phaseStart = love.timer.getTime()
         end
-        self:updateManagers(dt)
+        self:updateManagers(worldDt)
         if perfEnabled then
             PERF.managersMs = (love.timer.getTime() - phaseStart) * 1000
         end
@@ -3636,205 +3698,12 @@ function Game:drawLightSprites()
 end
 
 function Game:drawMinimap()
-    local currentRoom = self.minimapRoomOverrideId and FloorManager:getRoom(self.minimapRoomOverrideId)
-        or FloorManager:getCurrentRoom()
-    if not currentRoom then
-        return
-    end
-
-    local rooms = FloorManager:getRooms()
-    local config = MinimapConfig
-    local mapSize = config.size
-    local mapX = pixel(baseWidth - mapSize - config.marginX)
-    local mapY = pixel(config.marginY)
-    local centerX = pixel(mapX + mapSize / 2)
-    local centerY = pixel(mapY + mapSize / 2)
-    local step = config.cellSize + config.cellGap
-    local minimapSpriteScale = config.spriteScale or (config.cellSize / minimapSprites.room32x32:getWidth())
-    local currentCellX, currentCellY = getRoomCenterCell(currentRoom)
-    local viewRadius = config.viewRadius
-    local previousLineStyle = love.graphics.getLineStyle()
-
-    love.graphics.setLineStyle("rough")
-
-    love.graphics.setColor(1, 1, 1, 1)
-    drawMinimapSprite(minimapSprites.panel, centerX, centerY, mapSize, mapSize)
-
-    local previousScissorX, previousScissorY, previousScissorW, previousScissorH = love.graphics.getScissor()
-    love.graphics.setScissor(mapX, mapY, mapSize, mapSize)
-
-    local knownRooms = {}
-    for roomId, room in pairs(rooms) do
-        knownRooms[roomId] = isRoomKnown(room, rooms)
-    end
-
-    local function toMinimapPosition(cellX, cellY)
-        return pixel(centerX + (cellX - currentCellX) * step), pixel(centerY + (cellY - currentCellY) * step)
-    end
-
-    local function isCellInView(cell)
-        return math.abs(cell.x - currentCellX) <= viewRadius and math.abs(cell.y - currentCellY) <= viewRadius
-    end
-
-    local function getCellEdgePosition(cell, direction)
-        local x, y = toMinimapPosition(cell.x, cell.y)
-        local half = config.cellSize / 2
-
-        if direction == "north" then
-            return x, y - half
-        elseif direction == "south" then
-            return x, y + half
-        elseif direction == "west" then
-            return x - half, y
-        elseif direction == "east" then
-            return x + half, y
-        end
-
-        return x, y
-    end
-
-    local function drawShopIconAt(x, y)
-        local size = config.shopIconSize or (minimapSprites.store:getWidth() * minimapSpriteScale)
-
-        love.graphics.setColor(1, 1, 1, 1)
-        drawMinimapSprite(minimapSprites.store, x, y, size, size)
-    end
-
-    local function drawCardIconAt(x, y)
-        local size = config.shopIconSize or (minimapSprites.cards:getWidth() * minimapSpriteScale)
-
-        love.graphics.setColor(1, 1, 1, 1)
-        drawMinimapSprite(minimapSprites.cards, x, y, size, size)
-    end
-
-    local function clamp(value, minValue, maxValue)
-        return math.max(minValue, math.min(maxValue, value))
-    end
-
-    local function getPlayerMinimapPosition(room, playerIconSize)
-        local minX, minY, maxX, maxY = getRoomMinimapBounds(room)
-        local roomX, roomY = toMinimapPosition((minX + maxX) / 2, (minY + maxY) / 2)
-        local roomSprite = getMinimapRoomSprite({
-            minX = minX,
-            minY = minY,
-            maxX = maxX,
-            maxY = maxY,
-        }, room)
-        local roomSpriteWidth = roomSprite:getWidth() * minimapSpriteScale
-        local roomSpriteHeight = roomSprite:getHeight() * minimapSpriteScale
-        local playerMapX, playerMapY = Tilemap:worldToMap(Player.x, Player.y)
-        local roomWidth = math.max(1, room.width or 32)
-        local roomHeight = math.max(1, room.height or 32)
-        local relativeX = clamp((playerMapX - 0.5) / roomWidth, 0, 1) - 0.5
-        local relativeY = clamp((playerMapY - 0.5) / roomHeight, 0, 1) - 0.5
-        local walkableScaleX = config.playerRoomPositionScaleX or config.playerRoomPositionScale or 0.6
-        local walkableScaleY = config.playerRoomPositionScaleY or config.playerRoomPositionScale or 0.6
-        local edgeOverflow = config.playerRoomEdgeOverflow or 1
-        local playerX = roomX + relativeX * roomSpriteWidth * walkableScaleX + (config.playerIconOffsetX or 0)
-        local playerY = roomY + relativeY * roomSpriteHeight * walkableScaleY + (config.playerIconOffsetY or 0)
-        local minPlayerX = roomX - roomSpriteWidth / 2 + playerIconSize / 2 - edgeOverflow
-        local maxPlayerX = roomX + roomSpriteWidth / 2 - playerIconSize / 2 + edgeOverflow
-        local minPlayerY = roomY - roomSpriteHeight / 2 + playerIconSize / 2 - edgeOverflow
-        local maxPlayerY = roomY + roomSpriteHeight / 2 - playerIconSize / 2 + edgeOverflow
-
-        return clamp(playerX, minPlayerX, maxPlayerX),
-            clamp(playerY, minPlayerY, maxPlayerY)
-    end
-
-    local drawnDoors = {}
-    for roomId, room in pairs(rooms) do
-        if knownRooms[roomId] then
-            for direction, neighborId in pairs(room.neighbors or {}) do
-                local neighbor = rooms[neighborId]
-                if neighbor and knownRooms[neighborId] and roomId < neighborId then
-                    local cellA, cellB = getMinimapConnectionCells(room, neighbor, direction)
-                    if cellA and cellB and (isCellInView(cellA) or isCellInView(cellB)) then
-                        local doorKey = roomId .. ":" .. neighborId .. ":" .. direction
-                        if not drawnDoors[doorKey] then
-                            drawnDoors[doorKey] = true
-                            local ax, ay = getCellEdgePosition(cellA, direction)
-                            local bx, by = getCellEdgePosition(cellB, getOppositeDirection(direction))
-                            local connectionSize = config.connectionIconSize
-                                or (minimapSprites.connection:getWidth() * minimapSpriteScale)
-                            love.graphics.setColor(1, 1, 1, 1)
-                            drawMinimapSprite(
-                                minimapSprites.connection,
-                                (ax + bx) / 2,
-                                (ay + by) / 2,
-                                connectionSize,
-                                connectionSize
-                            )
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    for roomId, room in pairs(rooms) do
-        if knownRooms[roomId] then
-            for _, rect in ipairs(getRoomMinimapRects(room)) do
-                local inView = not (
-                    rect.maxX < currentCellX - viewRadius or
-                    rect.minX > currentCellX + viewRadius or
-                    rect.maxY < currentCellY - viewRadius or
-                    rect.minY > currentCellY + viewRadius
-                )
-
-                if inView then
-                    local roomX, roomY = toMinimapPosition(
-                        (rect.minX + rect.maxX) / 2,
-                        (rect.minY + rect.maxY) / 2
-                    )
-                    local sprite = getMinimapRoomSprite(rect, room)
-                    local width = sprite:getWidth() * minimapSpriteScale
-                    local height = sprite:getHeight() * minimapSpriteScale
-
-                    love.graphics.setColor(1, 1, 1, 1)
-                    drawMinimapSprite(sprite, roomX, roomY, width, height)
-                end
-            end
-        end
-    end
-
-    for roomId, room in pairs(rooms) do
-        if knownRooms[roomId] and (shouldShowShopIcon(room) or shouldShowCardIcon(room)) then
-            local minX, minY, maxX, maxY = getRoomMinimapBounds(room)
-            local inView = not (
-                maxX < currentCellX - viewRadius or
-                minX > currentCellX + viewRadius or
-                maxY < currentCellY - viewRadius or
-                minY > currentCellY + viewRadius
-            )
-
-            if inView then
-                local iconCellX = (minX + maxX) / 2
-                local iconCellY = (minY + maxY) / 2
-                local iconX, iconY = toMinimapPosition(iconCellX, iconCellY)
-                if shouldShowCardIcon(room) then
-                    drawCardIconAt(iconX, iconY)
-                else
-                    drawShopIconAt(iconX, iconY)
-                end
-            end
-        end
-    end
-
-    local playerIconSize = config.playerIconSize or (minimapSprites.player:getWidth() * minimapSpriteScale)
-    local inTransition = self.playerRoomExitTransition ~= nil or self.playerRoomEntryMove ~= nil
-    if not inTransition or not self.minimapPlayerIconX then
-        self.minimapPlayerIconX, self.minimapPlayerIconY = getPlayerMinimapPosition(currentRoom, playerIconSize)
-    end
-    love.graphics.setColor(1, 1, 1, 1)
-    drawMinimapSprite(minimapSprites.player, self.minimapPlayerIconX, self.minimapPlayerIconY, playerIconSize, playerIconSize)
-
-    if previousScissorX then
-        love.graphics.setScissor(previousScissorX, previousScissorY, previousScissorW, previousScissorH)
-    else
-        love.graphics.setScissor()
-    end
-    love.graphics.setLineStyle(previousLineStyle)
-    love.graphics.setColor(1, 1, 1, 1)
+    Minimap.draw({
+        game = self,
+        floorManager = FloorManager,
+        tilemap = Tilemap,
+        player = Player,
+    })
 end
 
 function Game:drawRoomFade()
@@ -3863,8 +3732,8 @@ function Game:drawLowHealthVignette()
     end
 
     vignetteShader:send("u_resolution", {baseWidth, baseHeight})
-    vignetteShader:send("u_intensity", math.min(math.max(intensity, 0), 1))
-    vignetteShader:send("u_edgeBrightness", 0.7)
+    vignetteShader:send("u_intensity", math.min(math.max(intensity, 0), 1.65))
+    vignetteShader:send("u_edgeBrightness", 0.32)
 
     love.graphics.setShader(vignetteShader)
     love.graphics.setColor(1, 1, 1, 1)
@@ -4058,25 +3927,34 @@ function Game:keypressed(key)
         return
     end
 
+    local playerActionLocked = Player and Player.isActionLocked and Player:isActionLocked()
+
     if key == "f6" then
         --DEBUG = not DEBUG
+    elseif key == "space" then
+        if Player and Player.tryDash then
+            Player:tryDash()
+        end
     elseif key == "1" then
-        if Player and Player.gun then
+        if not playerActionLocked and Player and Player.gun then
             Player.gun:selectSlot(1)
         end
     elseif key == "2" then
-        if Player and Player.gun then
+        if not playerActionLocked and Player and Player.gun then
             Player.gun:selectSlot(2)
         end
     elseif key == "e" then
-        if Player and Player.gun then
+        if not playerActionLocked and Player and Player.gun then
             Player.gun:toggleWeaponSlot()
         end
     elseif key == "q" then
-        if Player and Player.gun then
+        if not playerActionLocked and Player and Player.gun then
             Player.gun:reloadSelectedWeapon()
         end
     elseif key == "f" then
+        if playerActionLocked then
+            return
+        end
         if not Dialog.visible then
             Tilemap:keypressed(key)
             for i = #self.objects, 1, -1 do

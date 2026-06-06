@@ -15,6 +15,9 @@ function AmbienceSound:load()
 
     self.targetVolume = 0.1
     self.volume = 0.05
+    self.windBoostTimer = 0
+    self.windBoostDuration = 0
+    self.windBoostMultiplier = 2
 
     windSound:setLooping(true) 
     windSound:setVolume(self.volume)
@@ -28,7 +31,14 @@ end
 function AmbienceSound:silence()
     self.targetVolume = 0
     self.volume = 0
+    self.windBoostTimer = 0
     windSound:setVolume(0)
+end
+
+function AmbienceSound:startWindBoost(duration, multiplier)
+    self.windBoostDuration = duration or 1
+    self.windBoostTimer = self.windBoostDuration
+    self.windBoostMultiplier = multiplier or 2
 end
 
 
@@ -75,7 +85,16 @@ function AmbienceSound:update(dt)
         self.targetVolume = 0.0
     end
 
-    local speed = 2
+    local baseTargetVolume = self.targetVolume
+    if (self.windBoostTimer or 0) > 0 then
+        self.windBoostTimer = math.max(0, self.windBoostTimer - dt)
+        local duration = math.max(self.windBoostDuration or 1, 0.001)
+        local progress = self.windBoostTimer / duration
+        local boostMultiplier = 1 + ((self.windBoostMultiplier or 2) - 1) * progress
+        self.targetVolume = baseTargetVolume * boostMultiplier
+    end
+
+    local speed = (self.windBoostTimer or 0) > 0 and 6 or 2
     self.pitch = self.pitch + (self.targetPitch - self.pitch) * dt * speed
     self.volume = self.volume + (self.targetVolume - self.volume) * dt * speed
 

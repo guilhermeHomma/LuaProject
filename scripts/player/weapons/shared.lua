@@ -2,12 +2,12 @@ local Shared = {}
 
 Shared.bulletSizes = {
     pistol = {
-        radius = 0.85,
-        spriteTrailScale = 0.85,
+        radius = 1.0,
+        spriteTrailScale = 0.95,
     },
     standard = {
-        radius = 1.0,
-        spriteTrailScale = 1.0,
+        radius = 1.15,
+        spriteTrailScale = 1.1,
     },
 }
 

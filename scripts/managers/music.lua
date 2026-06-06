@@ -50,6 +50,9 @@ function Music:load()
     self.startDelayTimer = 0
     self.pendingTrack = nil
     self.pendingTrackTargetVolume = nil
+    self.damagePitchTimer = 0
+    self.damagePitchDuration = 1
+    self.damagePitch = 0.58
 
     MusicPlayer:setLooping(true)
     MusicPlayer:setVolume(self.volume * MUSIC_VOLUME)
@@ -60,6 +63,7 @@ function Music:death()
     self.targetVolume = 1
     self.targetPitch = 1
     self.pitch = 1
+    self.damagePitchTimer = 0
     self:startMusic(DEATH_TRACK, 1)
 end
 
@@ -72,6 +76,7 @@ function Music:startGame()
     self.targetVolume = GAME_VOLUME_TARGET
     self.targetPitch = 1
     self.pitch = 1
+    self.damagePitchTimer = 0
     self.startDelayTimer = 0
     self:switchToTrack(GAME_TRACK, GAME_VOLUME_TARGET)
     GAME_PITCH = 1
@@ -117,6 +122,7 @@ function Music:startMenu()
     self.startDelayTimer = 0
     self.targetPitch = 1
     self.pitch = 1
+    self.damagePitchTimer = 0
     self.targetVolume = MENU_VOLUME_TARGET
     if self.currentTrack ~= MENU_TRACK or not MusicPlayer:isPlaying() then
         self.volume = MENU_VOLUME_TARGET
@@ -162,10 +168,18 @@ function Music:changePause(isPaused)
     end
 end
 
+function Music:startDamageDistortion(duration, pitch)
+    self.damagePitchDuration = duration or 1
+    self.damagePitchTimer = self.damagePitchDuration
+    self.damagePitch = pitch or 0.58
+    self.pitch = self.damagePitch
+end
+
 function Music:closeGame()
     self.battleActive = false
     self:setBattleActive(false)
     self.targetVolume = 0.0
+    self.damagePitchTimer = 0
     GAME_PITCH = 1
 end
 
@@ -173,6 +187,7 @@ function Music:closeForFloorIntro()
     self.fadeSpeedOverride = FLOOR_INTRO_FADE_OUT_SPEED
     self:setBattleActive(false, true)
     self.targetVolume = 0
+    self.damagePitchTimer = 0
     GAME_PITCH = 1
 end
 
@@ -231,8 +246,17 @@ function Music:update(dt)
 
     local volumeSpeed = self.fadeSpeedOverride
         or ((self.volume < self.targetVolume) and (self.defaultFadeInSpeed or FADE_IN_SPEED) or (self.defaultFadeOutSpeed or FADE_OUT_SPEED))
-    local pitchSpeed = self.fadeSpeedOverride or 2
-    self.pitch = self.pitch + (self.targetPitch - self.pitch) * dt * pitchSpeed
+    if (self.damagePitchTimer or 0) > 0 then
+        self.damagePitchTimer = math.max(0, self.damagePitchTimer - dt)
+        local duration = math.max(self.damagePitchDuration or 1, 0.001)
+        local progress = 1 - (self.damagePitchTimer / duration)
+        local eased = 1 - (1 - progress) * (1 - progress)
+        local damagePitch = self.damagePitch or 0.58
+        self.pitch = damagePitch + ((self.targetPitch or 1) - damagePitch) * eased
+    else
+        local pitchSpeed = self.fadeSpeedOverride or 4.5
+        self.pitch = self.pitch + ((self.targetPitch or 1) - self.pitch) * dt * pitchSpeed
+    end
     self.volume = self.volume + (self.targetVolume - self.volume) * dt * volumeSpeed
     if self.pendingTrack and self.volume <= 0.04 then
         local nextTrack = self.pendingTrack

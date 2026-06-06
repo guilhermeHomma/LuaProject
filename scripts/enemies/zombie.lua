@@ -16,6 +16,7 @@ local BloodPixel = require("scripts/particles/bloodPixel")
 local BloodDecal = require("scripts/particles/bloodDecal")
 local DamageImpactParticle = require("scripts/particles/damageImpactParticle")
 local EnemyRepulsion = require("scripts/enemies/enemyRepulsion")
+local EnemyDeathProjectiles = require("scripts/enemies/enemyDeathProjectiles")
 
 local DropTemplates = require("scripts/drops/dropTemplates")
 local EnemyDeadDropParticle = require("scripts/particles/enemyDeadDropParticle")
@@ -229,6 +230,29 @@ local function playClonedSound(baseSource, volume, pitch)
     sound:setPitch(pitch)
     sound:play()
     return sound
+end
+
+local function setSourcePositionIfMono(source, x, y, z)
+    if not source then
+        return false
+    end
+
+    if source.getChannelCount then
+        local ok, channelCount = pcall(source.getChannelCount, source)
+        if ok and channelCount and channelCount > 1 then
+            return false
+        end
+    elseif source.getChannels then
+        local ok, channelCount = pcall(source.getChannels, source)
+        if ok and channelCount and channelCount > 1 then
+            return false
+        end
+    end
+
+    local ok = pcall(function()
+        source:setPosition(x, y, z or 0)
+    end)
+    return ok
 end
 
 function Zombie:new(x, y, speed)
@@ -727,7 +751,7 @@ function Zombie:noiseCheck(dt)
         local playerDistance = distance(Player, self) / 2
         local volume = getDistanceVolume(playerDistance, 0.1, 180)
         self.noise:stop()
-        self.noise:setPosition(soundPositionX, soundPositionY, 0)
+        setSourcePositionIfMono(self.noise, soundPositionX, soundPositionY, 0)
         self.noise:setVolume(volume)
         self.noise:setPitch((1.2 + math.random() * 0.2) * GAME_PITCH)
         self.noise:play()
@@ -896,7 +920,11 @@ function Zombie:takeDamage(damage, dx, dy)
         if self.soundTimer <= 1 then
             self.soundTimer = 1.1
         end
-        playClonedSound(enemyDamageBase, 1, (1 + math.random() * 0.1) * GAME_PITCH)
+        local damageSoundBase = self.damageSoundBase or enemyDamageBase
+        local pitchMin = self.damageSoundPitchMin or 1
+        local pitchMax = self.damageSoundPitchMax or 1.1
+        local pitch = pitchMin + math.random() * (pitchMax - pitchMin)
+        playClonedSound(damageSoundBase, self.damageSoundVolume or 1, pitch * (GAME_PITCH or 1))
     end
 end
 
@@ -943,6 +971,7 @@ function Zombie:death()
     self:spawnDeathBloodDecal()
 
     Game:increasePlayerPoints(self.dropPoints)
+    EnemyDeathProjectiles.spawn(self)
     self.noise:stop()
 
     self.isAlive = false    
@@ -981,7 +1010,7 @@ function Zombie:animate(startFrame, endFrame, dt)
             if playerDistance <= 150 then
                 local soundPositionX, soundPositionY = soundPosition(Player, self)
 
-                self.noise:setPosition(soundPositionX, soundPositionY, 0)
+                setSourcePositionIfMono(self.noise, soundPositionX, soundPositionY, 0)
                 local customFootstepPlayed = self.playFootstepSound and self:playFootstepSound(playerDistance)
                 if not customFootstepPlayed then
                     playClonedSound(footstepBase, 0.4, (0.4 + math.random() * 0.4) * GAME_PITCH)

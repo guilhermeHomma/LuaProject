@@ -74,6 +74,10 @@ local function getPrimaryWeaponStats(previewCard, highlightCard)
         stats.damage = stats.damage + 2
         stats.damageBonus = stats.damageBonus + 2
         stats.changed.damage = true
+    elseif cardId == "primary_damage_epic" then
+        stats.damage = stats.damage + 4
+        stats.damageBonus = stats.damageBonus + 4
+        stats.changed.damage = true
     elseif cardId == "primary_reload" then
         local previewReload = stats.reload * 0.9
         stats.reloadBonus = stats.reloadBonus + math.max(0, stats.reload - previewReload)
@@ -87,7 +91,7 @@ local function getPrimaryWeaponStats(previewCard, highlightCard)
     end
 
     local highlightId = highlightCard and highlightCard.id
-    if highlightId == "primary_damage" then
+    if highlightId == "primary_damage" or highlightId == "primary_damage_epic" then
         stats.changed.damage = true
     elseif highlightId == "primary_reload" then
         stats.changed.reload = true
@@ -172,7 +176,9 @@ local function getPlayerPreview(previewCard, highlightCard)
         changedLife = true
         changedMaxLife = true
     elseif cardId == "speed" then
-        speed = speed * 1.05
+        speed = speed + 5
+    elseif cardId == "speed_rare" then
+        speed = speed + 10
     end
 
     local result = {
@@ -183,11 +189,11 @@ local function getPlayerPreview(previewCard, highlightCard)
         speedBonus = math.max(0, speed - speedBase),
         changedLife = changedLife,
         changedMaxLife = changedMaxLife,
-        changedSpeed = cardId == "speed",
+        changedSpeed = cardId == "speed" or cardId == "speed_rare",
     }
 
     local highlightId = highlightCard and highlightCard.id
-    if highlightId == "speed" then
+    if highlightId == "speed" or highlightId == "speed_rare" then
         result.changedSpeed = true
     elseif highlightId == "half_heart" or highlightId == "full_heal" then
         result.changedLife = true

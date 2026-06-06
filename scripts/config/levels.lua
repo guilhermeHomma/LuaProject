@@ -4,6 +4,7 @@ local levelModules = {
     default = "scripts/levels/default",
     menu = "scripts/levels/menu",
     intro = "scripts/levels/intro",
+    zombieStressTest = "scripts/levels/zombieStressTest",
 }
 
 function Levels:get(levelId)

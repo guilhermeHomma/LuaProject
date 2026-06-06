@@ -1,5 +1,7 @@
 local RoomTemplates = {}
 
+local defaultObjectBorderCullLayers = {x = 3, top = 7, bottom = 4}
+
 local basicDoorSlots = {
     north = {
         doorTiles = {
@@ -126,6 +128,7 @@ local function buildTilemapConfigsFromFolder(folder, fallbackFiles)
                 configs[#configs + 1] = {
                     mapImage = folder .. "/" .. filename,
                     centerOrigin = true,
+                    objectBorderCullLayers = defaultObjectBorderCullLayers,
                 }
             end
         end
@@ -136,6 +139,7 @@ local function buildTilemapConfigsFromFolder(folder, fallbackFiles)
             configs[#configs + 1] = {
                 mapImage = folder .. "/" .. filename,
                 centerOrigin = true,
+                objectBorderCullLayers = defaultObjectBorderCullLayers,
             }
         end
     end

@@ -11,7 +11,7 @@ end
 function SettingsMenu:load()
     baseMenu.load(self)
     self.MenuTItle = "SETTINGS"
-    self.menuOptions = { "screenSize", "fullscreen", "vsync", "crt", "cameraShake", "master", "music", "back" }
+    self.menuOptions = { "screenSize", "fullscreen", "vsync", "crt", "cameraShake", "brightness", "master", "music", "back" }
     self.arrowBounds = {}
     self.optionActions = {
         screenSize = function(direction)
@@ -29,6 +29,9 @@ function SettingsMenu:load()
         cameraShake = function()
             Settings:toggleCameraShake()
         end,
+        brightness = function(direction)
+            Settings:adjustBrightness(direction)
+        end,
         master = function(direction)
             Settings:adjustMasterVolume(0.1 * direction)
         end,
@@ -44,6 +47,7 @@ end
 
 function SettingsMenu:isArrowOption(optionId)
     return optionId == "screenSize"
+        or optionId == "brightness"
         or optionId == "master"
         or optionId == "music"
 end
@@ -71,6 +75,9 @@ function SettingsMenu:canChangeOption(optionId, direction)
     elseif optionId == "music" then
         return direction < 0 and Settings.musicVolume > 0
             or direction > 0 and Settings.musicVolume < 1
+    elseif optionId == "brightness" then
+        return direction < 0 and Settings:getBrightnessValue() > 0
+            or direction > 0 and Settings:getBrightnessValue() < 10
     end
 
     return false
@@ -88,6 +95,8 @@ function SettingsMenu:getOptionLabel(index)
         return "crt filter: " .. Settings:getCrtLabel()
     elseif optionId == "cameraShake" then
         return "camera shake: " .. Settings:getCameraShakeLabel()
+    elseif optionId == "brightness" then
+        return "brightness: < " .. Settings:getBrightnessLabel() .. " >"
     elseif optionId == "master" then
         return "sound: < " .. formatPercent(Settings:getMasterPercent()) .. " >"
     elseif optionId == "music" then

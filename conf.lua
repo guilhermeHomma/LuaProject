@@ -2,7 +2,9 @@ GAME_FLAGS = GAME_FLAGS or {
     skipIntro = true,
     logFloorGeneration = false,
     weaponTestLevel = false,
+    experimentalZombieStressTest = false,
     cameraShake = true,
+    brightness = 5,
     vsync = false,
     performanceOverlay = false,
     crt = {
@@ -16,7 +18,7 @@ GAME_FLAGS = GAME_FLAGS or {
     },
 }
 
-GAME_VERSION = "0.1.8a"
+GAME_VERSION = "0.1.11a"
 
 function love.conf(t)
     local Levels = require("scripts/config/levels")

@@ -131,6 +131,10 @@ local function getBaseProjectileRange(weaponConfig, bulletConfig)
 end
 
 local function getProjectileLifetimeForRange(weaponConfig, bulletConfig)
+    if bulletConfig.ignoreWeaponRange and bulletConfig.lifeTime then
+        return bulletConfig.lifeTime
+    end
+
     local bulletSpeed = weaponConfig.bulletSpeed or 0
     local range = getBaseProjectileRange(weaponConfig, bulletConfig) * (weaponConfig.rangeMultiplier or 1)
 
@@ -189,6 +193,10 @@ local function createWeaponSlot(index, weaponConfig, infiniteAmmo)
         currentMagCount = weaponConfig.magCount or 0,
         damageBonus = 0,
         rangeMultiplier = 1,
+        reloadMultiplier = 1,
+        ricochetCount = 0,
+        deathSpawnCount = 0,
+        enemyDeathSpawnCount = 0,
     }
 end
 
@@ -240,8 +248,22 @@ function Gun:load()
     self.squareAngle = 0
     self.primary_weapon = createWeaponSlot(1, self:getWeaponConfig(1), true)
     self.secondary_weapon = nil
-    self.primaryUpgradeState = { damageBonus = 0, rangeMultiplier = 1, reloadMultiplier = 1 }
-    self.secondaryUpgradeState = { damageBonus = 0, rangeMultiplier = 1, reloadMultiplier = 1 }
+    self.primaryUpgradeState = {
+        damageBonus = 0,
+        rangeMultiplier = 1,
+        reloadMultiplier = 1,
+        ricochetCount = 0,
+        deathSpawnCount = 0,
+        enemyDeathSpawnCount = 0,
+    }
+    self.secondaryUpgradeState = {
+        damageBonus = 0,
+        rangeMultiplier = 1,
+        reloadMultiplier = 1,
+        ricochetCount = 0,
+        deathSpawnCount = 0,
+        enemyDeathSpawnCount = 0,
+    }
     self.selected_slot = 1
     self.current_weapon = self.primary_weapon
     self.gunIndex = self.current_weapon and self.current_weapon.index or 0
@@ -303,6 +325,9 @@ function Gun:applyUpgradeStateToSlot(slot, state)
     slot.damageBonus = state.damageBonus or 0
     slot.rangeMultiplier = state.rangeMultiplier or 1
     slot.reloadMultiplier = state.reloadMultiplier or 1
+    slot.ricochetCount = state.ricochetCount or 0
+    slot.deathSpawnCount = state.deathSpawnCount or 0
+    slot.enemyDeathSpawnCount = state.enemyDeathSpawnCount or 0
 end
 
 function Gun:getEffectiveWeaponConfig(slot)
@@ -312,10 +337,14 @@ function Gun:getEffectiveWeaponConfig(slot)
     end
 
     local config = copyTable(slot.config)
+    config.baseDamage = slot.config.damage or config.damage or 0
     config.damage = (config.damage or 0) + (slot.damageBonus or 0)
     config.rangeMultiplier = slot.rangeMultiplier or 1
     config.reloadDuration = (config.reloadDuration or self.defaultReloadDuration) * (slot.reloadMultiplier or 1)
     config.reloadSpinDuration = (config.reloadSpinDuration or self.defaultReloadSpinDuration) * (slot.reloadMultiplier or 1)
+    config.ricochetCount = slot.ricochetCount or 0
+    config.deathSpawnCount = slot.deathSpawnCount or 0
+    config.enemyDeathSpawnCount = slot.enemyDeathSpawnCount or 0
     return config
 end
 
@@ -587,6 +616,10 @@ function Gun:emitWeaponEvent(eventName, payload)
 end
 
 function Gun:selectSlot(slot)
+    if Player and Player.isActionLocked and Player:isActionLocked() then
+        return false
+    end
+
     if slot == 2 and not self.secondary_weapon then
         slot = 1
     end
@@ -624,6 +657,10 @@ function Gun:toggleWeaponSlot()
 end
 
 function Gun:reloadSelectedWeapon()
+    if Player and Player.isActionLocked and Player:isActionLocked() then
+        return false
+    end
+
     local weaponConfig = self:getCurrentWeapon()
     local slot = self:getSelectedWeaponSlot()
     if not weaponConfig or not slot then
@@ -671,6 +708,11 @@ function Gun:applyCardUpgrade(upgradeId)
         self:applyUpgradeStateToSlot(self.primary_weapon, self.primaryUpgradeState)
         self:syncCurrentWeaponState()
         return true
+    elseif upgradeId == "primary_damage_epic" then
+        self.primaryUpgradeState.damageBonus = (self.primaryUpgradeState.damageBonus or 0) + 4
+        self:applyUpgradeStateToSlot(self.primary_weapon, self.primaryUpgradeState)
+        self:syncCurrentWeaponState()
+        return true
     elseif upgradeId == "primary_range" then
         self.primaryUpgradeState.rangeMultiplier = (self.primaryUpgradeState.rangeMultiplier or 1) * 1.1
         self:applyUpgradeStateToSlot(self.primary_weapon, self.primaryUpgradeState)
@@ -678,6 +720,51 @@ function Gun:applyCardUpgrade(upgradeId)
         return true
     elseif upgradeId == "primary_reload" then
         self.primaryUpgradeState.reloadMultiplier = (self.primaryUpgradeState.reloadMultiplier or 1) * 0.9
+        self:applyUpgradeStateToSlot(self.primary_weapon, self.primaryUpgradeState)
+        self:syncCurrentWeaponState()
+        return true
+    elseif upgradeId == "primary_ricochet" then
+        local current = self.primaryUpgradeState.ricochetCount or 0
+        if current >= 4 then
+            return false
+        end
+        self.primaryUpgradeState.ricochetCount = math.min(4, current + 1)
+        self:applyUpgradeStateToSlot(self.primary_weapon, self.primaryUpgradeState)
+        self:syncCurrentWeaponState()
+        return true
+    elseif upgradeId == "primary_death_shard" then
+        local current = self.primaryUpgradeState.deathSpawnCount or 0
+        if current >= 8 then
+            return false
+        end
+        self.primaryUpgradeState.deathSpawnCount = math.min(8, current + 2)
+        self:applyUpgradeStateToSlot(self.primary_weapon, self.primaryUpgradeState)
+        self:syncCurrentWeaponState()
+        return true
+    elseif upgradeId == "primary_clean_split" then
+        local current = self.primaryUpgradeState.deathSpawnCount or 0
+        if current >= 8 then
+            return false
+        end
+        self.primaryUpgradeState.deathSpawnCount = math.min(8, current + 4)
+        self:applyUpgradeStateToSlot(self.primary_weapon, self.primaryUpgradeState)
+        self:syncCurrentWeaponState()
+        return true
+    elseif upgradeId == "enemy_death_shard" then
+        local current = self.primaryUpgradeState.enemyDeathSpawnCount or 0
+        if current >= 8 then
+            return false
+        end
+        self.primaryUpgradeState.enemyDeathSpawnCount = math.min(8, current + 2)
+        self:applyUpgradeStateToSlot(self.primary_weapon, self.primaryUpgradeState)
+        self:syncCurrentWeaponState()
+        return true
+    elseif upgradeId == "enemy_death_split" then
+        local current = self.primaryUpgradeState.enemyDeathSpawnCount or 0
+        if current >= 8 then
+            return false
+        end
+        self.primaryUpgradeState.enemyDeathSpawnCount = math.min(8, current + 4)
         self:applyUpgradeStateToSlot(self.primary_weapon, self.primaryUpgradeState)
         self:syncCurrentWeaponState()
         return true
@@ -768,7 +855,9 @@ function Gun:update(dt, playerX, playerY)
         INPUT_BLOCK_PRIMARY_FIRE_UNTIL_RELEASE = false
     end
 
-    if not Dialog.breakMovements then
+    if not Dialog.breakMovements
+        and not (Game and Game.hitStopActive)
+        and not (Player and Player.isActionLocked and Player:isActionLocked()) then
         if love.mouse.isDown(2) then
             self:aim()
         end
@@ -799,17 +888,88 @@ function Gun:showshootParticles()
     self.showParticles = true
 end
 
+function Gun:createDeathBulletConfig(parent, weaponConfig, bulletConfig, options)
+    options = options or {}
+    local child = copyTable(bulletConfig or {})
+    child.deathSpawnDisabled = true
+    child.level = 1
+    child.damage = options.damage or weaponConfig.baseDamage or weaponConfig.damage
+    child.speed = (options.speedMultiplier or 0.8) * 0.52 * (weaponConfig.bulletSpeed or 0)
+    child.lifeTime = (options.lifeTime or 0.18) * 1.5
+    child.ignoreWeaponRange = true
+    child.range = nil
+    child.colorParticleCount = math.min(child.colorParticleCount or weaponConfig.bulletColorParticleCount or 1, 1)
+    child.spriteTrailDistance = math.max(child.spriteTrailDistance or weaponConfig.spriteTrailDistance or 8, 10)
+    child.spriteTrailLifetime = math.min(child.spriteTrailLifetime or weaponConfig.spriteTrailLifetime or 0.13, 0.10)
+    child.sourceAngle = parent and parent.angle
+    return child
+end
+
+function Gun:spawnDeathProjectiles(parent, weaponConfig, bulletConfig, reason)
+    if not (parent and parent.x and parent.y and weaponConfig) then
+        return
+    end
+
+    if reason == "expired" and (weaponConfig.deathSpawnCount or 0) > 0 then
+        local count = math.min(weaponConfig.deathSpawnCount or 0, 8)
+        local startAngle = math.random() * math.pi * 2
+        for i = 1, count do
+            local angle = startAngle + (i - 1) * (math.pi * 2 / count) + randomRange(-0.06, 0.06)
+            local childConfig = self:createDeathBulletConfig(parent, weaponConfig, bulletConfig, {
+                damage = weaponConfig.baseDamage or weaponConfig.damage or 1,
+                lifeTime = 0.22,
+                speedMultiplier = 0.86,
+            })
+            self:createBullet(parent.x, parent.y, angle, parent.height, weaponConfig, childConfig)
+        end
+    end
+end
+
+function Gun:spawnEnemyDeathProjectiles(x, y, enemy)
+    local slot = self.primary_weapon
+    if not slot then
+        return
+    end
+
+    local count = math.min(slot.enemyDeathSpawnCount or 0, 8)
+    if count <= 0 then
+        return
+    end
+
+    local weaponConfig = self:getEffectiveWeaponConfig(slot)
+    if not weaponConfig then
+        return
+    end
+
+    local bulletConfig = resolveBulletConfig(weaponConfig, weaponConfig.initialBullet)
+    local startAngle = math.random() * math.pi * 2
+    local spawnX = x or (enemy and enemy.x) or self.x
+    local spawnY = y or (enemy and enemy.y) or self.y
+    for i = 1, count do
+        local angle = startAngle + (i - 1) * (math.pi * 2 / count) + randomRange(-0.06, 0.06)
+        local childConfig = self:createDeathBulletConfig(enemy, weaponConfig, bulletConfig, {
+            damage = weaponConfig.baseDamage or weaponConfig.damage or 1,
+            lifeTime = 0.22,
+            speedMultiplier = 0.86,
+        })
+        self:createBullet(spawnX, spawnY, angle, self.height, weaponConfig, childConfig)
+    end
+end
+
 function Gun:createBullet(spawnX, spawnY, angle, height, weaponConfig, bulletOverrides)
     local bulletConfig = resolveBulletConfig(weaponConfig, bulletOverrides)
     local lifeTime = getProjectileLifetimeForRange(weaponConfig, bulletConfig)
     local bulletModule = bulletModules[bulletConfig.module or weaponConfig.bulletModule or "particle"]
+    local projectileSpeed = bulletConfig.speed or weaponConfig.bulletSpeed
+    local projectileDamage = bulletConfig.damage or weaponConfig.damage
+    local deathSpawnDisabled = bulletConfig.deathSpawnDisabled == true
     local bullet = bulletModule:new(
         spawnX,
         spawnY,
         angle,
         height or self.height,
-        weaponConfig.bulletSpeed,
-        weaponConfig.damage,
+        projectileSpeed,
+        projectileDamage,
         {
             level = bulletConfig.level,
             radius = bulletConfig.radius or weaponConfig.bulletRadius,
@@ -824,7 +984,12 @@ function Gun:createBullet(spawnX, spawnY, angle, height, weaponConfig, bulletOve
             impactFlashSprite = bulletConfig.impactFlashSprite or weaponConfig.impactFlashSprite,
             impactShockwave = bulletConfig.impactShockwave or weaponConfig.impactShockwave,
             colorParticles = bulletConfig.colorParticles or weaponConfig.bulletColorParticles,
-            colorParticleCount = bulletConfig.colorParticleCount or weaponConfig.bulletColorParticleCount
+            colorParticleCount = bulletConfig.colorParticleCount or weaponConfig.bulletColorParticleCount,
+            ricochetCount = deathSpawnDisabled and 0 or (weaponConfig.ricochetCount or 0),
+            deathSpawnCount = deathSpawnDisabled and 0 or (weaponConfig.deathSpawnCount or 0),
+            onDeathSpawn = deathSpawnDisabled and nil or function(parent, reason)
+                self:spawnDeathProjectiles(parent, weaponConfig, bulletConfig, reason)
+            end
         }
     )
 

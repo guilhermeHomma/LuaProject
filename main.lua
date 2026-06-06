@@ -28,6 +28,20 @@ PERF = PERF or {
     lastSpikeReason = "none",
     lastSpikeEnemies = 0,
 }
+PERF.fpsStats = PERF.fpsStats or {
+    elapsed = 0,
+    samples = {},
+    sampleCount = 0,
+    sampleSum = 0,
+    min = math.huge,
+    max = 0,
+    lastMin = 0,
+    lastMax = 0,
+    lastAverage = 0,
+    lastOnePercentLow = 0,
+    history = {},
+    maxHistory = 36,
+}
 local presentationShockwaveCenters = {}
 local presentationShockwaveParams = {}
 local zeroVec2 = {0, 0}
@@ -51,6 +65,7 @@ local ConfirmMenu = require("scripts/managers/menu/confirmMenu")
 local LogoIntro = require("scripts/managers/menu/logoIntro")
 local TransitionManager = require("scripts.managers.transitionManager")
 local RoomScreenTransition = require("scripts/managers/roomScreenTransition")
+local AudioDeviceSync = require("scripts/managers/audioDeviceSync")
 
 canvas = nil
 local menuCanvas = nil
@@ -102,6 +117,14 @@ local function setLevel(levelId)
     updateWindowLayout()
 end
 
+local function getGameplayLevelId()
+    if GAME_FLAGS and GAME_FLAGS.experimentalZombieStressTest == true then
+        return "zombieStressTest"
+    end
+
+    return "default"
+end
+
 local function updateCurrentState(dt)
     if state == STATES.game then
         Game:update(dt)
@@ -141,6 +164,65 @@ local function shouldDrawHUD()
         and CURRENT_LEVEL.id == "default"
         and Player ~= nil
         and Player.isAlive ~= nil
+end
+
+local function updatePerformanceFpsStats(dt)
+    if not (PERF.enabled or DEBUG) then
+        return
+    end
+
+    local stats = PERF.fpsStats
+    if not stats or dt <= 0 then
+        return
+    end
+
+    local fps = 1 / dt
+    stats.sampleCount = (stats.sampleCount or 0) + 1
+    stats.samples[stats.sampleCount] = fps
+    stats.sampleSum = (stats.sampleSum or 0) + fps
+    stats.elapsed = (stats.elapsed or 0) + dt
+    stats.min = math.min(stats.min or math.huge, fps)
+    stats.max = math.max(stats.max or 0, fps)
+
+    if stats.elapsed < 1 then
+        return
+    end
+
+    local count = stats.sampleCount or 0
+    if count > 0 then
+        local sorted = {}
+        for i = 1, count do
+            sorted[i] = stats.samples[i]
+        end
+        table.sort(sorted)
+
+        local lowCount = math.max(1, math.ceil(count * 0.01))
+        local lowSum = 0
+        for i = 1, lowCount do
+            lowSum = lowSum + sorted[i]
+        end
+
+        stats.lastMin = stats.min
+        stats.lastMax = stats.max
+        stats.lastAverage = stats.sampleSum / count
+        stats.lastOnePercentLow = lowSum / lowCount
+
+        local history = stats.history
+        history[#history + 1] = {
+            min = stats.lastMin,
+            max = stats.lastMax,
+            low = stats.lastOnePercentLow,
+        }
+        while #history > (stats.maxHistory or 36) do
+            table.remove(history, 1)
+        end
+    end
+
+    stats.elapsed = stats.elapsed - 1
+    stats.sampleCount = 0
+    stats.sampleSum = 0
+    stats.min = math.huge
+    stats.max = 0
 end
 
 local function isMenuState()
@@ -198,6 +280,8 @@ local function presentCanvas(sourceCanvas, useRoomTransition, trackPerf)
     local presentStart = trackPerf and PERF.enabled and love.timer.getTime() or nil
     local crtConfig = GAME_FLAGS and GAME_FLAGS.crt or {}
     local crtEnabled = crtConfig.enabled == true
+    local brightness = math.min(math.max(tonumber(GAME_FLAGS and GAME_FLAGS.brightness) or 5, 0), 10)
+    local brightnessNeutral = math.abs(brightness - 5) < 0.001
 
     local spotlightEnabled = 0
     if state == STATES.game and Game.spot and Game.spot.enabled and camera then
@@ -249,7 +333,7 @@ local function presentCanvas(sourceCanvas, useRoomTransition, trackPerf)
         and RoomScreenTransition:getPresentationCanvas(sourceCanvas)
         or sourceCanvas
 
-    if not crtEnabled and spotlightEnabled == 0 and shockwaveCount == 0 then
+    if not crtEnabled and spotlightEnabled == 0 and shockwaveCount == 0 and brightnessNeutral then
         love.graphics.setColor(1, 1, 1, 1)
         love.graphics.draw(presentationCanvas, viewportOffsetX, viewportOffsetY, 0, scale, scale)
         if presentStart then
@@ -267,6 +351,7 @@ local function presentCanvas(sourceCanvas, useRoomTransition, trackPerf)
     presentationShader:send("u_crtCurvature", crtConfig.curvature or 0.055)
     presentationShader:send("u_crtVignette", crtConfig.vignette or 0.22)
     presentationShader:send("u_crtChromatic", crtConfig.chromatic or 0.55)
+    presentationShader:send("u_brightness", brightness)
     presentationShader:send("u_center", zeroVec2)
     presentationShader:send("u_radius", spotlightEnabled == 1 and Game.spot.radius * scale or 0)
     presentationShader:send("u_feather", spotlightEnabled == 1 and Game.spot.feather or 0)
@@ -326,6 +411,7 @@ function love.load()
     local icon = love.image.newImageData("assets/sprites/icon.png")
     love.window.setIcon(icon)
     Settings:load()
+    AudioDeviceSync:refresh(false)
     LogoIntro:load()
     MainMenu:load()
 
@@ -339,14 +425,21 @@ function love.load()
     TransitionManager:load()
     
     if SCAPE_INTRO then
-        setLevel("default")
-        state = STATES.floorIntro
-        Game:load({
-            onFloorIntroComplete = function()
-                state = STATES.game
-                Music:startGame()
-            end,
-        })
+        local levelId = getGameplayLevelId()
+        setLevel(levelId)
+        if levelId == "zombieStressTest" then
+            state = STATES.game
+            Game:load({ startFloorIntro = false })
+            Music:startGame()
+        else
+            state = STATES.floorIntro
+            Game:load({
+                onFloorIntroComplete = function()
+                    state = STATES.game
+                    Music:startGame()
+                end,
+            })
+        end
     end
     --loadIntro()
 end
@@ -364,14 +457,21 @@ end
 
 function loadGame(levelId)
     local function callback()
-        setLevel(levelId or "default")
-        state = STATES.floorIntro
-        Game:load({
-            onFloorIntroComplete = function()
-                state = STATES.game
-                Music:startGame()
-            end,
-        })
+        local resolvedLevelId = levelId or getGameplayLevelId()
+        setLevel(resolvedLevelId)
+        if resolvedLevelId == "zombieStressTest" then
+            state = STATES.game
+            Game:load({ startFloorIntro = false })
+            Music:startGame()
+        else
+            state = STATES.floorIntro
+            Game:load({
+                onFloorIntroComplete = function()
+                    state = STATES.game
+                    Music:startGame()
+                end,
+            })
+        end
     end
 
     TransitionManager:startTransition(function() callback() end)
@@ -623,16 +723,78 @@ function love.visible(visible)
 end
 
 function love.update(dt)
+    updatePerformanceFpsStats(dt)
     local updateStart = PERF.enabled and love.timer.getTime() or nil
     updateCurrentState(dt)
     TransitionManager:update(dt)
     RoomScreenTransition:update(dt)
     AmbienceSound:update(dt)
     Music:update(dt)
+    if Game and Game.updateDamageAudioVolumeDuck then
+        Game:updateDamageAudioVolumeDuck(dt)
+    end
+    AudioDeviceSync:update(dt)
     if updateStart then
         PERF.updateMs = (love.timer.getTime() - updateStart) * 1000
     end
 end 
+
+local function drawPerformanceFpsGraph(x, y, width, height)
+    local fpsStats = PERF.fpsStats
+    local history = fpsStats and fpsStats.history
+    if not history or #history == 0 then
+        love.graphics.setColor(1, 1, 1, 0.72)
+        love.graphics.print("1% low: collecting...", x, y)
+        return
+    end
+
+    local onePercentLow = fpsStats.lastOnePercentLow or 0
+    local minFps = fpsStats.lastMin or 0
+    local maxFps = fpsStats.lastMax or 0
+
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.print(string.format("1%% low %.0f min %.0f max %.0f", onePercentLow, minFps, maxFps), x, y)
+
+    local graphY = y + 17
+    local graphHeight = height - 17
+    love.graphics.setColor(0.08, 0.08, 0.08, 0.82)
+    love.graphics.rectangle("fill", x, graphY, width, graphHeight)
+    love.graphics.setColor(1, 1, 1, 0.18)
+    love.graphics.rectangle("line", x, graphY, width, graphHeight)
+
+    local maxGraphFps = 60
+    for i = 1, #history do
+        maxGraphFps = math.max(maxGraphFps, history[i].max or 0)
+    end
+    maxGraphFps = math.ceil(maxGraphFps / 30) * 30
+
+    local function valueY(value)
+        local normalized = math.min(math.max((value or 0) / maxGraphFps, 0), 1)
+        return graphY + graphHeight - normalized * graphHeight
+    end
+
+    love.graphics.setColor(1, 1, 1, 0.18)
+    local y60 = valueY(60)
+    love.graphics.line(x, y60, x + width, y60)
+
+    local step = width / math.max(fpsStats.maxHistory or 36, 1)
+    local startIndex = math.max(1, #history - (fpsStats.maxHistory or 36) + 1)
+    for i = startIndex, #history do
+        local entry = history[i]
+        local drawIndex = i - startIndex
+        local cx = x + drawIndex * step + step * 0.5
+        local minY = valueY(entry.min)
+        local maxY = valueY(entry.max)
+        local lowY = valueY(entry.low)
+
+        love.graphics.setColor(0.36, 0.92, 0.62, 0.72)
+        love.graphics.line(cx, maxY, cx, minY)
+        love.graphics.setColor(1, 0.42, 0.34, 0.86)
+        love.graphics.points(cx, minY)
+        love.graphics.setColor(1, 0.88, 0.34, 0.95)
+        love.graphics.rectangle("fill", cx - 1, lowY - 1, 2, 2)
+    end
+end
 
 local function drawPerformanceOverlay()
     if not (PERF.enabled or DEBUG) then
@@ -660,8 +822,8 @@ local function drawPerformanceOverlay()
     local stats = love.graphics.getStats()
     local previousFont = love.graphics.getFont()
     local lineHeight = 16
-    local width = 210
-    local height = 432
+    local width = 238
+    local height = 500
     local x = 8
     local y = (baseHeight or love.graphics.getHeight()) - height - 8
 
@@ -671,6 +833,8 @@ local function drawPerformanceOverlay()
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.print("FPS: " .. love.timer.getFPS(), x, y)
     y = y + lineHeight
+    drawPerformanceFpsGraph(x, y, width - 8, 72)
+    y = y + 80
     love.graphics.print(string.format("update %.2f", PERF.updateMs or 0), x, y)
     y = y + lineHeight
     love.graphics.print(string.format("u enemy %.2f post %.2f", PERF.enemiesUpdateMs or 0, PERF.enemyPostUpdateMs or 0), x, y)
@@ -838,6 +1002,9 @@ function love.draw()
     presentCanvas()
     if keepRoomUiFixed then
         drawFixedRoomLayer()
+    end
+    if state == STATES.game and Game and Game.drawPlayerDamageFlash then
+        Game:drawPlayerDamageFlash(scale or 1)
     end
     drawRoomTransitionFade()
 

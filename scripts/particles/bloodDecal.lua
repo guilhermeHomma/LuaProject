@@ -12,6 +12,7 @@ local centerFillRadius = 0.22
 local maxBloodDecals = 24
 local fadeOutDuration = 5
 local bloodDecalUpdateInterval = 1 / 30
+local deferredPixelBatchSize = 80
 
 local function createBloodSprite(path)
     local imageData = love.image.newImageData(path)
@@ -115,11 +116,13 @@ local function getPixelDrawPosition(decal, pixel, cosA, sinA)
         math.floor(localX * sinA + localY * cosA + 0.5)
 end
 
-local function buildStaticCanvas(decal)
+local function setupStaticCanvas(decal)
     local cosA = math.cos(decal.rotation)
     local sinA = math.sin(decal.rotation)
     local minX, minY = math.huge, math.huge
     local maxX, maxY = -math.huge, -math.huge
+    local centerPixels = {}
+    local pendingPixels = {}
 
     for _, pixel in ipairs(decal.sprite.pixels or {}) do
         local drawX, drawY = getPixelDrawPosition(decal, pixel, cosA, sinA)
@@ -127,6 +130,22 @@ local function buildStaticCanvas(decal)
         minY = math.min(minY, drawY)
         maxX = math.max(maxX, drawX + 1)
         maxY = math.max(maxY, drawY + 1)
+
+        local centeredU = pixel.u - 0.5
+        local centeredV = pixel.v - 0.5
+        local distanceFromCenter = math.sqrt(centeredU * centeredU + centeredV * centeredV)
+        local drawData = {
+            x = drawX,
+            y = drawY,
+            pixel = pixel,
+            center = distanceFromCenter <= centerFillRadius,
+        }
+
+        if drawData.center then
+            centerPixels[#centerPixels + 1] = drawData
+        else
+            pendingPixels[#pendingPixels + 1] = drawData
+        end
     end
 
     if minX == math.huge then
@@ -138,48 +157,80 @@ local function buildStaticCanvas(decal)
     local canvas = love.graphics.newCanvas(width, height)
     canvas:setFilter("nearest", "nearest")
 
+    decal.staticCanvas = canvas
+    decal.staticCanvasX = decal.x + minX - 1
+    decal.staticCanvasY = decal.y + minY - 1
+    decal.staticCanvasOffsetX = -minX + 1
+    decal.staticCanvasOffsetY = -minY + 1
+    decal.drawnPixels = {}
+    decal.pendingPixels = pendingPixels
+    decal.pendingPixelIndex = 1
+
+    return centerPixels
+end
+
+local function drawPixelBatch(decal, pixels, startIndex, maxCount)
+    if not (decal and decal.staticCanvas and pixels) then
+        return startIndex or 1, 0
+    end
+
     local previousCanvas = love.graphics.getCanvas()
     local previousShader = love.graphics.getShader()
     local r, g, b, a = love.graphics.getColor()
-    love.graphics.setCanvas(canvas)
+    love.graphics.setCanvas(decal.staticCanvas)
     love.graphics.setShader()
-    love.graphics.clear(0, 0, 0, 0)
-
-    local drawnPixels = {}
-    local offsetX = -minX + 1
-    local offsetY = -minY + 1
 
     local function drawCachedPixel(drawX, drawY, pixel, alpha)
         local key = drawX .. ":" .. drawY
-        if drawnPixels[key] then
+        if decal.drawnPixels[key] then
             return
         end
 
-        drawnPixels[key] = true
+        decal.drawnPixels[key] = true
         love.graphics.setColor(pixel.r, pixel.g, pixel.b, pixel.a * (alpha or 1))
-        love.graphics.rectangle("fill", drawX + offsetX, drawY + offsetY, bloodPixelSize, bloodPixelSize)
+        love.graphics.rectangle(
+            "fill",
+            drawX + decal.staticCanvasOffsetX,
+            drawY + decal.staticCanvasOffsetY,
+            bloodPixelSize,
+            bloodPixelSize
+        )
     end
 
-    for _, pixel in ipairs(decal.sprite.pixels or {}) do
-        local drawX, drawY = getPixelDrawPosition(decal, pixel, cosA, sinA)
-        local centeredU = pixel.u - 0.5
-        local centeredV = pixel.v - 0.5
-        local distanceFromCenter = math.sqrt(centeredU * centeredU + centeredV * centeredV)
+    local index = startIndex or 1
+    local drawnCount = 0
+    local limit = maxCount or #pixels
 
-        drawCachedPixel(drawX, drawY, pixel, 1)
-        if distanceFromCenter <= centerFillRadius and decal.scale > 1 then
-            drawCachedPixel(drawX + 1, drawY, pixel, 0.92)
-            drawCachedPixel(drawX, drawY + 1, pixel, 0.92)
+    while index <= #pixels and drawnCount < limit do
+        local drawData = pixels[index]
+        drawCachedPixel(drawData.x, drawData.y, drawData.pixel, 1)
+        if drawData.center and decal.scale > 1 then
+            drawCachedPixel(drawData.x + 1, drawData.y, drawData.pixel, 0.92)
+            drawCachedPixel(drawData.x, drawData.y + 1, drawData.pixel, 0.92)
         end
+        index = index + 1
+        drawnCount = drawnCount + 1
     end
 
     love.graphics.setCanvas(previousCanvas)
     love.graphics.setShader(previousShader)
     love.graphics.setColor(r, g, b, a)
 
-    decal.staticCanvas = canvas
-    decal.staticCanvasX = decal.x + minX - 1
-    decal.staticCanvasY = decal.y + minY - 1
+    return index, drawnCount
+end
+
+local function buildStaticCanvas(decal)
+    local centerPixels = setupStaticCanvas(decal)
+    if not centerPixels then
+        return
+    end
+
+    local previousCanvas = love.graphics.getCanvas()
+    love.graphics.setCanvas(decal.staticCanvas)
+    love.graphics.clear(0, 0, 0, 0)
+    love.graphics.setCanvas(previousCanvas)
+
+    drawPixelBatch(decal, centerPixels, 1, #centerPixels)
 end
 
 function BloodDecal:new(x, y, damageDx, damageDy, options)
@@ -221,6 +272,19 @@ end
 
 function BloodDecal:update(dt)
     self.timer = self.timer + dt
+
+    if self.pendingPixels and self.pendingPixelIndex <= #self.pendingPixels then
+        self.pendingPixelIndex = drawPixelBatch(
+            self,
+            self.pendingPixels,
+            self.pendingPixelIndex,
+            deferredPixelBatchSize
+        )
+        if self.pendingPixelIndex > #self.pendingPixels then
+            self.pendingPixels = nil
+            self.pendingPixelIndex = nil
+        end
+    end
 
     if self.timer >= self.lifeTime then
         self.isAlive = false
