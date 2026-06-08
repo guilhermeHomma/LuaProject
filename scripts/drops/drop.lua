@@ -1,4 +1,5 @@
 local Drop = {}
+local Localization = require("scripts/managers/localization")
 Drop.__index = Drop
 
 function Drop:new(x, y)
@@ -101,7 +102,7 @@ function Drop:updatePickupTutorial(dt)
     end
 
     if self:isPlayerInPickupRange() then
-        Game.drawtext = "Press F to pick up"
+        Game.drawtext = Localization:t("game.press_pickup")
         Game.textAlphaTarget = 1
     end
 end

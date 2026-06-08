@@ -1180,29 +1180,6 @@ function Zombie:draw()
     end
 
 
-    if DEBUG then 
-
-        love.graphics.rectangle("line", self.x - self.size/2, self.y - self.size/2, self.size, self.size)
-    
-        if self.path and #self.path > 1 then
-            love.graphics.setColor(0, 1, 0, 0.6)
-    
-            local points = {}
-    
-            for i = 1, #self.path do
-                local node = self.path[i]
-                local worldX, worldY = Tilemap:mapToWorld(node.x, node.y)
-
-                worldY = worldY - 8
-                
-                table.insert(points, worldX)
-                table.insert(points, worldY)
-            end
-    
-            love.graphics.line(points)
-            love.graphics.setColor(1, 1, 1, 1)
-        end
-    end
 end
 
 function Zombie:drawXray()

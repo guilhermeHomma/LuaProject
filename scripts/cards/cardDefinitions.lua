@@ -1,4 +1,5 @@
 local CardDefinitions = {}
+local Localization = require("scripts/managers/localization")
 
 CardDefinitions.rarities = {
     common = {
@@ -254,6 +255,28 @@ CardDefinitions.cards = {
 
 function CardDefinitions:getRarity(card)
     return self.rarities[card.rarity] or self.rarities.common
+end
+
+function CardDefinitions:getRarityLabel(rarityId)
+    return Localization:t("cards.rarity." .. tostring(rarityId or "common"))
+end
+
+function CardDefinitions:getCardName(card)
+    local key = "cards." .. card.id .. ".name"
+    local value = Localization:t(key)
+    return value ~= key and value or card.name
+end
+
+function CardDefinitions:getCardAmount(card)
+    local key = "cards." .. card.id .. ".amount"
+    local value = Localization:t(key)
+    return value ~= key and value or card.amount
+end
+
+function CardDefinitions:getCardDescription(card)
+    local key = "cards." .. card.id .. ".description"
+    local value = Localization:t(key)
+    return value ~= key and value or card.description
 end
 
 function CardDefinitions:getCardStacks(card)

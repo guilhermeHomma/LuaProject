@@ -1,5 +1,6 @@
 local Settings = {}
 local SettingsStorage = require("scripts/managers/settingsStorage")
+local Localization = require("scripts/managers/localization")
 
 local BRIGHTNESS_MIN = 0
 local BRIGHTNESS_MAX = 10
@@ -83,6 +84,8 @@ function Settings:save()
         vsyncEnabled = self.vsyncEnabled,
         crtEnabled = self.crtEnabled,
         cameraShakeEnabled = self.cameraShakeEnabled,
+        fpsEnabled = self.fpsEnabled,
+        language = self.language,
         brightness = self.brightness,
         masterVolume = self.masterVolume,
         musicVolume = self.musicVolume,
@@ -101,6 +104,8 @@ function Settings:loadSavedSettings()
     self.vsyncEnabled = saved.vs == "1"
     self.crtEnabled = saved.crt == "1"
     self.cameraShakeEnabled = saved.shake ~= "0"
+    self.fpsEnabled = saved.fps == "1"
+    self.language = saved.lang or self.language
     self.brightness = clampInteger(saved.brightness or self.brightness, BRIGHTNESS_MIN, BRIGHTNESS_MAX)
 
     local width = tonumber(saved.w)
@@ -136,11 +141,14 @@ end
 
 function Settings:load()
     self.loading = true
+    Localization:load()
     self.masterVolume = SOUND_VOLUME or 1
     self.musicVolume = MUSIC_VOLUME or 0.6
     self.fullscreen = love.window.getFullscreen()
     self.crtEnabled = GAME_FLAGS and GAME_FLAGS.crt and GAME_FLAGS.crt.enabled == true
     self.cameraShakeEnabled = not (GAME_FLAGS and GAME_FLAGS.cameraShake == false)
+    self.fpsEnabled = FPS == true
+    self.language = Localization.currentLanguage or "en"
     self.vsyncEnabled = GAME_FLAGS and GAME_FLAGS.vsync == true
     self.brightness = GAME_FLAGS and GAME_FLAGS.brightness or BRIGHTNESS_DEFAULT
     self:buildResolutionPresets()
@@ -148,6 +156,7 @@ function Settings:load()
     self:syncResolutionIndex()
     self:loadSavedSettings()
     self:applyAudio()
+    self:applyGeneral()
     self:applyVideoEffects()
     if self:needsWindowModeApply() then
         self:applyWindowMode()
@@ -171,25 +180,38 @@ function Settings:applyAudio()
     love.audio.setVolume(self.masterVolume)
 end
 
+function Settings:applyGeneral()
+    FPS = self.fpsEnabled == true
+    Localization:setLanguage(self.language or "en")
+end
+
 function Settings:getResolutionLabel()
     local preset = self.resolutionPresets[self.resolutionIndex]
     return string.format("%dx%d", preset.width, preset.height)
 end
 
 function Settings:getFullscreenLabel()
-    return self.fullscreen and "on" or "off"
+    return self.fullscreen and Localization:t("settings.on") or Localization:t("settings.off")
 end
 
 function Settings:getCrtLabel()
-    return self.crtEnabled and "on" or "off"
+    return self.crtEnabled and Localization:t("settings.on") or Localization:t("settings.off")
 end
 
 function Settings:getCameraShakeLabel()
-    return self.cameraShakeEnabled and "on" or "off"
+    return self.cameraShakeEnabled and Localization:t("settings.on") or Localization:t("settings.off")
+end
+
+function Settings:getFpsLabel()
+    return self.fpsEnabled and Localization:t("settings.on") or Localization:t("settings.off")
+end
+
+function Settings:getLanguageLabel()
+    return Localization:getLanguageLabel()
 end
 
 function Settings:getVsyncLabel()
-    return self.vsyncEnabled and "on" or "off"
+    return self.vsyncEnabled and Localization:t("settings.on") or Localization:t("settings.off")
 end
 
 function Settings:getBrightnessValue()
@@ -291,6 +313,23 @@ end
 
 function Settings:toggleCameraShake()
     self:setCameraShakeEnabled(not self.cameraShakeEnabled)
+end
+
+function Settings:setFpsEnabled(enabled)
+    self.fpsEnabled = enabled == true
+    self:applyGeneral()
+    self:save()
+end
+
+function Settings:toggleFps()
+    self:setFpsEnabled(not self.fpsEnabled)
+end
+
+function Settings:cycleLanguage(direction)
+    Localization:cycleLanguage(direction or 1)
+    self.language = Localization.currentLanguage
+    self:applyGeneral()
+    self:save()
 end
 
 function Settings:setVsyncEnabled(enabled)

@@ -110,7 +110,6 @@ function Enemy:draw()
         love.graphics.draw(self.spriteSheet, self.frames[self.currentFrame], self.x, self.y, 0, scaleX * damageScaleX, damageScaleY, self.frameWidth / 2, self.frameHeight)
     end
 
-    self.drawDebug(x, y)
 end
 
 function Enemy:drawDebug()

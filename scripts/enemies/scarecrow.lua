@@ -251,10 +251,6 @@ function Scarecrow:draw()
     love.graphics.setShader()
     love.graphics.setColor(1, 1, 1, 1)
 
-    if DEBUG then
-        local box = self:collisionBox()
-        love.graphics.rectangle("line", box.x, box.y, box.width, box.height)
-    end
 end
 
 function Scarecrow:drawXray()

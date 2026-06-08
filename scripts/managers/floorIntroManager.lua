@@ -1,8 +1,10 @@
 local FloorIntroManager = {}
+local Localization = require("scripts/managers/localization")
+local Fonts = require("scripts/ui/fonts")
 
-local floorTitleFont = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 78)
-local thanksFont = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 54)
-local madeByFont = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 18)
+local floorTitleFont = Fonts:translated("floorTitle")
+local thanksFont = Fonts:translated("thanks")
+local madeByFont = Fonts:translated("madeBy")
 local riserSoundBase = love.audio.newSource("assets/sfx/effects/riser.mp3", "static")
 local impactSoundBase = love.audio.newSource("assets/sfx/effects/impact-hit.mp3", "static")
 
@@ -223,7 +225,7 @@ function FloorIntroManager:drawFloor()
     end
 
     if drawFloorTitle then
-        local text = "floor " .. tostring(intro.floorIndex or 1)
+        local text = Localization:t("game.floor", { floor = tostring(intro.floorIndex or 1) })
         local titleY = baseHeight / 2 + FLOOR_TITLE_Y_OFFSET
         growProgress = intro.phase == "title" and 1 or math.min(growProgress, 1)
         local rawScale = 0.46 + (1 - 0.46) * easeOutExpo(growProgress)
@@ -259,13 +261,13 @@ function FloorIntroManager:drawThanks()
     love.graphics.setColor(0, 0, 0, 1)
     love.graphics.rectangle("fill", 0, 0, baseWidth, baseHeight)
     love.graphics.setFont(thanksFont)
-    drawWavyText("thanks for playing", baseHeight / 2 - 42, thanksFont, {
+    drawWavyText(Localization:t("game.thanks"), baseHeight / 2 - 42, thanksFont, {
         alpha = alpha,
         speedScale = 0.9,
         amplitudeScale = 0.9,
     })
     love.graphics.setFont(madeByFont)
-    drawWavyText("made by homma", baseHeight / 2 + 28, madeByFont, {
+    drawWavyText(Localization:t("game.made_by"), baseHeight / 2 + 28, madeByFont, {
         alpha = alpha * 0.76,
         speedScale = 0.8,
         amplitudeScale = 0.45,

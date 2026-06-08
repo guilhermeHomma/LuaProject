@@ -2,6 +2,7 @@ local Chest = {}
 Chest.__index = Chest
 
 local DamageStretch = require("scripts/effects/damageStretch")
+local Localization = require("scripts/managers/localization")
 local DropTemplates = require("scripts/drops/dropTemplates")
 local Ball = require("scripts/particles/ballParticle")
 local TileSet = require("scripts.objects.tileset")
@@ -246,7 +247,7 @@ function Chest:update(dt)
     addToDrawQueue(self.yWorld, self)
 
     if not self.isOpen and not self.isOpening and self:isPlayerNear() then
-        Game.drawtext = "Press F to open"
+        Game.drawtext = Localization:t("game.press_open")
         Game.textAlphaTarget = 1
     end
 

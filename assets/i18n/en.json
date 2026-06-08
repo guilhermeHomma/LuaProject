@@ -1,0 +1,86 @@
+{
+  "menu": {
+    "settings": "SETTINGS",
+    "paused": "PAUSED",
+    "game_over": "GAME OVER",
+    "confirm": "CONFIRM",
+    "start_game": "start game",
+    "continue": "continue",
+    "new_run": "new run",
+    "main_menu": "main menu",
+    "exit_game": "exit game",
+    "yes": "yes",
+    "no": "no",
+    "back": "back"
+  },
+  "confirm": {
+    "are_you_sure": "are you sure?",
+    "return_menu": "return to main menu?",
+    "restart": "start a new run?",
+    "quit": "quit game?"
+  },
+  "settings": {
+    "sections": {
+      "general": "GENERAL",
+      "video": "VIDEO",
+      "sound": "SOUND"
+    },
+    "language": "language",
+    "show_fps": "show fps",
+    "screen_size": "screen size",
+    "fullscreen": "fullscreen",
+    "vsync": "vsync",
+    "crt_filter": "crt filter",
+    "camera_shake": "camera shake",
+    "brightness": "brightness",
+    "sound": "sound",
+    "music": "music",
+    "on": "on",
+    "off": "off"
+  },
+  "cards": {
+    "choose": "CHOOSE A CARD",
+    "rarity": {
+      "common": "common",
+      "rare": "rare",
+      "epic": "epic",
+      "legendary": "legendary"
+    },
+    "speed": { "name": "SPEED", "description": "Move faster." },
+    "speed_rare": { "name": "SPEED", "description": "Move much faster." },
+    "primary_damage": { "name": "DAMAGE", "description": "Primary gun damage." },
+    "primary_damage_epic": { "name": "DAMAGE", "description": "Primary gun damage." },
+    "primary_range": { "name": "RANGE", "description": "Primary gun range." },
+    "secondary_fill": { "name": "CHARGE", "amount": "FULL", "description": "Fill secondary weapon." },
+    "primary_reload": { "name": "LOAD", "description": "Primary gun loadspeed." },
+    "primary_ricochet": { "name": "BOUNCE", "amount": "RICOCHET", "description": "Primary shots bounce from walls and enemies." },
+    "primary_death_shard": { "name": "SPARK", "description": "Missed primary shots split into short base-damage shots." },
+    "primary_clean_split": { "name": "SPLIT", "description": "Missed primary shots split into more short base-damage shots." },
+    "enemy_death_shard": { "name": "BURST", "description": "Enemies release short base-damage shots when they die." },
+    "enemy_death_split": { "name": "BURST", "description": "Enemies release more short base-damage shots when they die." },
+    "half_heart": { "name": "HEART", "amount": "HEAL 1", "description": "Restore one lost heart only." },
+    "full_heal": { "name": "FULL HEAL", "amount": "RESTORE", "description": "Restore all lost hearts only." },
+    "heart_container": { "name": "HEART SLOT", "amount": "+1 MAX", "description": "Gain one max heart and fully heal." }
+  },
+  "hud": {
+    "fps": "FPS"
+  },
+  "game": {
+    "floor": "floor {floor}",
+    "wave": "Wave {wave}",
+    "room_cleared": "Room cleared",
+    "clear_room_first": "Clear the room first",
+    "press_open": "Press F to open",
+    "press_pickup": "Press F to pick up",
+    "next_floor": "press f to go to the next floor",
+    "weapon_help": "press e to switch weapon\npress q to reload"
+    ,
+    "thanks": "thanks for playing",
+    "made_by": "made by homma"
+  },
+  "store": {
+    "full_bullets": "full bullets",
+    "card": "card",
+    "buy": "click F to buy"
+  }
+}

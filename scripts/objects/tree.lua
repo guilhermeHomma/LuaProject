@@ -206,26 +206,6 @@ local function getTreeSpriteMetrics(tree)
     return originX, originY, spriteWidth, spriteHeight
 end
 
-local function drawTreeDebugFadeArea(box)
-    if not DEBUG then
-        return
-    end
-
-    local debugConfig = TreeConfig.debug or {}
-    local fillColor = debugConfig.fadeAreaFillColor or {0.25, 0.8, 1, 0.12}
-    local lineColor = debugConfig.fadeAreaLineColor or {0.25, 0.8, 1, 0.85}
-    local r, g, b, a = love.graphics.getColor()
-    local previousLineWidth = love.graphics.getLineWidth()
-
-    love.graphics.setLineWidth(1)
-    love.graphics.setColor(fillColor)
-    love.graphics.rectangle("fill", box.x, box.y, box.width, box.height)
-    love.graphics.setColor(lineColor)
-    love.graphics.rectangle("line", box.x, box.y, box.width, box.height)
-    love.graphics.setLineWidth(previousLineWidth)
-    love.graphics.setColor(r, g, b, a)
-end
-
 function TreeTile:new(x, y, quadIndex, collider, options)
     local tile = Tile.new(self, x, y, quadIndex, collider)
     options = options or {}
@@ -452,8 +432,6 @@ function TreeTile:draw()
     love.graphics.draw(image, self.xWorld, self.yWorld, 0, 1, self.stretch, originX, originY)
     love.graphics.setColor(r, g, b, a) 
     love.graphics.setShader()
-    drawTreeDebugFadeArea(box)
-    self:drawDebug()    
 end
 
 return TreeTile

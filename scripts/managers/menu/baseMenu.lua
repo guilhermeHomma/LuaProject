@@ -1,5 +1,7 @@
 
 local baseMenu = {}
+local Localization = require("scripts/managers/localization")
+local Fonts = require("scripts/ui/fonts")
 local navigateSound = love.audio.newSource("assets/sfx/menu/menu-button.mp3", "static")
 local confirmSound = love.audio.newSource("assets/sfx/menu/menu-selected.mp3", "static")
 
@@ -12,11 +14,9 @@ function baseMenu:load()
     self.selectedOption = 1
     self.optionBounds = {}
     self.MenuTItle = "MENU BASE - make a new menu"
-    self.fontTitle = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 56)
-    self.fontTitle:setFilter("nearest", "nearest")
+    self.fontTitle = Fonts:translated("menuTitle")
 
-    self.fontOptions = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 32)
-    self.fontOptions:setFilter("nearest", "nearest")
+    self.fontOptions = Fonts:translated("menuOption")
     self.scale = 1
     self.lastSelectChange = -1
 
@@ -62,8 +62,13 @@ function baseMenu:onSelect()
 end
 
 function baseMenu:drawSelectSprite(text, y)
-
-    local spriteX =  math.ceil(self:getWidth()/ 2 - self.fontOptions:getWidth(text) / 2 - 30)
+    local normalizedText = Localization:normalizeText(text)
+    local ok, textWidth = pcall(function()
+        return self.fontOptions:getWidth(normalizedText)
+    end)
+    textWidth = ok and textWidth or 80
+    textWidth = math.min(textWidth, self:getWidth() - 74)
+    local spriteX =  math.ceil(self:getWidth()/ 2 - textWidth / 2 - 30)
     love.graphics.draw(self.selectSprite, spriteX, y+ 3, 0, 3, 3)
 end
 
@@ -101,6 +106,8 @@ local MENU_TEXT_SHADOW_X = 2
 local MENU_TEXT_SHADOW_Y = 2
 local MENU_TEXT_SHADOW_DARKEN = 0.42
 local MOUSE_REACTIVATE_DISTANCE = 6
+local MARQUEE_SPEED = 28
+local MARQUEE_END_PAUSE = 0.8
 
 local function setDarkerTextColor(r, g, b, a)
     love.graphics.setColor(
@@ -111,10 +118,102 @@ local function setDarkerTextColor(r, g, b, a)
     )
 end
 
+local cp1252ToCodepoint = {
+    [0x80] = 0x20AC, [0x82] = 0x201A, [0x83] = 0x0192, [0x84] = 0x201E,
+    [0x85] = 0x2026, [0x86] = 0x2020, [0x87] = 0x2021, [0x88] = 0x02C6,
+    [0x89] = 0x2030, [0x8A] = 0x0160, [0x8B] = 0x2039, [0x8C] = 0x0152,
+    [0x8E] = 0x017D, [0x91] = 0x2018, [0x92] = 0x2019, [0x93] = 0x201C,
+    [0x94] = 0x201D, [0x95] = 0x2022, [0x96] = 0x2013, [0x97] = 0x2014,
+    [0x98] = 0x02DC, [0x99] = 0x2122, [0x9A] = 0x0161, [0x9B] = 0x203A,
+    [0x9C] = 0x0153, [0x9E] = 0x017E, [0x9F] = 0x0178,
+}
+
+local function isContinuationByte(byte)
+    return byte and byte >= 0x80 and byte <= 0xBF
+end
+
+local function getSequenceLength(byte)
+    if byte < 0x80 then
+        return 1
+    elseif byte >= 0xC2 and byte <= 0xDF then
+        return 2
+    elseif byte >= 0xE0 and byte <= 0xEF then
+        return 3
+    elseif byte >= 0xF0 and byte <= 0xF4 then
+        return 4
+    end
+    return 0
+end
+
+local function appendCodepoint(characters, byte)
+    if utf8 and utf8.char then
+        characters[#characters + 1] = utf8.char(cp1252ToCodepoint[byte] or byte)
+    else
+        characters[#characters + 1] = "?"
+    end
+end
+
+local function getSafeUtf8Characters(text)
+    local characters = {}
+    text = tostring(text or "")
+    local index = 1
+
+    while index <= #text do
+        local byte = text:byte(index)
+        local sequenceLength = getSequenceLength(byte)
+
+        if sequenceLength == 1 then
+            characters[#characters + 1] = text:sub(index, index)
+            index = index + 1
+        elseif sequenceLength > 1 then
+            local valid = index + sequenceLength - 1 <= #text
+            for offset = 1, sequenceLength - 1 do
+                if not isContinuationByte(text:byte(index + offset)) then
+                    valid = false
+                    break
+                end
+            end
+
+            if valid then
+                characters[#characters + 1] = text:sub(index, index + sequenceLength - 1)
+                index = index + sequenceLength
+            else
+                appendCodepoint(characters, byte)
+                index = index + 1
+            end
+        else
+            appendCodepoint(characters, byte)
+            index = index + 1
+        end
+    end
+
+    return characters
+end
+
 local function drawWavyMenuText(self, text, y, font, config)
+    text = Localization:normalizeText(text)
     local time = love.timer.getTime()
-    local textWidth = font:getWidth(text)
+    local characters = getSafeUtf8Characters(text)
+    local textWidth = 0
+    for _, char in ipairs(characters) do
+        textWidth = textWidth + font:getWidth(char)
+    end
+    local maxWidth = config.maxWidth
+    local clipX = config.clipX or (maxWidth and (self:getWidth() / 2 - maxWidth / 2) or nil)
+    local previousX, previousY, previousWidth, previousHeight
     local x = self:getWidth() / 2 - textWidth / 2
+
+    if maxWidth and textWidth > maxWidth then
+        local overflow = textWidth - maxWidth
+        local travelTime = math.max(overflow / MARQUEE_SPEED, 0.001)
+        local cycleTime = travelTime + MARQUEE_END_PAUSE
+        local elapsed = ((love.timer.getTime() - (self.lastSelectChange or 0)) % cycleTime)
+        local offset = elapsed >= travelTime and overflow or (elapsed / travelTime) * overflow
+        x = clipX - math.floor(offset + 0.5)
+        previousX, previousY, previousWidth, previousHeight = love.graphics.getScissor()
+        love.graphics.setScissor(clipX, y - 4, maxWidth, font:getHeight() + 12)
+    end
+
     local centerX = x + textWidth / 2
     local halfTextWidth = math.max(textWidth / 2, 1)
     local paletteShift = math.floor(time * config.paletteSpeed)
@@ -123,8 +222,7 @@ local function drawWavyMenuText(self, text, y, font, config)
     local leanTiltY = config.leanTiltY or 0
     local leanTiltX = config.leanTiltX or 0
 
-    for i = 1, #text do
-        local char = text:sub(i, i)
+    for i, char in ipairs(characters) do
         local charWidth = font:getWidth(char)
         local relativeX = ((x + charWidth / 2) - centerX) / halfTextWidth
         local phase = time * config.phaseSpeed + i * config.letterPhase
@@ -141,13 +239,20 @@ local function drawWavyMenuText(self, text, y, font, config)
 
         if char ~= " " then
             local r, g, b = hexToRGB(color)
-            setDarkerTextColor(r, g, b, config.shadowAlpha or 1)
-            love.graphics.print(char, drawX + shadowX, drawY + shadowY)
+            if config.drawShadow ~= false then
+                setDarkerTextColor(r, g, b, config.shadowAlpha or 1)
+                love.graphics.print(char, drawX + shadowX, drawY + shadowY)
+            end
             love.graphics.setColor(r, g, b)
             love.graphics.print(char, drawX, drawY)
         end
-
         x = x + charWidth
+    end
+
+    if previousX then
+        love.graphics.setScissor(previousX, previousY, previousWidth, previousHeight)
+    elseif maxWidth and textWidth > maxWidth then
+        love.graphics.setScissor()
     end
 
     love.graphics.setColor(hexToRGB("fbfaf7"))
@@ -165,7 +270,7 @@ end
 function baseMenu:drawTitle()
     love.graphics.setFont(self.fontTitle)
 
-    local titleY = self:getHeight() / 2 - 72
+    local titleY = self.titleYOverride or (self:getHeight() / 2 - 72)
     drawWavyMenuText(self, self.MenuTItle, titleY, self.fontTitle, {
         paletteSpeed = 1.55,
         phaseSpeed = 1.65,
@@ -177,6 +282,8 @@ function baseMenu:drawTitle()
         yAmplitude = 0.28,
         shadowAlpha = 1,
         color = "fbfaf7",
+        maxWidth = self:getWidth() - 28,
+        drawShadow = true,
     })
     love.graphics.setColor(hexToRGB("ffffff"))
 end
@@ -197,6 +304,8 @@ function baseMenu:drawHoverText(text, y, bounds)
         leanY = leanY,
         leanTiltY = 3.0,
         leanTiltX = -1.45,
+        maxWidth = math.max(24, math.min((bounds and bounds.width or self:getWidth()) - 18, self:getWidth() - 74)),
+        drawShadow = false,
     })
 end
 
@@ -213,13 +322,14 @@ function baseMenu:drawOption(text, x, y, def, isSelected, isInactive, bounds)
     if isInactive then
         love.graphics.setColor(0, 0, 0, 0.45)
         love.graphics.rectangle("fill", bounds.left, bounds.top - 2, bounds.width, bounds.height)
-        drawShadowedPrintf(text, x, y, self:getWidth(), def, {0.45, 0.45, 0.45, 0.7}, 0.9)
+        love.graphics.setColor(0.45, 0.45, 0.45, 0.7)
+        love.graphics.printf(text, x, y, self:getWidth(), def)
         return
     end
 
     if not isSelected then
-        --drawOutline(text, x, y, self:getWidth(), def)
-        drawShadowedPrintf(text, x, y, self:getWidth(), def, {hexToRGB("fbfaf7")}, 1)
+        love.graphics.setColor(hexToRGB("fbfaf7"))
+        love.graphics.printf(text, x, y, self:getWidth(), def)
         return
     end
 
@@ -249,8 +359,7 @@ function baseMenu:draw()
         local isSelected = i == self.selectedOption and not isInactive
         love.graphics.push()
         if isSelected and self.lastSelectChange + 0.06 > love.timer.getTime() then
-            self.scale = 1.05
-            love.graphics.scale(1.05, 1.05)
+            self.scale = 1
         end
         local centerHeight =  self:getHeight() / 2    
         local y = (centerHeight) + (i * 30)

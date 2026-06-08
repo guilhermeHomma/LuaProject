@@ -1,4 +1,5 @@
 local baseMenu = require("scripts/managers/menu/baseMenu")
+local Localization = require("scripts/managers/localization")
 local pauseMenu = {}
 
 setmetatable(pauseMenu, { __index = baseMenu })
@@ -6,11 +7,16 @@ setmetatable(pauseMenu, { __index = baseMenu })
 
 function pauseMenu:load()
     baseMenu.load(self)
-    self.MenuTItle = "PAUSED"
-    self.menuOptions = {"Continue", "Settings", "New Run", "Main Menu"}
+    self.MenuTItle = Localization:t("menu.paused")
+    self.menuOptions = {"continue", "settings", "new_run", "main_menu"}
+end
+
+function pauseMenu:getOptionLabel(index)
+    return Localization:t("menu." .. self.menuOptions[index])
 end
 
 function pauseMenu:draw()
+    self.MenuTItle = Localization:t("menu.paused")
     love.graphics.setColor(0.03, 0.02, 0.02, 1)
     love.graphics.rectangle("fill", 0, 0, baseWidth * 2, baseHeight * 2)
     baseMenu.draw(self)

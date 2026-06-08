@@ -44,7 +44,6 @@ function Container:draw()
         love.graphics.draw(sprite, self.xWorld- 10, self.yWorld - 45)
         
     end
-    self:drawDebug()
 end
 
 return Container

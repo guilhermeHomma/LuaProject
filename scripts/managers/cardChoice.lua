@@ -3,6 +3,8 @@ local CardChoice = {}
 local Ball = require("scripts/particles/ballParticle")
 local CardDefinitions = require("scripts/cards/cardDefinitions")
 local PlayerStatusHud = require("scripts/ui/playerStatusHud")
+local Localization = require("scripts/managers/localization")
+local Fonts = require("scripts/ui/fonts")
 
 local function loadCardImage(path)
     local image = love.graphics.newImage(path)
@@ -26,16 +28,11 @@ local smoothCardSoundBase = love.audio.newSource("assets/sfx/ui/smooth-good-card
 local shuffleCardSoundBase = love.audio.newSource("assets/sfx/ui/shuffle-card.mp3", "static")
 local singleCardSoundBase = love.audio.newSource("assets/sfx/ui/single-card-sound.mp3", "static")
 
-local titleFont = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 38)
-local cardNameFont = love.graphics.newFont("assets/fonts/pixelart.ttf", 26)
-local cardRarityFont = love.graphics.newFont("assets/fonts/pixelart.ttf", 16)
-local cardAmountFont = love.graphics.newFont("assets/fonts/PixelGame.otf", 29)
-local cardDescriptionFont = love.graphics.newFont("assets/fonts/pixelart.ttf", 14)
-titleFont:setFilter("nearest", "nearest")
-cardNameFont:setFilter("nearest", "nearest")
-cardRarityFont:setFilter("nearest", "nearest")
-cardAmountFont:setFilter("nearest", "nearest")
-cardDescriptionFont:setFilter("nearest", "nearest")
+local titleFont = Fonts:translated("cardTitle")
+local cardNameFont = Fonts:translated("cardName")
+local cardRarityFont = Fonts:translated("cardRarity")
+local cardAmountFont = Fonts:translated("cardAmount")
+local cardDescriptionFont = Fonts:translated("cardDescription")
 
 local colors = {
     {0.48, 0.04, 0.18, 1},
@@ -422,39 +419,39 @@ function CardChoice:drawCard(card, index)
     local textX = math.floor(x - textW / 2 + 0.5)
     local textLeanX = round(leanX * 4)
     local textLeanY = round(leanY * 2)
-    local rarityX = textX - textLeanX
-    local nameX = textX
-    local amountX = textX + textLeanX
+    local rarityX = math.floor(textX + textLeanX + 0.5)
+    local nameX = math.floor(textX + 0.5)
+    local amountX = math.floor(textX - textLeanX + 0.5)
     local rarityY = math.floor(y - screenCardH * 0.40 + 0.5) - textLeanY
     local nameY = math.floor(y - screenCardH * 0.08 + 0.5)
     local amountY = math.floor(y + screenCardH * 0.22 + 0.5) + textLeanY
-    local descriptionW = screenCardW
-    local descriptionX = math.floor(x - descriptionW / 2 + 0.5) + round(textLeanX * 0.5)
-    local descriptionY = math.floor(y + screenCardH / 2 + 8 + 0.5)
+    local fixedCardW = math.floor(cardW * cardScale + 0.5)
+    local fixedCardH = math.floor(cardH * cardScale + 0.5)
+    local descriptionW = fixedCardW
+    local descriptionX = math.floor(x - descriptionW / 2 + 0.5)
+    local descriptionY = math.floor((card.y + bob) + fixedCardH / 2 + 8 + 0.5)
 
     love.graphics.setFont(cardRarityFont)
     love.graphics.setColor(0.02, 0.01, 0.035, alpha)
-    love.graphics.printf(string.upper(rarity.label), rarityX + 1, rarityY + 1, textW, "center")
+    local rarityLabel = string.upper(CardDefinitions:getRarityLabel(def.rarity))
+    local cardName = CardDefinitions:getCardName(def)
+    local cardAmount = CardDefinitions:getCardAmount(def)
+    local cardDescription = CardDefinitions:getCardDescription(def)
+
     love.graphics.setColor(rarity.color[1], rarity.color[2], rarity.color[3], alpha)
-    love.graphics.printf(string.upper(rarity.label), rarityX, rarityY, textW, "center")
+    love.graphics.printf(rarityLabel, rarityX, rarityY, textW, "center")
 
     love.graphics.setFont(cardNameFont)
-    love.graphics.setColor(0.02, 0.01, 0.035, alpha)
-    love.graphics.printf(def.name, nameX + 1, nameY + 1, textW, "center")
     love.graphics.setColor(0.10, 0.035, 0.13, alpha)
-    love.graphics.printf(def.name, nameX, nameY, textW, "center")
+    love.graphics.printf(cardName, nameX, nameY, textW, "center")
 
     love.graphics.setFont(cardAmountFont)
-    love.graphics.setColor(0.02, 0.01, 0.035, alpha)
-    love.graphics.printf(def.amount, amountX + 1, amountY + 1, textW, "center")
     love.graphics.setColor(0.22, 0.09, 0.13, alpha)
-    love.graphics.printf(def.amount, amountX, amountY, textW, "center")
+    love.graphics.printf(cardAmount, amountX, amountY, textW, "center")
 
     love.graphics.setFont(cardDescriptionFont)
-    love.graphics.setColor(0.02, 0.01, 0.035, alpha)
-    love.graphics.printf(def.description, descriptionX + 1, descriptionY + 1, descriptionW, "center")
     love.graphics.setColor(1, 1, 1, alpha)
-    love.graphics.printf(def.description, descriptionX, descriptionY, descriptionW, "center")
+    love.graphics.printf(cardDescription, descriptionX, descriptionY, descriptionW, "center")
 end
 
 function CardChoice:draw()
@@ -478,7 +475,7 @@ function CardChoice:draw()
 
     love.graphics.setFont(titleFont)
     love.graphics.setColor(1, 1, 1, fadeAlpha)
-    love.graphics.printf("CHOOSE A CARD", 0, 42, baseWidth, "center")
+    love.graphics.printf(Localization:t("cards.choose"), 0, 42, baseWidth, "center")
 
     self.drawAlpha = fadeAlpha
     for i, card in ipairs(self.cards) do

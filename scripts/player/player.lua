@@ -521,7 +521,7 @@ function Player:update(dt)
     self:death()
 end
 
-function Player:takeDamage(amount, damageDx, damageDy)
+function Player:takeDamage(amount, damageDx, damageDy, hitX, hitY)
     if self:isDashing() then return false end
     if self.damageTimer < 1.2 then return false end
 
@@ -540,7 +540,7 @@ function Player:takeDamage(amount, damageDx, damageDy)
     damageDx = damageDx or self.velocityX or 0
     damageDy = damageDy or self.velocityY or 0
     if Game and Game.showPlayerDamageFlash then
-        Game:showPlayerDamageFlash(damageDx, damageDy)
+        Game:showPlayerDamageFlash(damageDx, damageDy, hitX, hitY)
     end
     self:startDamageKnockback(damageDx, damageDy)
     BloodPixel.spawnBurst(self.x, self.y - 2, damageDx, damageDy, 5, 7)
@@ -586,7 +586,15 @@ function Player:checkDamage()
         if enemy.canDamagePlayer ~= false and distance < 10 then
             --enemy.life = 0
             --enemy:death()
-            self:takeDamage(1, self.x - enemy.x, self.y - enemy.y)
+            local damageDx = self.x - enemy.x
+            local damageDy = self.y - enemy.y
+            local length = math.sqrt(damageDx * damageDx + damageDy * damageDy)
+            local hitX, hitY = self.x, self.y - 18
+            if length > 0.001 then
+                hitX = hitX - (damageDx / length) * 8
+                hitY = hitY - (damageDy / length) * 13
+            end
+            self:takeDamage(1, damageDx, damageDy, hitX, hitY)
             break
         end
     end
@@ -1288,19 +1296,6 @@ function Player:draw()
 
     self:drawReloadBar()
 
-    if DEBUG then
-        local collisionBox = self:getCollisionBox()
-        love.graphics.rectangle("line", collisionBox.x, collisionBox.y, collisionBox.width, collisionBox.height)
-
-        love.graphics.rectangle("line", self.x, self.y, 1, 1)
-
-        local tileX, tileY = Tilemap:worldToMap(self.x, self.y)
-        local worldX, worldY = Tilemap:mapToWorld(tileX, tileY)
-
-        love.graphics.setColor(0, 1, 1, 0.1)
-        love.graphics.rectangle("fill", worldX-8, worldY-16, 16, 16)
-        love.graphics.setColor(1, 1, 1, 1)
-    end
 end
 
 function Player:getCurrentDrawQuads()

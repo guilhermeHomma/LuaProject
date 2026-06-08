@@ -71,6 +71,8 @@ function SettingsStorage:serialize(settings)
         "vs=" .. (settings.vsyncEnabled and "1" or "0"),
         "crt=" .. (settings.crtEnabled and "1" or "0"),
         "shake=" .. (settings.cameraShakeEnabled and "1" or "0"),
+        "fps=" .. (settings.fpsEnabled and "1" or "0"),
+        "lang=" .. tostring(settings.language or "en"),
         "brightness=" .. tostring(settings.brightness or 5),
         "master=" .. tostring(settings.masterVolume or 1),
         "music=" .. tostring(settings.musicVolume or 0.6),

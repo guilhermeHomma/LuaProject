@@ -1,4 +1,6 @@
 local baseMenu = require("scripts/managers/menu/baseMenu")
+local Localization = require("scripts/managers/localization")
+local Fonts = require("scripts/ui/fonts")
 local MainMenu = {}
 
 setmetatable(MainMenu, { __index = baseMenu })
@@ -11,11 +13,9 @@ local animationTimer = 0
 local currentFrame = 1
 local frameDuration = 0.3
 local animationQuads = {}
-local versionFont = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 28)
+local versionFont = Fonts:logo("version")
 
 sheetImage:setFilter("nearest", "nearest")
-versionFont:setFilter("nearest", "nearest")
-
 for i = 0, math.floor(sheetWidth / frameWidth) - 1 do
     table.insert(animationQuads, love.graphics.newQuad(i * frameWidth, 0, frameWidth, frameHeight, sheetWidth, sheetHeight))
 end
@@ -24,12 +24,10 @@ end
 function MainMenu:load()
     baseMenu.load(self)
     self.MenuTItle = "mobize"
-    self.menuOptions = {"start game", "settings", "exit game"}
-    self.fontTitle = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 56)
-    self.fontTitle:setFilter("nearest", "nearest")
+    self.menuOptions = {"start_game", "settings", "exit_game"}
+    self.fontTitle = Fonts:logo("mainLogo")
 
-    self.fontOptions = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 32)
-    self.fontOptions:setFilter("nearest", "nearest")
+    self.fontOptions = Fonts:translated("menuOption")
 
 
 end
@@ -42,6 +40,10 @@ function MainMenu:update(dt)
     end
 
     baseMenu.update(self, dt)
+end
+
+function MainMenu:getOptionLabel(index)
+    return Localization:t("menu." .. self.menuOptions[index])
 end
 
 function MainMenu:draw()

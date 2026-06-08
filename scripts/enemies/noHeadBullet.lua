@@ -268,7 +268,8 @@ function NoHeadBullet:hitTile()
 end
 
 function NoHeadBullet:damagePlayer()
-    return Player:takeDamage(self.damage, self.dx or 0, self.dy or 0)
+    local hitY = self.y - (self.height or 0) + (self.hitboxHeightOffset or 0)
+    return Player:takeDamage(self.damage, self.dx or 0, self.dy or 0, self.x, hitY)
 end
 
 function NoHeadBullet:death()
@@ -406,15 +407,6 @@ function NoHeadBullet:draw()
         bodyScale,
         bodyAlpha
     )
-
-    if DEBUG then
-        local tileBox = self:getBox()
-        local playerBox = self:getPlayerHitBox()
-        love.graphics.setColor(1, 0.2, 0.2, 0.85)
-        love.graphics.rectangle("line", tileBox.x, tileBox.y, tileBox.width, tileBox.height)
-        love.graphics.setColor(1, 0.85, 0.1, 0.85)
-        love.graphics.rectangle("line", playerBox.x, playerBox.y, playerBox.width, playerBox.height)
-    end
 
     love.graphics.setColor(1, 1, 1, 1)
 end

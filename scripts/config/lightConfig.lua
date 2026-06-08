@@ -9,7 +9,7 @@ local LightConfig = {
     types = {
         player = {
             generalShadow = {
-                minBrightness = 0.6,
+                minBrightness = 0.62,
                 color = {0, 0.1, 0.5},
             },
             worldLights = {

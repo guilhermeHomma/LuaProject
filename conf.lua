@@ -36,7 +36,7 @@ function love.conf(t)
         t.window.fullscreen = savedSettings.fs == "1"
     else
         t.window.vsync = GAME_FLAGS.vsync and 1 or 0
-        t.window.fullscreen = false
+        t.window.fullscreen = true
     end
     t.window.fullscreentype = "desktop"
     t.window.width = savedWidth or defaultLevel.window.width

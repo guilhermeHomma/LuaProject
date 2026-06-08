@@ -10,8 +10,10 @@ local cardDropImage = love.graphics.newImage("assets/sprites/objects/card-drop.p
 local DropShine = require("scripts/drops/dropShine")
 local WeaponDefinitions = require("scripts/player/weapons/init")
 local FloorManager = require("scripts/managers/floorManager")
+local Localization = require("scripts/managers/localization")
 local BulletColorParticle = require("scripts/particles/bulletColorParticle")
-local font = love.graphics.newFont("assets/fonts/pixelart.ttf", 8)
+local Fonts = require("scripts/ui/fonts")
+local font = Fonts:translated("store")
 local errorSoundBase = love.audio.newSource("assets/sfx/error/error.mp3", "static")
 local softDenySoundBase = love.audio.newSource("assets/sfx/gun/empty.mp3", "static")
 
@@ -270,7 +272,7 @@ function Store:performBuy()
             Game:markWeaponPurchased(self.product.name)
         end
         if Game and Game.showBottomMessage then
-            Game:showBottomMessage("press e to switch weapon\npress q to reload", 6)
+            Game:showBottomMessage(Localization:t("game.weapon_help"), 6)
         end
     end
     self.playerIsClose = false
@@ -381,7 +383,6 @@ function Store:draw()
     end
     love.graphics.setColor(1, 1, 1)
 
-    self:drawDebug()
 end
 
 function Store:getText()
@@ -390,9 +391,14 @@ function Store:getText()
 
     local currentPrice = self.product.price
 
-    local name = self.product.name 
+    local name = self.product.name
+    if self.product.kind == "ammo" then
+        name = Localization:t("store.full_bullets")
+    elseif self.product.kind == "card" then
+        name = Localization:t("store.card")
+    end
 
-    local buyT = "click F to buy"
+    local buyT = Localization:t("store.buy")
     local price = currentPrice .. " C"
 
     if not Player.isAlive or self:isPurchased() then

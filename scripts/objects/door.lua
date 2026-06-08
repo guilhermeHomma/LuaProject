@@ -6,6 +6,7 @@ sheetImage:setFilter("nearest", "nearest")
 local lockIconImage = love.graphics.newImage("assets/sprites/icons/lock.png")
 lockIconImage:setFilter("nearest", "nearest")
 local TreeConfig = require("scripts/config/treeConfig")
+local Localization = require("scripts/managers/localization")
 local whiteShader = love.graphics.newShader("scripts/shaders/whiteShader.glsl")
 local doorHandleSoundBase = love.audio.newSource("assets/sfx/door/doorhandle.mp3", "static")
 local doorCloseSoundBase = love.audio.newSource("assets/sfx/door/doorclose.mp3", "static")
@@ -385,7 +386,7 @@ function DoorTile:performBuy()
     local FloorManager = require("scripts/managers/floorManager")
     local currentRoom = FloorManager:getCurrentRoom()
     if not (currentRoom and currentRoom.state and currentRoom.state.cleared) then
-        Game.drawtext = "Clear the room first"
+        Game.drawtext = Localization:t("game.clear_room_first")
         Game.textAlphaTarget = 1
         return
     end
@@ -517,7 +518,7 @@ function DoorTile:update(dt)
             self:openConnectedDoors()
             return
         else
-            Game.drawtext = "Clear the room first"
+            Game.drawtext = Localization:t("game.clear_room_first")
         end
         Game.textAlphaTarget = 1
     end
@@ -548,7 +549,6 @@ function DoorTile:draw()
 
     love.graphics.setShader()
     love.graphics.setColor(1, 1, 1, 1)
-    self:drawDebug()
 end
 
 function DoorTile:drawXrayOccluder()

@@ -1,8 +1,10 @@
 local PlayerStatusHud = {}
+local Localization = require("scripts/managers/localization")
+local Fonts = require("scripts/ui/fonts")
 
-local font = love.graphics.newFont("assets/fonts/PixelGame.otf", 30)
-local smallFont = love.graphics.newFont("assets/fonts/PixelGame.otf", 24)
-local titleFont = love.graphics.newFont("assets/fonts/PixelGame.otf", 28)
+local font = Fonts:translated("status")
+local smallFont = Fonts:translated("statusSmall")
+local titleFont = Fonts:translated("statusTitle")
 local currentAlpha = 1
 
 local HUD_WIDTH = 870
@@ -261,14 +263,14 @@ function PlayerStatusHud:draw(x, y, options)
     local gunStatsX = layout.primaryX + SLOT_PADDING_X
     local topY = y + SECTION_STATS_Y_OFFSET
 
-    drawStat("DAMAGE", tostring(round(stats.damage)), "+" .. tostring(round(stats.damageBonus)), gunStatsX, topY, {0.50, 0.95, 0.58, 1}, stats.changed.damage)
-    drawStat("LOADSPEED", formatDecimal(stats.reload), "-" .. formatDecimal(stats.reloadBonus), gunStatsX, topY + STAT_LINE_SPACING, {0.45, 0.78, 1.00, 1}, stats.changed.reload)
-    drawStat("RANGE", tostring(round(stats.range)), "+" .. tostring(round(stats.rangeBonus)), gunStatsX, topY + STAT_LINE_SPACING * 2, {0.50, 0.95, 0.58, 1}, stats.changed.range)
+    drawStat(Localization:t("cards.primary_damage.name"), tostring(round(stats.damage)), "+" .. tostring(round(stats.damageBonus)), gunStatsX, topY, {0.50, 0.95, 0.58, 1}, stats.changed.damage)
+    drawStat(Localization:t("cards.primary_reload.name"), formatDecimal(stats.reload), "-" .. formatDecimal(stats.reloadBonus), gunStatsX, topY + STAT_LINE_SPACING, {0.45, 0.78, 1.00, 1}, stats.changed.reload)
+    drawStat(Localization:t("cards.primary_range.name"), tostring(round(stats.range)), "+" .. tostring(round(stats.rangeBonus)), gunStatsX, topY + STAT_LINE_SPACING * 2, {0.50, 0.95, 0.58, 1}, stats.changed.range)
 
     local playerX = layout.playerX + SLOT_PADDING_X
     drawSectionTitle("PLAYER", playerX, y + SECTION_TITLE_Y_OFFSET)
     drawHeartSlots(playerX, topY + STAT_LINE_SPACING, playerStats)
-    drawStat("SPEED", tostring(round(playerStats.speed)), "+" .. tostring(round(playerStats.speedBonus)), playerX, topY + STAT_LINE_SPACING * 2, {0.50, 0.95, 0.58, 1}, playerStats.changedSpeed, {
+    drawStat(Localization:t("cards.speed.name"), tostring(round(playerStats.speed)), "+" .. tostring(round(playerStats.speedBonus)), playerX, topY + STAT_LINE_SPACING * 2, {0.50, 0.95, 0.58, 1}, playerStats.changedSpeed, {
         valueOffset = PLAYER_VALUE_OFFSET,
         highlightWidth = PLAYER_HIGHLIGHT_WIDTH,
     })

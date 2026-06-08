@@ -84,7 +84,6 @@ function Water:draw()
         currentQuad = self.quad3
     end
     love.graphics.draw(sheetImage, currentQuad, self.xWorld, self.yWorld + 16, 0, 1, 1, 16/2, 16*2)
-    self:drawDebug()
 end
 
 

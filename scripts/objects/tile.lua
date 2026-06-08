@@ -311,8 +311,6 @@ function Tile:draw()
     else
        love.graphics.draw(tilesetImage, self.quad, self.xWorld, self.yWorld, 0, 1, 1, tileSize/2, tileSize)
     end
-
-    self:drawDebug()
 end
 
 function Tile:drawDebug()

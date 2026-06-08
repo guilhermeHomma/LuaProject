@@ -1,0 +1,86 @@
+{
+  "menu": {
+    "settings": "CONFIGURAÇÕES",
+    "paused": "PAUSADO",
+    "game_over": "FIM DE JOGO",
+    "confirm": "CONFIRMAR",
+    "start_game": "iniciar jogo",
+    "continue": "continuar",
+    "new_run": "nova tentativa",
+    "main_menu": "menu principal",
+    "exit_game": "sair do jogo",
+    "yes": "sim",
+    "no": "não",
+    "back": "voltar"
+  },
+  "confirm": {
+    "are_you_sure": "tem certeza?",
+    "return_menu": "voltar ao menu principal?",
+    "restart": "iniciar uma nova tentativa?",
+    "quit": "sair do jogo?"
+  },
+  "settings": {
+    "sections": {
+      "general": "GERAL",
+      "video": "VÍDEO",
+      "sound": "SOM"
+    },
+    "language": "idioma",
+    "show_fps": "mostrar fps",
+    "screen_size": "resolução",
+    "fullscreen": "tela cheia",
+    "vsync": "vsync",
+    "crt_filter": "filtro crt",
+    "camera_shake": "tremor da câmera",
+    "brightness": "brilho",
+    "sound": "som",
+    "music": "música",
+    "on": "ligado",
+    "off": "desligado"
+  },
+  "cards": {
+    "choose": "ESCOLHA UMA CARTA",
+    "rarity": {
+      "common": "comum",
+      "rare": "rara",
+      "epic": "épica",
+      "legendary": "lendária"
+    },
+    "speed": { "name": "VELOCIDADE", "description": "Mova-se mais rápido." },
+    "speed_rare": { "name": "VELOCIDADE", "description": "Mova-se muito mais rápido." },
+    "primary_damage": { "name": "DANO", "description": "Dano da arma primária." },
+    "primary_damage_epic": { "name": "DANO", "description": "Dano da arma primária." },
+    "primary_range": { "name": "ALCANCE", "description": "Alcance da arma primária." },
+    "secondary_fill": { "name": "CARGA", "amount": "CHEIA", "description": "Carrega a arma secundária." },
+    "primary_reload": { "name": "RECARGA", "description": "Velocidade de recarga da arma primária." },
+    "primary_ricochet": { "name": "REBOTE", "amount": "RICOCHETE", "description": "Tiros primários ricocheteiam em paredes e inimigos." },
+    "primary_death_shard": { "name": "FAÍSCA", "description": "Tiros primários errados se dividem em disparos curtos de dano base." },
+    "primary_clean_split": { "name": "DIVIDIR", "description": "Tiros primários errados se dividem em mais disparos curtos de dano base." },
+    "enemy_death_shard": { "name": "EXPLOSÃO", "description": "Inimigos soltam disparos curtos de dano base ao morrer." },
+    "enemy_death_split": { "name": "EXPLOSÃO", "description": "Inimigos soltam mais disparos curtos de dano base ao morrer." },
+    "half_heart": { "name": "CORAÇÃO", "amount": "CURA 1", "description": "Restaura apenas um coração perdido." },
+    "full_heal": { "name": "CURA TOTAL", "amount": "RESTAURA", "description": "Restaura apenas todos os corações perdidos." },
+    "heart_container": { "name": "ESPAÇO DE CORAÇÃO", "amount": "+1 MÁX", "description": "Ganha um coração máximo e cura tudo." }
+  },
+  "hud": {
+    "fps": "FPS"
+  },
+  "game": {
+    "floor": "andar {floor}",
+    "wave": "Onda {wave}",
+    "room_cleared": "Sala limpa",
+    "clear_room_first": "Limpe a sala primeiro",
+    "press_open": "Pressione F para abrir",
+    "press_pickup": "Pressione F para pegar",
+    "next_floor": "pressione f para ir ao próximo andar",
+    "weapon_help": "pressione e para trocar de arma\npressione q para recarregar"
+    ,
+    "thanks": "obrigado por jogar",
+    "made_by": "feito por homma"
+  },
+  "store": {
+    "full_bullets": "munição cheia",
+    "card": "carta",
+    "buy": "aperte F para comprar"
+  }
+}

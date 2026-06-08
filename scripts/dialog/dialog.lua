@@ -1,16 +1,17 @@
 local DialogBox = {}
+local Fonts = require("scripts/ui/fonts")
 
 
 function DialogBox:load()
     self.text = "text test text test sdasdasd asdasda sdas dasd"
     self.visible = false
-    self.font = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 32)
+    self.font = Fonts:translated("dialog")
     self.padding = 20
     self.boxWidth = 500
     self.boxHeight = 130
     self.breakMovements = false
     self.PassDialog = false
-    self.font:setLineHeight(0.7)
+    self.font:setLineHeight(1)
 end
 
 function DialogBox:show(message)

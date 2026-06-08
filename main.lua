@@ -1,5 +1,6 @@
 local Levels = require("scripts/config/levels")
 local GameConfig = require("scripts/config/gameConfig")
+local Fonts = require("scripts/ui/fonts")
 GameConfig:applyLevel(Levels:getDefault())
 
 require "scripts/utils"
@@ -9,39 +10,10 @@ local GameIntro = require("scripts.managers.gameIntro")
 love.graphics.setDefaultFilter("nearest", "nearest")
 local presentationShader = love.graphics.newShader("scripts/shaders/presentation.glsl")
 local menuDistortionShader = love.graphics.newShader("scripts/shaders/hudWater.glsl")
-local performanceFont = love.graphics.newFont("assets/fonts/PixelGame.otf", 14)
+local fpsFont = Fonts:translated("fps")
 local unpackValues = table.unpack or unpack
 local MAX_PRESENTATION_SHOCKWAVES = 8
-PERF = PERF or {
-    enabled = false,
-    updateMs = 0,
-    drawMs = 0,
-    stateDrawMs = 0,
-    hudDrawMs = 0,
-    presentMs = 0,
-    canvasMs = 0,
-    enemiesMs = 0,
-    objectsMs = 0,
-    particlesMs = 0,
-    tilemapMs = 0,
-    lastSpikeMs = 0,
-    lastSpikeReason = "none",
-    lastSpikeEnemies = 0,
-}
-PERF.fpsStats = PERF.fpsStats or {
-    elapsed = 0,
-    samples = {},
-    sampleCount = 0,
-    sampleSum = 0,
-    min = math.huge,
-    max = 0,
-    lastMin = 0,
-    lastMax = 0,
-    lastAverage = 0,
-    lastOnePercentLow = 0,
-    history = {},
-    maxHistory = 36,
-}
+PERF = PERF or {}
 local presentationShockwaveCenters = {}
 local presentationShockwaveParams = {}
 local zeroVec2 = {0, 0}
@@ -51,12 +23,12 @@ for i = 1, MAX_PRESENTATION_SHOCKWAVES do
     presentationShockwaveParams[i] = {1, 0, 1, 0}
 end
 
-performanceFont:setFilter("nearest", "nearest")
-performanceFont:setLineHeight(1)
+fpsFont:setLineHeight(1)
 
 local AmbienceSound = require("scripts/managers/ambienceSound")
 local Music = require("scripts/managers/music")
 local Settings = require("scripts/managers/settings")
+local Localization = require("scripts/managers/localization")
 local PauseMenu = require("scripts/managers/menu/pauseMenu")
 local GameoverMenu = require("scripts/managers/menu/gameoverMenu")
 local MainMenu = require("scripts/managers/menu/mainMenu")
@@ -76,7 +48,6 @@ state = STATES.startLogo
 DEBUG = false
 FPS = false
 PERF.enabled = false
-PERF.overlayAvailable = GAME_FLAGS and GAME_FLAGS.performanceOverlay == true
 
 MUSIC_VOLUME = 0.7
 GAME_VOLUME = 1
@@ -166,65 +137,6 @@ local function shouldDrawHUD()
         and Player.isAlive ~= nil
 end
 
-local function updatePerformanceFpsStats(dt)
-    if not (PERF.enabled or DEBUG) then
-        return
-    end
-
-    local stats = PERF.fpsStats
-    if not stats or dt <= 0 then
-        return
-    end
-
-    local fps = 1 / dt
-    stats.sampleCount = (stats.sampleCount or 0) + 1
-    stats.samples[stats.sampleCount] = fps
-    stats.sampleSum = (stats.sampleSum or 0) + fps
-    stats.elapsed = (stats.elapsed or 0) + dt
-    stats.min = math.min(stats.min or math.huge, fps)
-    stats.max = math.max(stats.max or 0, fps)
-
-    if stats.elapsed < 1 then
-        return
-    end
-
-    local count = stats.sampleCount or 0
-    if count > 0 then
-        local sorted = {}
-        for i = 1, count do
-            sorted[i] = stats.samples[i]
-        end
-        table.sort(sorted)
-
-        local lowCount = math.max(1, math.ceil(count * 0.01))
-        local lowSum = 0
-        for i = 1, lowCount do
-            lowSum = lowSum + sorted[i]
-        end
-
-        stats.lastMin = stats.min
-        stats.lastMax = stats.max
-        stats.lastAverage = stats.sampleSum / count
-        stats.lastOnePercentLow = lowSum / lowCount
-
-        local history = stats.history
-        history[#history + 1] = {
-            min = stats.lastMin,
-            max = stats.lastMax,
-            low = stats.lastOnePercentLow,
-        }
-        while #history > (stats.maxHistory or 36) do
-            table.remove(history, 1)
-        end
-    end
-
-    stats.elapsed = stats.elapsed - 1
-    stats.sampleCount = 0
-    stats.sampleSum = 0
-    stats.min = math.huge
-    stats.max = 0
-end
-
 local function isMenuState()
     return state == STATES.mainMenu
         or state == STATES.gamePause
@@ -268,16 +180,12 @@ local function drawMenuWithDistortion(targetCanvas)
     love.graphics.setShader()
 end
 
-local function presentCanvas(sourceCanvas, useRoomTransition, trackPerf)
+local function presentCanvas(sourceCanvas, useRoomTransition)
     sourceCanvas = sourceCanvas or canvas
     if useRoomTransition == nil then
         useRoomTransition = true
     end
-    if trackPerf == nil then
-        trackPerf = true
-    end
 
-    local presentStart = trackPerf and PERF.enabled and love.timer.getTime() or nil
     local crtConfig = GAME_FLAGS and GAME_FLAGS.crt or {}
     local crtEnabled = crtConfig.enabled == true
     local brightness = math.min(math.max(tonumber(GAME_FLAGS and GAME_FLAGS.brightness) or 5, 0), 10)
@@ -324,11 +232,6 @@ local function presentCanvas(sourceCanvas, useRoomTransition, trackPerf)
         params[1], params[2], params[3], params[4] = 1, 0, 1, 0
     end
 
-    if trackPerf and PERF and PERF.enabled then
-        PERF.presentPixels = math.floor((baseWidth or 0) * (baseHeight or 0) * (scale or 1) * (scale or 1))
-        PERF.presentScale = scale or 1
-    end
-
     local presentationCanvas = useRoomTransition
         and RoomScreenTransition:getPresentationCanvas(sourceCanvas)
         or sourceCanvas
@@ -336,9 +239,6 @@ local function presentCanvas(sourceCanvas, useRoomTransition, trackPerf)
     if not crtEnabled and spotlightEnabled == 0 and shockwaveCount == 0 and brightnessNeutral then
         love.graphics.setColor(1, 1, 1, 1)
         love.graphics.draw(presentationCanvas, viewportOffsetX, viewportOffsetY, 0, scale, scale)
-        if presentStart then
-            PERF.presentMs = (love.timer.getTime() - presentStart) * 1000
-        end
         return
     end
 
@@ -364,10 +264,6 @@ local function presentCanvas(sourceCanvas, useRoomTransition, trackPerf)
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.draw(presentationCanvas, viewportOffsetX, viewportOffsetY, 0, scale, scale)
     love.graphics.setShader()
-
-    if presentStart then
-        PERF.presentMs = (love.timer.getTime() - presentStart) * 1000
-    end
 end
 
 local function drawFixedRoomLayer()
@@ -389,7 +285,7 @@ local function drawFixedRoomLayer()
     end
 
     love.graphics.setCanvas()
-    presentCanvas(fixedLayerCanvas, false, false)
+    presentCanvas(fixedLayerCanvas, false)
 end
 
 local function drawRoomTransitionFade()
@@ -490,7 +386,7 @@ end
 
 function openReturnToMenuConfirm(returnState)
     confirmReturnState = returnState or STATES.gamePause
-    ConfirmMenu:open("MAIN MENU", "return to main menu?", function()
+    ConfirmMenu:open("menu.main_menu", "confirm.return_menu", function()
         quitToMenu()
     end)
     state = STATES.confirm
@@ -498,7 +394,7 @@ end
 
 function openRestartConfirm(returnState)
     confirmReturnState = returnState or STATES.gamePause
-    ConfirmMenu:open("NEW RUN", "start a new run?", function()
+    ConfirmMenu:open("menu.new_run", "confirm.restart", function()
         loadGame()
     end)
     state = STATES.confirm
@@ -506,7 +402,7 @@ end
 
 function openQuitGameConfirm(returnState)
     confirmReturnState = returnState or STATES.mainMenu
-    ConfirmMenu:open("EXIT GAME", "quit the game?", function()
+    ConfirmMenu:open("menu.exit_game", "confirm.quit", function()
         quitGame()
     end)
     state = STATES.confirm
@@ -669,15 +565,6 @@ function love.keypressed(key)
     elseif state == STATES.confirm then
         ConfirmMenu:keypressed(key)
     end
-    if key == "f5" then
-        if PERF.overlayAvailable then
-            PERF.enabled = not PERF.enabled
-            FPS = false
-        else
-            PERF.enabled = false
-            FPS = not FPS
-        end
-    end
 end
 
 function love.mousepressed(x, y, button)
@@ -706,6 +593,14 @@ function love.mousepressed(x, y, button)
     end
 end
 
+function love.wheelmoved(x, y)
+    if TransitionManager.isTransiting then return end
+
+    if state == STATES.settings and SettingsMenu.wheelmoved then
+        SettingsMenu:wheelmoved(y)
+    end
+end
+
 function love.resize(w, h)
     updateWindowLayout(w, h)
 end
@@ -723,8 +618,6 @@ function love.visible(visible)
 end
 
 function love.update(dt)
-    updatePerformanceFpsStats(dt)
-    local updateStart = PERF.enabled and love.timer.getTime() or nil
     updateCurrentState(dt)
     TransitionManager:update(dt)
     RoomScreenTransition:update(dt)
@@ -734,270 +627,44 @@ function love.update(dt)
         Game:updateDamageAudioVolumeDuck(dt)
     end
     AudioDeviceSync:update(dt)
-    if updateStart then
-        PERF.updateMs = (love.timer.getTime() - updateStart) * 1000
-    end
 end 
 
-local function drawPerformanceFpsGraph(x, y, width, height)
-    local fpsStats = PERF.fpsStats
-    local history = fpsStats and fpsStats.history
-    if not history or #history == 0 then
-        love.graphics.setColor(1, 1, 1, 0.72)
-        love.graphics.print("1% low: collecting...", x, y)
+local function drawFPS()
+    if not FPS then
         return
     end
 
-    local onePercentLow = fpsStats.lastOnePercentLow or 0
-    local minFps = fpsStats.lastMin or 0
-    local maxFps = fpsStats.lastMax or 0
-
-    love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.print(string.format("1%% low %.0f min %.0f max %.0f", onePercentLow, minFps, maxFps), x, y)
-
-    local graphY = y + 17
-    local graphHeight = height - 17
-    love.graphics.setColor(0.08, 0.08, 0.08, 0.82)
-    love.graphics.rectangle("fill", x, graphY, width, graphHeight)
-    love.graphics.setColor(1, 1, 1, 0.18)
-    love.graphics.rectangle("line", x, graphY, width, graphHeight)
-
-    local maxGraphFps = 60
-    for i = 1, #history do
-        maxGraphFps = math.max(maxGraphFps, history[i].max or 0)
-    end
-    maxGraphFps = math.ceil(maxGraphFps / 30) * 30
-
-    local function valueY(value)
-        local normalized = math.min(math.max((value or 0) / maxGraphFps, 0), 1)
-        return graphY + graphHeight - normalized * graphHeight
-    end
-
-    love.graphics.setColor(1, 1, 1, 0.18)
-    local y60 = valueY(60)
-    love.graphics.line(x, y60, x + width, y60)
-
-    local step = width / math.max(fpsStats.maxHistory or 36, 1)
-    local startIndex = math.max(1, #history - (fpsStats.maxHistory or 36) + 1)
-    for i = startIndex, #history do
-        local entry = history[i]
-        local drawIndex = i - startIndex
-        local cx = x + drawIndex * step + step * 0.5
-        local minY = valueY(entry.min)
-        local maxY = valueY(entry.max)
-        local lowY = valueY(entry.low)
-
-        love.graphics.setColor(0.36, 0.92, 0.62, 0.72)
-        love.graphics.line(cx, maxY, cx, minY)
-        love.graphics.setColor(1, 0.42, 0.34, 0.86)
-        love.graphics.points(cx, minY)
-        love.graphics.setColor(1, 0.88, 0.34, 0.95)
-        love.graphics.rectangle("fill", cx - 1, lowY - 1, 2, 2)
-    end
-end
-
-local function drawPerformanceOverlay()
-    if not (PERF.enabled or DEBUG) then
-        if FPS then
-            local previousFont = love.graphics.getFont()
-            local r, g, b, a = love.graphics.getColor()
-            local x = 8
-            local y = love.graphics.getHeight() - 22
-
-            love.graphics.setFont(performanceFont)
-            love.graphics.setColor(0, 0, 0, 0.68)
-            love.graphics.rectangle("fill", x - 4, y - 3, 72, 18)
-            love.graphics.setColor(1, 1, 1, 1)
-            love.graphics.print("FPS: " .. love.timer.getFPS(), x, y)
-            love.graphics.setFont(previousFont)
-            love.graphics.setColor(r, g, b, a)
-        end
-        return
-    end
-
-    if not (PERF.overlayAvailable or DEBUG) then
-        return
-    end
-
-    local stats = love.graphics.getStats()
     local previousFont = love.graphics.getFont()
-    local lineHeight = 16
-    local width = 238
-    local height = 500
+    local r, g, b, a = love.graphics.getColor()
     local x = 8
-    local y = (baseHeight or love.graphics.getHeight()) - height - 8
+    local y = love.graphics.getHeight() - 22
 
+    love.graphics.setFont(fpsFont)
     love.graphics.setColor(0, 0, 0, 0.68)
-    love.graphics.rectangle("fill", x - 4, y - 4, width, height)
-    love.graphics.setFont(performanceFont)
+    love.graphics.rectangle("fill", x - 4, y - 3, 72, 18)
     love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.print("FPS: " .. love.timer.getFPS(), x, y)
-    y = y + lineHeight
-    drawPerformanceFpsGraph(x, y, width - 8, 72)
-    y = y + 80
-    love.graphics.print(string.format("update %.2f", PERF.updateMs or 0), x, y)
-    y = y + lineHeight
-    love.graphics.print(string.format("u enemy %.2f post %.2f", PERF.enemiesUpdateMs or 0, PERF.enemyPostUpdateMs or 0), x, y)
-    y = y + lineHeight
-    love.graphics.print(string.format("u obj %.2f part %.2f", PERF.objectsUpdateMs or 0, PERF.particlesMs or 0), x, y)
-    y = y + lineHeight
-    love.graphics.print(string.format("u player %.2f tile %.2f", PERF.playerUpdateMs or 0, PERF.tilemapMs or 0), x, y)
-    y = y + lineHeight
-    love.graphics.print(string.format("u misc %.2f mgr %.2f", PERF.miscUpdateMs or 0, PERF.managersOtherMs or 0), x, y)
-    y = y + lineHeight
-    love.graphics.print(string.format("draw %.2f", PERF.drawMs or 0), x, y)
-    y = y + lineHeight
-    love.graphics.print(string.format("canvas %.2f", PERF.canvasMs or 0), x, y)
-    y = y + lineHeight
-    love.graphics.print(string.format("world %.2f", PERF.stateDrawMs or 0), x, y)
-    y = y + lineHeight
-    love.graphics.print(string.format("c setup %.2f other %.2f", PERF.canvasSetupMs or 0, PERF.canvasOtherMs or 0), x, y)
-    y = y + lineHeight
-    love.graphics.print(string.format("present %.2f", PERF.presentMs or 0), x, y)
-    y = y + lineHeight
-    love.graphics.print(string.format("overlay %.2f trans %.2f", PERF.overlayMs or 0, PERF.transitionDrawMs or 0), x, y)
-    y = y + lineHeight
-    love.graphics.print(string.format("draw other %.2f", PERF.drawOtherMs or 0), x, y)
-    y = y + lineHeight
-    love.graphics.print(string.format("queue %.2f", PERF.worldQueueMs or 0), x, y)
-    y = y + lineHeight
-    love.graphics.print(string.format("  ground %.2f", PERF.wGroundQueueMs or 0), x, y)
-    y = y + lineHeight
-    love.graphics.print(string.format("  shadows %.2f", PERF.wShadowsMs or 0), x, y)
-    y = y + lineHeight
-    love.graphics.print(string.format("  objects %.2f", PERF.wQueueObjMs or 0), x, y)
-    y = y + lineHeight
-    love.graphics.print(string.format("q static %.2f/%d", PERF.qStaticMs or 0, PERF.qStaticCount or 0), x, y)
-    y = y + lineHeight
-    love.graphics.print(string.format("q enemies %.2f/%d", PERF.qEnemiesMs or 0, PERF.qEnemiesCount or 0), x, y)
-    y = y + lineHeight
-    love.graphics.print(string.format("q bullets %.2f/%d", PERF.qProjectilesMs or 0, PERF.qProjectilesCount or 0), x, y)
-    y = y + lineHeight
-    love.graphics.print(string.format("q parts %.2f/%d", PERF.qParticlesMs or 0, PERF.qParticlesCount or 0), x, y)
-    y = y + lineHeight
-    love.graphics.print(string.format("q player %.2f/%d", PERF.qPlayerMs or 0, PERF.qPlayerCount or 0), x, y)
-    y = y + lineHeight
-    love.graphics.print(string.format("q other %.2f/%d", PERF.qOtherMs or 0, PERF.qOtherCount or 0), x, y)
-    y = y + lineHeight
-    love.graphics.print(string.format("ground %.2f lights %.2f", PERF.worldGroundMs or 0, PERF.worldLightsMs or 0), x, y)
-    y = y + lineHeight
-    love.graphics.print(string.format("sort %.2f xray %.2f", PERF.worldSortMs or 0, PERF.worldXrayMs or 0), x, y)
-    y = y + lineHeight
-    love.graphics.print(string.format("hud %.2f clouds %.2f", PERF.hudDrawMs or 0, PERF.worldCloudsMs or 0), x, y)
-    y = y + lineHeight
-    love.graphics.print(string.format("dc %d cs %d", stats.drawcalls or 0, stats.canvasswitches or 0), x, y)
-    y = y + lineHeight
-    love.graphics.print(string.format("px batch %d/%d", PERF.pixelBatchDraws or 0, PERF.pixelBatchSprites or 0), x, y)
-    y = y + lineHeight
-    love.graphics.print(string.format("grass %.2f/%d big %.2f/%d", PERF.qGrassMs or 0, PERF.qGrassCount or 0, PERF.qBigGrassMs or 0, PERF.qBigGrassCount or 0), x, y)
-    y = y + lineHeight
-    love.graphics.print(string.format("tree %.2f/%d tile %.2f/%d", PERF.qTreesMs or 0, PERF.qTreesCount or 0, PERF.qTilesMs or 0, PERF.qTilesCount or 0), x, y)
-    y = y + lineHeight
-    love.graphics.print(string.format("water %.2f/%d sother %.2f/%d", PERF.qWaterMs or 0, PERF.qWaterCount or 0, PERF.qStaticOtherMs or 0, PERF.qStaticOtherCount or 0), x, y)
-    y = y + lineHeight
-    love.graphics.print(string.format(
-        "enemies %d prof %s",
-        Game and Game.enemies and #Game.enemies or 0,
-        PERF.drawProfileActive and "on" or "sample"
-    ), x, y)
+    love.graphics.print(Localization:t("hud.fps") .. ": " .. love.timer.getFPS(), x, y)
     love.graphics.setFont(previousFont)
+    love.graphics.setColor(r, g, b, a)
 end
-
-local function updatePerformanceSpike(totalMs)
-    if not PERF.enabled then
-        return
-    end
-
-    local threshold = PERF.spikeThresholdMs or 7.5
-    if totalMs < threshold and totalMs < (PERF.lastSpikeMs or 0) * 0.92 then
-        return
-    end
-
-    local reason = "frame"
-    local maxPhase = 0
-    local phases = {
-        update = PERF.updateMs or 0,
-        world = PERF.stateDrawMs or 0,
-        hud = PERF.hudDrawMs or 0,
-        present = PERF.presentMs or 0,
-        enemies = PERF.enemiesMs or 0,
-        objects = PERF.objectsMs or 0,
-        particles = PERF.particlesMs or 0,
-        tilemap = PERF.tilemapMs or 0,
-        w_ground = PERF.worldGroundMs or 0,
-        w_lights = PERF.worldLightsMs or 0,
-        w_sort = PERF.worldSortMs or 0,
-        w_queue = PERF.worldQueueMs or 0,
-        w_xray = PERF.worldXrayMs or 0,
-    }
-
-    for name, value in pairs(phases) do
-        if value > maxPhase then
-            maxPhase = value
-            reason = name
-        end
-    end
-
-    if maxPhase < totalMs * 0.18 then
-        reason = "present/driver"
-    end
-
-    PERF.lastSpikeMs = totalMs
-    PERF.lastSpikeReason = reason
-    PERF.lastSpikeEnemies = Game and Game.enemies and #Game.enemies or 0
-end
-
 
 function love.draw()
-    local drawStart = PERF.enabled and love.timer.getTime() or nil
-    local phaseStart = PERF.enabled and love.timer.getTime() or nil
     local keepRoomUiFixed = RoomScreenTransition:isCapturing() or RoomScreenTransition:isActive()
     love.graphics.clear(0, 0, 0)
-    if phaseStart then
-        PERF.backClearMs = (love.timer.getTime() - phaseStart) * 1000
-        phaseStart = love.timer.getTime()
-    end
 
-    local canvasStart = PERF.enabled and love.timer.getTime() or nil
     love.graphics.setCanvas({canvas, stencil = true})
     love.graphics.clear(0.2, 0.3, 0.3)
-    if phaseStart then
-        PERF.canvasSetupMs = (love.timer.getTime() - phaseStart) * 1000
-    end
-    local stateDrawStart = PERF.enabled and love.timer.getTime() or nil
     drawCurrentState()
-    if stateDrawStart then
-        PERF.stateDrawMs = (love.timer.getTime() - stateDrawStart) * 1000
-    end
     if isGameplayState() and not keepRoomUiFixed then
-        local hudStart = PERF.enabled and love.timer.getTime() or nil
         Game:drawHUD()
-        if hudStart then
-            PERF.hudDrawMs = (love.timer.getTime() - hudStart) * 1000
-        end
-    elseif PERF.enabled then
-        PERF.hudDrawMs = 0
     end
     if not keepRoomUiFixed and isMenuState() then
         drawMenuWithDistortion()
     elseif not keepRoomUiFixed then
         drawScaledState()
     end
-    if PERF.enabled then
-        PERF.scaledDrawMs = 0
-    end
-    if isMenuState() then
-        -- drawMenuWithDistortion is intentionally counted in canvas overhead for menus.
-    end
     love.graphics.setCanvas()
     RoomScreenTransition:captureOldFrame(canvas)
-    if canvasStart then
-        PERF.canvasMs = (love.timer.getTime() - canvasStart) * 1000
-        PERF.canvasOtherMs = PERF.canvasMs
-            - (PERF.canvasSetupMs or 0)
-            - (PERF.stateDrawMs or 0)
-            - (PERF.hudDrawMs or 0)
-    end
 
     presentCanvas()
     if keepRoomUiFixed then
@@ -1008,25 +675,7 @@ function love.draw()
     end
     drawRoomTransitionFade()
 
-    local overlayStart = PERF.enabled and love.timer.getTime() or nil
-    drawPerformanceOverlay()
-    if overlayStart then
-        PERF.overlayMs = (love.timer.getTime() - overlayStart) * 1000
-    end
+    drawFPS()
 
-    local transitionStart = PERF.enabled and love.timer.getTime() or nil
     TransitionManager:drawFullscreen()
-    if transitionStart then
-        PERF.transitionDrawMs = (love.timer.getTime() - transitionStart) * 1000
-    end
-
-    if drawStart then
-        PERF.drawMs = (love.timer.getTime() - drawStart) * 1000
-        PERF.drawOtherMs = PERF.drawMs
-            - (PERF.canvasMs or 0)
-            - (PERF.presentMs or 0)
-            - (PERF.overlayMs or 0)
-            - (PERF.transitionDrawMs or 0)
-        updatePerformanceSpike(PERF.drawMs)
-    end
 end

@@ -1,5 +1,6 @@
 local Hollow = {}
 Hollow.__index = Hollow
+local Localization = require("scripts/managers/localization")
 
 local image = love.graphics.newImage("assets/sprites/objects/hollow.png")
 image:setFilter("nearest", "nearest")
@@ -38,7 +39,7 @@ function Hollow:update(dt)
     end
 
     if self:isPlayerNear() then
-        Game.drawtext = "press f to go to the next floor"
+        Game.drawtext = Localization:t("game.next_floor")
         Game.textAlphaTarget = 1
     end
 end
