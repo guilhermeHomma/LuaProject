@@ -3,6 +3,7 @@ local WorldRenderer = {}
 local Ground = require("scripts/ground")
 local Clouds = require("scripts/clouds")
 local LightConfig = require("scripts/config/lightConfig")
+local TileLightInterpolator = require("scripts/render/tileLightInterpolator")
 local Trail = require("scripts.objects.trails")
 
 local MAX_XRAY_TARGETS_PER_FRAME = 10
@@ -201,6 +202,10 @@ local function calcCachedBrightness(object, objectX, objectY, minBrightness)
     return value
 end
 
+local function calcTileInterpolatedBrightness(object, brightness, minBrightness)
+    return TileLightInterpolator:apply(object, brightness, minBrightness, calcCachedBrightness)
+end
+
 local function drawFootsteps(game)
     local brightnessByFootstep = game.footstepBrightnessCache or {}
     game.footstepBrightnessCache = brightnessByFootstep
@@ -262,6 +267,7 @@ local function drawGroundQueueObjects(game)
             local ox = obj.xWorld or obj.x
             local oy = obj.yWorld or obj.y
             local brt = ox and oy and calcCachedBrightness(obj, ox, oy, minBrightness) or minBrightness
+            brt = calcTileInterpolatedBrightness(obj, brt, minBrightness)
             local r = sr + ivr * brt
             local g = sg + ivg * brt
             local b = sb + ivb * brt
@@ -288,6 +294,7 @@ local function drawGroundQueueObjects(game)
             local ox = object.xWorld or object.x
             local oy = object.yWorld or object.y
             local brt = ox and oy and calcCachedBrightness(object, ox, oy, minBrightness) or minBrightness
+            brt = calcTileInterpolatedBrightness(object, brt, minBrightness)
             local color = generalShadow.color or {0, 0, 0}
             local sr, sg, sb = color[1] or 0, color[2] or 0, color[3] or 0
             tintR = sr + (1 - sr) * brt
@@ -340,6 +347,7 @@ local function drawQueueObjects(game)
             local ox = obj.xWorld or obj.x
             local oy = obj.yWorld or obj.y
             local brt = ox and oy and calcCachedBrightness(obj, ox, oy, minBrightness) or minBrightness
+            brt = calcTileInterpolatedBrightness(obj, brt, minBrightness)
             local r = sr + ivr * brt
             local g = sg + ivg * brt
             local b = sb + ivb * brt

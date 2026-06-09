@@ -6,7 +6,6 @@ local Bullet = require("scripts/bullet")
 local BallParticle = require("scripts/particles/ballParticle")
 local WalkParticle = require("scripts/particles/walkParticle")
 local WalkParticleSquare = require("scripts/particles/walkParticleSquare")
-local FootStep = require("scripts/particles/footstep")
 local BloodPixel = require("scripts/particles/bloodPixel")
 local BloodDecal = require("scripts/particles/bloodDecal")
 local Tilemap = require("scripts/tilemap")
@@ -118,7 +117,6 @@ function Player:load(camera, spawnX, spawnY)
     self.damageAlha = 0
 
     self.shadowTimer = 0
-    self.footStepTimer = 0 
     self.glitchDuration = 0.35
     self.glitchTimer = 0
     self.glitchDisplacementPixels = 2
@@ -255,7 +253,6 @@ function Player:updateAnimation(dt, moving)
             self.idleHandTimer = self.idleHandTimer - 0.6
             self.idleHandFrame = self.idleHandFrame == 1 and 2 or 1
         end
-        self.footStepTimer = 0
         return
     end
 
@@ -279,17 +276,6 @@ function Player:updateAnimation(dt, moving)
     end
 
     self.animationTimer = self.animationTimer + dt
-    self.footStepTimer = self.footStepTimer + dt
-    if moving and self.footStepTimer > 0.11 then
-        self.footStepTimer = 0
-        local randx = math.random(-1.5,1.5)
-        local randy = math.random(-1.5,1.5)
-        local footstep = FootStep:new(self.x + randx, self.y +randy)
-        table.insert(Game.footsteps, footstep)
-
-    
-    end
-    
     local advancedFrames = 0
     while self.animationTimer >= frameTime and advancedFrames < 4 do
         self.animationTimer = self.animationTimer - frameTime

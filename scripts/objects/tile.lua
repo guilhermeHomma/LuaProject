@@ -118,6 +118,7 @@ function Tile:new(x, y, quadIndex, collider)
     tile.xWorld, tile.yWorld = Tile.tilemap:mapToWorld(x,y)
     tile.distance = 0
     tile.isAlive = true
+    tile.isTile = true
     tile.isBreaking = false
     tile.hasExploded = false
     tile.hasDroppedBoxParticle = false

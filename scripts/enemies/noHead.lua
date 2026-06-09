@@ -149,7 +149,6 @@ function NoHead:new(x, y)
     local enemy = Zombie.new(self, x, y, math.random(52, 60))
     enemy.totalLife = 30
     enemy.life = enemy.totalLife
-    enemy.footStepAlpha = 0.35
     enemy.shootDistance = math.random(96, 128)
     enemy.shootCancelDistance = enemy.shootDistance + 72
     enemy.shootCooldown = math.random(75, 100) / 100

@@ -6,35 +6,56 @@ local LeafParticle = require("scripts/particles/leafParticle")
 local FloorManager = require("scripts/managers/floorManager")
 local TreeConfig = require("scripts/config/treeConfig")
 
-local threeImage1 = love.graphics.newImage("assets/sprites/objects/three1.png")
-local threeImage2 = love.graphics.newImage("assets/sprites/objects/three2.png")
-local threeImage3 = love.graphics.newImage("assets/sprites/objects/three3.png")
-local threeImage4 = love.graphics.newImage("assets/sprites/objects/three4.png")
-local threeImage5 = love.graphics.newImage("assets/sprites/objects/three5.png")
+local treeSheetImage = love.graphics.newImage("assets/sprites/florest/three.png")
 local bigThreeImage = love.graphics.newImage("assets/sprites/objects/bigthree.png")
 local TilemapModule = nil
 local triedLoadingTilemapModule = false
 
-threeImage1:setFilter("nearest", "nearest")
-threeImage2:setFilter("nearest", "nearest")
-threeImage3:setFilter("nearest", "nearest")
-threeImage4:setFilter("nearest", "nearest")
-threeImage5:setFilter("nearest", "nearest")
+treeSheetImage:setFilter("nearest", "nearest")
 bigThreeImage:setFilter("nearest", "nearest")
+
+local TREE_FRAME_WIDTH = 64
+local TREE_FRAME_HEIGHT = 96
+local TREE_FRAME_COUNT = 5
+local treeQuads = {}
+local treeFrameUVs = {}
+local treeSheetWidth, treeSheetHeight = treeSheetImage:getDimensions()
+treeFrameUVs.big = {0, 0, 1, 1}
+
+for i = 1, TREE_FRAME_COUNT do
+    local frameX = (i - 1) * TREE_FRAME_WIDTH
+    treeQuads[i] = love.graphics.newQuad(
+        frameX,
+        0,
+        TREE_FRAME_WIDTH,
+        TREE_FRAME_HEIGHT,
+        treeSheetWidth,
+        treeSheetHeight
+    )
+    treeFrameUVs[i] = {
+        (frameX + 0.5) / treeSheetWidth,
+        0,
+        (frameX + TREE_FRAME_WIDTH - 0.5) / treeSheetWidth,
+        TREE_FRAME_HEIGHT / treeSheetHeight,
+    }
+end
 
 local shader = love.graphics.newShader([[
     extern float time;
     extern float invScaleY10;
     extern float camPhaseOffset;
     extern vec2 spriteSize;
+    extern vec4 frameUV;
 
     vec4 effect(vec4 color, Image tex, vec2 texture_coords, vec2 screen_coords) {
         float phase = screen_coords.y * invScaleY10 + camPhaseOffset;
-        float direction = sin(time * 1.1 + phase) * 0.45 + 1.0;
-        vec2 pixelCoord = texture_coords * spriteSize;
+        float direction = sin(time * 1.0 + phase);
+        vec2 frameSize = max(frameUV.zw - frameUV.xy, vec2(0.0001));
+        vec2 localUV = clamp((texture_coords - frameUV.xy) / frameSize, vec2(0.0), vec2(1.0));
+        vec2 pixelCoord = localUV * spriteSize;
         float relY = clamp(1.0 - pixelCoord.y / spriteSize.y, 0.0, 1.0);
-        float sway = relY * relY * 2.0;
-        texture_coords.x += direction / spriteSize.x * sway;
+        float sway = relY * relY * 0.42;
+        texture_coords.x = clamp(texture_coords.x + direction / spriteSize.x * sway, frameUV.x, frameUV.z);
         return Texel(tex, texture_coords) * color;
     }
 ]])
@@ -43,10 +64,13 @@ shader:send("time", 0.0)
 shader:send("invScaleY10", 1.0 / (2.4 * 18.0))
 shader:send("camPhaseOffset", 0.0)
 shader:send("spriteSize", {64.0, 96.0})
+shader:send("frameUV", {0.0, 0.0, 1.0, 1.0})
 
 local treeShaderSize = {64, 96}
+local treeShaderFrameUV = {0, 0, 1, 1}
 local lastTreeShaderWidth = 64
 local lastTreeShaderHeight = 96
+local lastTreeShaderFrameUV = nil
 local lastShaderUpdateTime = -1
 
 local function updateTreeShaderGlobals()
@@ -62,13 +86,19 @@ local function updateTreeShaderGlobals()
     end
 end
 
-local function applyTreeShader(width, height)
+local function applyTreeShader(width, height, frameUV)
     love.graphics.setShader(shader)
     updateTreeShaderGlobals()
     if width ~= lastTreeShaderWidth or height ~= lastTreeShaderHeight then
         treeShaderSize[1], treeShaderSize[2] = width, height
         shader:send("spriteSize", treeShaderSize)
         lastTreeShaderWidth, lastTreeShaderHeight = width, height
+    end
+    if frameUV ~= lastTreeShaderFrameUV then
+        treeShaderFrameUV[1], treeShaderFrameUV[2] = frameUV[1], frameUV[2]
+        treeShaderFrameUV[3], treeShaderFrameUV[4] = frameUV[3], frameUV[4]
+        shader:send("frameUV", treeShaderFrameUV)
+        lastTreeShaderFrameUV = frameUV
     end
 end
 
@@ -204,6 +234,14 @@ local function getTreeSpriteMetrics(tree)
     end
 
     return originX, originY, spriteWidth, spriteHeight
+end
+
+local function getTreeSprite(tree)
+    if tree.treeIndex == 6 then
+        return bigThreeImage, nil, treeFrameUVs.big
+    end
+
+    return treeSheetImage, treeQuads[tree.treeIndex] or treeQuads[1], treeFrameUVs[tree.treeIndex] or treeFrameUVs[1]
 end
 
 function TreeTile:new(x, y, quadIndex, collider, options)
@@ -375,21 +413,20 @@ function TreeTile:getXrayOccluderBox()
 end
 
 function TreeTile:drawXrayOccluder()
-    local image = threeImage1
     local originX = 32
     local originY = 93
 
-    if self.treeIndex == 2 then image = threeImage2 end
-    if self.treeIndex == 3 then image = threeImage3 end
-    if self.treeIndex == 4 then image = threeImage4 end
-    if self.treeIndex == 5 then image = threeImage5 end
+    local image, quad = getTreeSprite(self)
     if self.treeIndex == 6 then
-        image = bigThreeImage
         originX = 80
         originY = 156
     end
 
-    love.graphics.draw(image, self.xWorld, self.yWorld, 0, 1, self.stretch, originX, originY)
+    if quad then
+        love.graphics.draw(image, quad, self.xWorld, self.yWorld, 0, 1, self.stretch, originX, originY)
+    else
+        love.graphics.draw(image, self.xWorld, self.yWorld, 0, 1, self.stretch, originX, originY)
+    end
 end
 
 function TreeTile:draw()
@@ -398,18 +435,10 @@ function TreeTile:draw()
     local tileSize = TileSet.tileSize
     local tilesetImage = TileSet.tilesetImage
 
-    local image = threeImage1
+    local image, quad, frameUV = getTreeSprite(self)
     local originX, originY, spriteWidth, spriteHeight = getTreeSpriteMetrics(self)
 
-    if self.treeIndex == 2 then image = threeImage2 end 
-    if self.treeIndex == 3 then image = threeImage3 end
-    if self.treeIndex == 4 then image = threeImage4 end
-    if self.treeIndex == 5 then image = threeImage5 end
-    if self.treeIndex == 6 then
-        image = bigThreeImage
-    end
-
-    applyTreeShader(spriteWidth, spriteHeight)
+    applyTreeShader(spriteWidth, spriteHeight, frameUV)
 
     if not self.collider then
         love.graphics.draw(tilesetImage, tileSet[5], self.xWorld, self.yWorld , 0, 1, 1, tileSize/2, tileSize)
@@ -429,7 +458,11 @@ function TreeTile:draw()
     local foregroundBrightness = getTreeForegroundBrightness(self)
     love.graphics.setColor(r * foregroundBrightness, g * foregroundBrightness, b * foregroundBrightness, self.alpha)
     
-    love.graphics.draw(image, self.xWorld, self.yWorld, 0, 1, self.stretch, originX, originY)
+    if quad then
+        love.graphics.draw(image, quad, self.xWorld, self.yWorld, 0, 1, self.stretch, originX, originY)
+    else
+        love.graphics.draw(image, self.xWorld, self.yWorld, 0, 1, self.stretch, originX, originY)
+    end
     love.graphics.setColor(r, g, b, a) 
     love.graphics.setShader()
 end

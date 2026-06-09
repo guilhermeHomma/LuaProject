@@ -1,6 +1,7 @@
 local baseMenu = require("scripts/managers/menu/baseMenu")
 local Settings = require("scripts/managers/settings")
 local Localization = require("scripts/managers/localization")
+local SelectCorners = require("scripts/ui/selectCorners")
 
 local SettingsMenu = {}
 setmetatable(SettingsMenu, { __index = baseMenu })
@@ -316,6 +317,12 @@ function SettingsMenu:drawOptionBox(bounds, isSelected, isInactive)
     if isSelected and not isInactive then
         love.graphics.setColor(0.78, 0.76, 0.62, 0.72)
         love.graphics.rectangle("line", bounds.left, bounds.top, bounds.width, bounds.height)
+        SelectCorners.draw(bounds, {
+            startedAt = self.lastSelectChange,
+            scale = 1.85,
+            padding = -1,
+            color = {0.95, 0.92, 0.74, 1},
+        })
     end
 end
 

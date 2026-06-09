@@ -95,7 +95,6 @@ function BigZombie:new(x, y)
     zombie.damageTimer = 0.1
     zombie.totalLife = 65
     zombie.life = zombie.totalLife
-    zombie.footStepAlpha = 0.7
     zombie.roamAroundPlayer = false
     zombie.rushState = "seeking"
     zombie.rushCooldown = math.random(65, 70) / 100

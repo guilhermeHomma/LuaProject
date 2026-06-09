@@ -2,6 +2,7 @@
 local baseMenu = {}
 local Localization = require("scripts/managers/localization")
 local Fonts = require("scripts/ui/fonts")
+local SelectCorners = require("scripts/ui/selectCorners")
 local navigateSound = love.audio.newSource("assets/sfx/menu/menu-button.mp3", "static")
 local confirmSound = love.audio.newSource("assets/sfx/menu/menu-selected.mp3", "static")
 
@@ -26,8 +27,6 @@ function baseMenu:load()
     self.mouseNeedsSync = true
     self.inputMode = "mouse"
     self.hoverSoundCooldowns = {}
-
-    self.selectSprite = love.graphics.newImage("assets/sprites/menu/menu-select.png")
 
 end
 
@@ -59,17 +58,6 @@ end
 
 function baseMenu:onSelect()
 
-end
-
-function baseMenu:drawSelectSprite(text, y)
-    local normalizedText = Localization:normalizeText(text)
-    local ok, textWidth = pcall(function()
-        return self.fontOptions:getWidth(normalizedText)
-    end)
-    textWidth = ok and textWidth or 80
-    textWidth = math.min(textWidth, self:getWidth() - 74)
-    local spriteX =  math.ceil(self:getWidth()/ 2 - textWidth / 2 - 30)
-    love.graphics.draw(self.selectSprite, spriteX, y+ 3, 0, 3, 3)
 end
 
 function baseMenu:getCanvasMousePosition()
@@ -311,9 +299,28 @@ end
 
 function baseMenu:drawSelectedOptionContent(text, y, bounds)
     local leanX, leanY = self:getMouseLean(bounds)
+    local normalizedText = Localization:normalizeText(text)
+    local ok, textWidth = pcall(function()
+        return self.fontOptions:getWidth(normalizedText)
+    end)
+    textWidth = ok and textWidth or math.max((bounds and bounds.width or 80) - 72, 24)
+    local visualPaddingX = 10
+    local visualPaddingY = 2
+    local visualBounds = {
+        left = math.floor(self:getWidth() / 2 - textWidth / 2 - visualPaddingX + 0.5),
+        top = bounds.top + visualPaddingY,
+        width = math.floor(textWidth + visualPaddingX * 2 + 0.5),
+        height = bounds.height - visualPaddingY * 2 - 6,
+    }
+
     love.graphics.push()
     love.graphics.translate(math.floor(leanY * -1 + 0.5), math.floor(leanX * 1 + 0.5))
-    self:drawSelectSprite(text, y)
+    SelectCorners.draw(visualBounds, {
+        startedAt = self.lastSelectChange,
+        scale = 2.25,
+        padding = 0,
+        color = {0.95, 0.92, 0.74, 1},
+    })
     love.graphics.pop()
     self:drawHoverText(text, y, bounds)
 end

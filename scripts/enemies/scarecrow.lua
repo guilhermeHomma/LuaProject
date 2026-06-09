@@ -6,7 +6,6 @@ local DropTemplates = require("scripts/drops/dropTemplates")
 local EnemyDeadDropParticle = require("scripts/particles/enemyDeadDropParticle")
 local Ball = require("scripts/particles/ballParticle")
 local BloodPixel = require("scripts/particles/bloodPixel")
-local FootStep = require("scripts/particles/footstep")
 local FloorManager = require("scripts/managers/floorManager")
 local DamageImpactParticle = require("scripts/particles/damageImpactParticle")
 local EnemyDeathProjectiles = require("scripts/enemies/enemyDeathProjectiles")
@@ -150,7 +149,6 @@ function Scarecrow:breakApart()
     end
     BloodPixel.spawnBurst(self.x, self.y - 8, 0, -1, 9, 12, strawBloodPalette)
 
-    table.insert(Game.footsteps, FootStep:new(self.x, self.y - 8))
     for _ = 1, 2 do
         table.insert(Game.particles, EnemyDeadDropParticle:new(self.x, self.y))
     end

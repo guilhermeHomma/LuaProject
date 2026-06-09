@@ -9,7 +9,6 @@ local EnemyDirector = require("scripts/enemies/enemyDirector")
 local whiteShader = love.graphics.newShader("scripts/shaders/whiteShader.glsl")
 local glitchShader = love.graphics.newShader("scripts/shaders/playerGlitch.glsl")
 local WalkParticle = require("scripts/particles/walkParticle")
-local FootStep = require("scripts/particles/footstep")
 local DamageStretch = require("scripts/effects/damageStretch")
 local ZombieMouthConfig = require("scripts/enemies/zombieMouthConfig")
 local BloodPixel = require("scripts/particles/bloodPixel")
@@ -313,8 +312,6 @@ function Zombie:new(x, y, speed)
     enemy.currentFrame = 1
     enemy.animationTimer = 0
     enemy.animationSpeed = 0.15
-    enemy.footStepTimer = 0
-    enemy.footStepAlpha = 0.4
     enemy.stateTimer = 0
     enemy.idleDuration = math.random(7, 13) / 10
     enemy.walkDuration = math.random(4, 6)
@@ -979,21 +976,6 @@ end
 
 function Zombie:animate(startFrame, endFrame, dt)
     self.animationTimer = self.animationTimer + dt
-
-    self.footStepTimer = self.footStepTimer + dt
-    local footStepVisualInterval = self.footStepVisualInterval or 0.12
-    if not self.skipFootSteps and self.footStepTimer > footStepVisualInterval and (self.state == Zombie.states.walk) then
-        local dx = self.x - Player.x
-        local dy = self.y - Player.y
-        if dx * dx + dy * dy < 40000 then
-            self.footStepTimer = 0
-            local randx = math.random(-2,2)
-            local randy = math.random(-2,2)
-            local footstep = FootStep:new(self.x + randx, self.y + randy, self.footStepAlpha)
-            table.insert(Game.footsteps, footstep)
-        end
-    end
-    
 
     local advancedFrames = 0
     while self.animationTimer >= self.animationSpeed and advancedFrames < 4 do

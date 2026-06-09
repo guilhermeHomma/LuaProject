@@ -22,7 +22,6 @@ function babyZombie:new(x, y)
     zombie.speed = math.random(72, 83)
     zombie.damageTimer = 0.14
     zombie.totalLife = 25
-    zombie.skipFootSteps = true
     zombie.skipWalkParticles = true
     zombie.life = zombie.totalLife
     zombie.mouthVariant = "babyZombie"

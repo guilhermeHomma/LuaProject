@@ -72,8 +72,6 @@ function Spider:new(x, y)
     enemy.randomPathTiles = 6
     enemy.randomPathIdleTimer = 0.6
     enemy.randomPathPauseTimer = math.random() * 0.35
-    enemy.footStepAlpha = 0.18
-    enemy.footStepVisualInterval = 0.5
     enemy.animationSpeed = 0.1
     enemy.noise = spiderSoundBase:clone()
     enemy.soundInterval = 3.8 + math.random() * 2.4

@@ -1,7 +1,7 @@
 GAME_FLAGS = GAME_FLAGS or {
-    skipIntro = true,
+    skipIntro = false,
     logFloorGeneration = false,
-    weaponTestLevel = false,
+    weaponTestLevel = true,
     experimentalZombieStressTest = false,
     cameraShake = true,
     brightness = 5,
