@@ -1,5 +1,6 @@
 local baseMenu = require("scripts/managers/menu/baseMenu")
 local Localization = require("scripts/managers/localization")
+local TransitionManager = require("scripts.managers.transitionManager")
 
 local ConfirmMenu = {}
 setmetatable(ConfirmMenu, { __index = baseMenu })
@@ -10,9 +11,11 @@ function ConfirmMenu:load()
     self.message = Localization:t("confirm.return_menu")
     self.menuOptions = {"yes", "no"}
     self.onConfirm = nil
+    self.lockOnSelect = true
 end
 
 function ConfirmMenu:open(title, message, onConfirm)
+    self:unlockInteractions()
     self.titleKey = title
     self.messageKey = message
     self.MenuTItle = title and Localization:t(title) or Localization:t("menu.confirm")
@@ -20,6 +23,14 @@ function ConfirmMenu:open(title, message, onConfirm)
     self.onConfirm = onConfirm
     self.selectedOption = 2
     self.mouseNeedsSync = true
+end
+
+function ConfirmMenu:update(dt)
+    if self:isInteractionLocked() and not TransitionManager.isTransiting then
+        self:unlockInteractions()
+    end
+
+    baseMenu.update(self, dt)
 end
 
 function ConfirmMenu:draw()
@@ -52,6 +63,10 @@ function ConfirmMenu:onSelect()
 end
 
 function ConfirmMenu:keypressed(key)
+    if self:isInteractionLocked() then
+        return true
+    end
+
     if key == "escape" then
         closeConfirmMenu()
         return

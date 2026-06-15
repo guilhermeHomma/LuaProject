@@ -133,13 +133,16 @@ function BigZombie:takeDamage(damage, dx, dy)
     self.lastDamageDx = dx
     self.lastDamageDy = dy
     self.life = self.life - damage
-    BloodPixel.spawnBurst(self.x, self.y - 2, dx, dy, 4, 6)
+    local hitBloodMin, hitBloodMax = self:getHitBloodRange()
+    BloodPixel.spawnBurst(self.x, self.y - 2, dx, dy, hitBloodMin, hitBloodMax)
     if self.life > 0 then
-        BloodDecal.spawn(self.x, self.y, dx, dy, {
-            scaleMultiplier = 0.5,
-            volumeMultiplier = 0.78,
-            pitchMultiplier = 0.62,
-        })
+        if self:canSpawnHitBloodDecal() then
+            BloodDecal.spawn(self.x, self.y, dx, dy, {
+                scaleMultiplier = 0.5,
+                volumeMultiplier = 0.78,
+                pitchMultiplier = 0.62,
+            })
+        end
     else
         self:spawnDeathBloodDecal()
     end

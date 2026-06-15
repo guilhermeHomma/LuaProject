@@ -71,6 +71,11 @@ ZombieStressTestLevel.roomEncounterConfig = {
 }
 ZombieStressTestLevel.objectSpawnChances = {}
 ZombieStressTestLevel.objectSpawnChancesByTemplate = {}
+ZombieStressTestLevel.grassConfig = {
+    nonWalkableChance = 0.14,
+    bigGrassChance = 0.05,
+    nonWalkableBigGrassChance = 0.05,
+}
 ZombieStressTestLevel.floorPathTiles = {}
 ZombieStressTestLevel.wallVariantTiles = {}
 ZombieStressTestLevel.shopConfig = {

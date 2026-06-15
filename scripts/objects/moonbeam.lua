@@ -1,6 +1,18 @@
 local Moonbeam = {}
 Moonbeam.__index = Moonbeam
 
+local DEFAULT_DUST_DRIFT_MIN_X = -32
+local DEFAULT_DUST_DRIFT_MAX_X = -14
+local DEFAULT_DUST_DRIFT_MIN_Y = -5
+local DEFAULT_DUST_DRIFT_MAX_Y = 4
+local DEFAULT_DUST_DRIFT_DISTANCE = 220
+local DEFAULT_DUST_BOB_AMOUNT_MIN = 4
+local DEFAULT_DUST_BOB_AMOUNT_MAX = 11
+local DEFAULT_DUST_BOB_SPEED_MIN = 2.2
+local DEFAULT_DUST_BOB_SPEED_MAX = 4.8
+local DEFAULT_DUST_LIFE_MIN = 3.4
+local DEFAULT_DUST_LIFE_MAX = 6.4
+
 local function randomRange(minValue, maxValue)
     return minValue + math.random() * (maxValue - minValue)
 end
@@ -46,20 +58,27 @@ local function makeDustParticle(beam)
     local x = beam.startX + beam.dx * progress + widthOffset
     local y = beam.startY + beam.dy * progress + randomRange(-8, 8)
     local bright = math.random() < (beam.config.dustWhiteChance or 0.18)
+    local bobPhase = math.random() * math.pi * 2
+    local bobAmount = randomRange(beam.config.dustBobAmountMin or DEFAULT_DUST_BOB_AMOUNT_MIN, beam.config.dustBobAmountMax or DEFAULT_DUST_BOB_AMOUNT_MAX)
+    local lifeMax = beam.config.dustLifeMax or DEFAULT_DUST_LIFE_MAX
 
     return {
         x = x,
         y = y,
         startX = x,
         startY = y,
-        vx = randomRange(beam.config.dustDriftMinX or -3.8, beam.config.dustDriftMaxX or -1.2),
-        vy = randomRange(beam.config.dustDriftMinY or -0.25, beam.config.dustDriftMaxY or 0.35),
+        vx = randomRange(beam.config.dustDriftMinX or DEFAULT_DUST_DRIFT_MIN_X, beam.config.dustDriftMaxX or DEFAULT_DUST_DRIFT_MAX_X),
+        vy = randomRange(beam.config.dustDriftMinY or DEFAULT_DUST_DRIFT_MIN_Y, beam.config.dustDriftMaxY or DEFAULT_DUST_DRIFT_MAX_Y),
+        bobPhase = bobPhase,
+        bobSpeed = randomRange(beam.config.dustBobSpeedMin or DEFAULT_DUST_BOB_SPEED_MIN, beam.config.dustBobSpeedMax or DEFAULT_DUST_BOB_SPEED_MAX),
+        bobAmount = bobAmount,
+        bobOffset = math.sin(bobPhase) * bobAmount,
         radius = randomRange(beam.config.dustRadiusMin or 0.45, beam.config.dustRadiusMax or 1.1),
         alpha = randomRange(beam.config.dustAlphaMin or 0.16, beam.config.dustAlphaMax or 0.34),
         color = bright and copyColor(beam.config.dustBrightColor, {0.88, 0.92, 1, 1})
             or copyColor(beam.config.dustColor, {0.58, 0.62, 0.68, 1}),
-        life = randomRange(beam.config.dustLifeMin or 2.2, beam.config.dustLifeMax or 4.2),
-        timer = math.random() * 2.5,
+        life = randomRange(beam.config.dustLifeMin or DEFAULT_DUST_LIFE_MIN, lifeMax),
+        timer = math.random() * lifeMax,
     }
 end
 
@@ -107,12 +126,14 @@ end
 function Moonbeam:updateDust(dt)
     for i, particle in ipairs(self.dust) do
         particle.timer = particle.timer + dt
+        local bobOffset = math.sin(particle.timer * particle.bobSpeed + particle.bobPhase) * particle.bobAmount
         particle.x = particle.x + particle.vx * dt
-        particle.y = particle.y + particle.vy * dt
+        particle.y = particle.y + particle.vy * dt + (bobOffset - particle.bobOffset)
+        particle.bobOffset = bobOffset
 
         local driftX = particle.x - particle.startX
         local driftY = particle.y - particle.startY
-        local driftLimit = self.config.dustDriftDistance or 18
+        local driftLimit = self.config.dustDriftDistance or DEFAULT_DUST_DRIFT_DISTANCE
         if particle.timer >= particle.life or driftX * driftX + driftY * driftY > driftLimit * driftLimit then
             self.dust[i] = makeDustParticle(self)
         end
@@ -187,10 +208,12 @@ function Moonbeam:drawDust()
     for _, particle in ipairs(self.dust) do
         local lifeProgress = math.min(particle.timer / particle.life, 1)
         local alpha = particle.alpha * (1 - lifeProgress) * getScreenFade(particle.y, self.config)
-        local size = math.max(1, particle.radius)
+        local size = math.max(1, math.floor(particle.radius + 0.5))
+        local width = size / math.max(WORLD_SCALE_X or 1, 0.001)
+        local height = size / math.max(YSCALE or 1, 0.001)
         if alpha > 0.002 then
             love.graphics.setColor(particle.color[1], particle.color[2], particle.color[3], alpha)
-            love.graphics.rectangle("fill", math.floor(particle.x + 0.5), math.floor(particle.y + 0.5), size, size)
+            love.graphics.rectangle("fill", math.floor(particle.x + 0.5), math.floor(particle.y + 0.5), width, height)
         end
     end
 end

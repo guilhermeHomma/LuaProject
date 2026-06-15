@@ -5,8 +5,9 @@ local FloorEncounterConfig = {}
 FloorEncounterConfig.base = {
     enabled = true,
     startRoom = false,
-    spawnMinDistanceTiles = 4,
-    spawnEntryAvoidDistanceTiles = 4,
+    spawnMinDistanceTiles = 5,
+    spawnEntryAvoidDistanceTiles = 5,
+    spawnPlayerAvoidDistanceTiles = 5,
     waveTemplates = EncounterWaves,
     additionalWaveTemplates = EncounterWaves.additional,
 }

@@ -174,6 +174,10 @@ local function getScaledPathUpdateInterval(enemy)
     return interval
 end
 
+local function getParticleCount()
+    return #(Game and Game.particles or {})
+end
+
 local function distanceSqToPoint(x1, y1, x2, y2)
     local dx = x1 - x2
     local dy = y1 - y2
@@ -283,6 +287,7 @@ function Zombie:new(x, y, speed)
 
     enemy.spriteKey = self:getSpriteKey()
     enemy.spriteSheet = self:getSprite()
+    enemy.spriteTexturePixelSize = {1 / enemy.spriteSheet:getWidth(), 1 / enemy.spriteSheet:getHeight()}
     enemy.spriteShadow = shadowSprite
     enemy.mouthVariant = "zombie"
     
@@ -324,12 +329,12 @@ function Zombie:new(x, y, speed)
     enemy.soundTimer = math.random() * enemy.soundInterval
     enemy.spawnIntroDuration = 0.3
     enemy.spawnIntroTimer = enemy.spawnIntroDuration
-    enemy.glitchDuration = 0.95
+    enemy.glitchDuration = 0.14
     enemy.glitchTimer = 0
-    enemy.glitchDisplacementPixels = 0.25
-    enemy.whiteFlashDuration = 0.1
+    enemy.glitchDisplacementPixels = 0.14
+    enemy.whiteFlashDuration = 0.07
     enemy.whiteFlashTimer = 0
-    enemy.damageAnimationInterval = 0.04
+    enemy.damageAnimationInterval = 0.08
     enemy.lastDamageAnimationTime = -math.huge
     enemy.hitBloodPixelMin = 4
     enemy.hitBloodPixelMax = 6
@@ -348,7 +353,7 @@ function Zombie:new(x, y, speed)
     enemy.prevX = x
     enemy.prevY = y
     enemy.visualWalkTimer = 0
-    DamageStretch:init(enemy, 0.1, 0.1)
+    DamageStretch:init(enemy, 0.08, 0.06)
 
     enemy.state = (math.random(0, 1) == 0) and Zombie.states.idle or Zombie.states.walk
     return enemy
@@ -864,9 +869,27 @@ function Zombie:getDamageImpactPosition()
 end
 
 function Zombie:spawnDamageImpact(dx, dy)
-    if Game and Game.particles then
+    if Game and Game.particles and getParticleCount() < 160 then
         table.insert(Game.particles, DamageImpactParticle:new(self, dx, dy))
     end
+end
+
+function Zombie:getHitBloodRange()
+    local minCount = self.hitBloodPixelMin or 4
+    local maxCount = self.hitBloodPixelMax or 6
+    local particleCount = getParticleCount()
+
+    if particleCount >= 180 then
+        return 1, 2
+    elseif particleCount >= 120 then
+        return math.min(minCount, 2), math.min(maxCount, 3)
+    end
+
+    return minCount, maxCount
+end
+
+function Zombie:canSpawnHitBloodDecal()
+    return getParticleCount() < 150
 end
 
 function Zombie:spawnDeathBloodDecal()
@@ -888,10 +911,11 @@ function Zombie:takeDamage(damage, dx, dy)
     self.lastDamageDy = dy
     self.life = self.life - damage
     local bloodY = self.y + (self.bloodSpawnYOffset or 0)
-    BloodPixel.spawnBurst(self.x, bloodY - 2, dx, dy, self.hitBloodPixelMin or 4, self.hitBloodPixelMax or 6)
+    local hitBloodMin, hitBloodMax = self:getHitBloodRange()
+    BloodPixel.spawnBurst(self.x, bloodY - 2, dx, dy, hitBloodMin, hitBloodMax)
     if self.life > 0 then
         local now = love.timer.getTime()
-        if now >= (self.nextHitBloodDecalTime or 0) then
+        if self:canSpawnHitBloodDecal() and now >= (self.nextHitBloodDecalTime or 0) then
             self.nextHitBloodDecalTime = now + (self.hitBloodDecalCooldown or 0)
             BloodDecal.spawn(self.x, bloodY, dx, dy, {
                 scaleMultiplier = self.hitBloodDecalScaleMultiplier or 0.5,
@@ -1098,15 +1122,12 @@ function Zombie:draw()
             local flash = 0
             local intensity = 0
             if self.glitchTimer > 0 then
-                intensity = self.glitchTimer / self.glitchDuration *4
+                intensity = (self.glitchTimer / self.glitchDuration) * 0.65
             end
             if self.whiteFlashTimer > 0 then
                 flash = 1
             end
-            glitchShader:send("texturePixelSize", {
-                1 / self.spriteSheet:getWidth(),
-                1 / self.spriteSheet:getHeight()
-            })
+            glitchShader:send("texturePixelSize", self.spriteTexturePixelSize)
             glitchShader:send("displacementPixels", self.glitchDisplacementPixels)
             glitchShader:send("time", love.timer.getTime())
             glitchShader:send("intensity", intensity)
@@ -1119,15 +1140,12 @@ function Zombie:draw()
         local flash = 0
         local intensity = 0
         if self.glitchTimer > 0 then
-            intensity = self.glitchTimer / self.glitchDuration
+            intensity = (self.glitchTimer / self.glitchDuration) * 0.45
         end
         if self.whiteFlashTimer > 0 then
             flash = 1
         end
-        glitchShader:send("texturePixelSize", {
-            1 / self.spriteSheet:getWidth(),
-            1 / self.spriteSheet:getHeight()
-        })
+        glitchShader:send("texturePixelSize", self.spriteTexturePixelSize)
         glitchShader:send("displacementPixels", self.glitchDisplacementPixels)
         glitchShader:send("time", love.timer.getTime())
         glitchShader:send("intensity", intensity)

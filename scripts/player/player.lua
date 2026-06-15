@@ -17,6 +17,8 @@ local damageBase = love.audio.newSource("assets/sfx/player/ow-damage.mp3", "stat
 local damageSplatBase = love.audio.newSource("assets/sfx/player/splat.mp3", "static")
 local electricBase = love.audio.newSource("assets/sfx/menu/eletric-transition.mp3", "static")
 local PLAYER_DAMAGE_HIT_AUDIO_DUCK_DELAY = 0.28
+local PLAYER_DAMAGE_OW_DELAY = 0.20
+local PLAYER_DAMAGE_OW_CHANCE = 0.40
 local heartImage = love.graphics.newImage("assets/sprites/ui/heart.png")
 local heartWhiteShader = love.graphics.newShader("scripts/shaders/whiteShader.glsl")
 local heartFrameSize = 16
@@ -122,8 +124,10 @@ function Player:load(camera, spawnX, spawnY)
     self.glitchDisplacementPixels = 2
     self.whiteFlashDuration = 0.12
     self.whiteFlashTimer = 0
-    self.cardPickupFlashDuration = 0.55
+    self.cardPickupFlashDuration = 0.42
     self.cardPickupFlashTimer = 0
+    self.pendingDamageOwTimer = 0
+    self.pendingDamageOwPitch = 1
     self.damageBlinkDelay = 0.1
     self.damageVignettePulse = 0
     self.reloadBarFlashDuration = 0.18
@@ -307,6 +311,16 @@ end
 
 function Player:update(dt)
     self.sideChangeTimer = self.sideChangeTimer + dt
+    if (self.pendingDamageOwTimer or 0) > 0 then
+        self.pendingDamageOwTimer = math.max(0, self.pendingDamageOwTimer - dt)
+        if self.pendingDamageOwTimer <= 0 then
+            playClonedSound(
+                damageBase,
+                0.65 * (SOUND_VOLUME or 1),
+                (self.pendingDamageOwPitch or 1) * (GAME_PITCH or 1)
+            )
+        end
+    end
 
     if not self.isAlive then
         return
@@ -546,12 +560,13 @@ function Player:takeDamage(amount, damageDx, damageDy, hitX, hitY)
     self.damageTimer = 0
     self.glitchTimer = self.glitchDuration
     self.whiteFlashTimer = self.whiteFlashDuration
-    local duckMultiplier = 1
-    if Game and Game.getDamageAudioVolumeMultiplier then
-        duckMultiplier = math.max(Game:getDamageAudioVolumeMultiplier() or 1, 0.001)
-    end
     playClonedSound(damageSplatBase, (0.9 * (SOUND_VOLUME or 1)) , (0.96 + math.random() * 0.08) * (GAME_PITCH or 1))
-    playClonedSound(damageBase, (0.65 * (SOUND_VOLUME or 1)) , (0.95 + math.random() * 0.36))
+    if self.life > 0 and math.random() < PLAYER_DAMAGE_OW_CHANCE then
+        self.pendingDamageOwTimer = PLAYER_DAMAGE_OW_DELAY
+        self.pendingDamageOwPitch = 0.95 + math.random() * 0.36
+    else
+        self.pendingDamageOwTimer = 0
+    end
     self.damageVignettePulse = self.life <= 1 and 1.45 or 1.25
     if self.life <= 0 then
         TransitionManager.distortionTimer = 1
@@ -598,6 +613,7 @@ end
 
 function Player:startCardPickupFlash()
     self.cardPickupFlashTimer = self.cardPickupFlashDuration or 0.55
+    self.whiteFlashTimer = math.max(self.whiteFlashTimer or 0, self.whiteFlashDuration or 0.12)
 end
 
 function Player:getCollisionBox()
@@ -744,6 +760,36 @@ local function getCircleTileCollision(centerX, centerY, radius, tile)
     return {normalX = 0, normalY = 1, penetration = radius}
 end
 
+local function getObjectCollisionBoxes(object)
+    if not (object and object.isAlive ~= false and object.blocksPlayer) then
+        return nil
+    end
+
+    if type(object.collisionBoxes) == "function" then
+        return object:collisionBoxes()
+    end
+
+    if type(object.collisionBox) == "function" then
+        local box = object:collisionBox()
+        return box and {box} or nil
+    end
+
+    return nil
+end
+
+local function isPlayerCollidingWithBlockingObjects(playerBox)
+    for _, object in ipairs((Game and Game.objects) or {}) do
+        local boxes = getObjectCollisionBoxes(object)
+        for _, box in ipairs(boxes or {}) do
+            if checkCollision(playerBox, box) then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
 function Player:getTileCollisionAtOffset(moveX, moveY)
     local radius = 6
     local centerX = self.x + (moveX or 0)
@@ -778,6 +824,10 @@ function Player:isCollidingAtOffset(moveX, moveY)
                 return true
             end
         end
+    end
+
+    if isPlayerCollidingWithBlockingObjects(playerBox) then
+        return true
     end
 
     return false
@@ -896,6 +946,18 @@ function Player:isColliding(moveX, moveY, size)
                 collidedX = true
             end
             if checkCollision(playerBoxY, enemyBox) then
+                collidedY = true
+            end
+        end
+    end
+
+    for _, object in ipairs((Game and Game.objects) or {}) do
+        local boxes = getObjectCollisionBoxes(object)
+        for _, box in ipairs(boxes or {}) do
+            if checkCollision(playerBoxX, box) then
+                collidedX = true
+            end
+            if checkCollision(playerBoxY, box) then
                 collidedY = true
             end
         end
@@ -1181,9 +1243,12 @@ function Player:drawPlayerImage(image, quad, x, y, rotation, scaleX, scaleY, ori
     if quad then
         local flashProgress = math.max(0, math.min((self.cardPickupFlashTimer or 0) / (self.cardPickupFlashDuration or 0.55), 1))
         if flashProgress > 0 then
+            local previousBlendMode, previousAlphaMode = love.graphics.getBlendMode()
             love.graphics.setShader()
-            love.graphics.setColor(1, 1, 1, 0.72 * flashProgress)
+            love.graphics.setBlendMode("add", "alphamultiply")
+            love.graphics.setColor(1, 1, 1, 0.95 * flashProgress)
             drawImageWithCurrentColor()
+            love.graphics.setBlendMode(previousBlendMode, previousAlphaMode)
             if hasGlitch then
                 self:applyGlitchShader(image)
             end

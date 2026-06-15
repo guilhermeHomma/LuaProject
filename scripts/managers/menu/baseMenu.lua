@@ -27,6 +27,9 @@ function baseMenu:load()
     self.mouseNeedsSync = true
     self.inputMode = "mouse"
     self.hoverSoundCooldowns = {}
+    self.cornerExits = {}
+    self.lockOnSelect = false
+    self.interactionsLocked = false
 
 end
 
@@ -58,6 +61,34 @@ end
 
 function baseMenu:onSelect()
 
+end
+
+function baseMenu:lockInteractions()
+    self.interactionsLocked = true
+    self.mouseNeedsSync = true
+end
+
+function baseMenu:unlockInteractions()
+    self.interactionsLocked = false
+    self.mouseNeedsSync = true
+end
+
+function baseMenu:isInteractionLocked()
+    return self.interactionsLocked == true
+end
+
+function baseMenu:confirmSelectedOption()
+    if self:isInteractionLocked() or self:isOptionIndexInactive(self.selectedOption) then
+        return false
+    end
+
+    self:playConfirmSound()
+    self.lastSelectChange = love.timer.getTime()
+    if self.lockOnSelect then
+        self:lockInteractions()
+    end
+    self:onSelect()
+    return true
 end
 
 function baseMenu:getCanvasMousePosition()
@@ -298,31 +329,81 @@ function baseMenu:drawHoverText(text, y, bounds)
 end
 
 function baseMenu:drawSelectedOptionContent(text, y, bounds)
-    local leanX, leanY = self:getMouseLean(bounds)
     local normalizedText = Localization:normalizeText(text)
     local ok, textWidth = pcall(function()
         return self.fontOptions:getWidth(normalizedText)
     end)
     textWidth = ok and textWidth or math.max((bounds and bounds.width or 80) - 72, 24)
-    local visualPaddingX = 10
-    local visualPaddingY = 2
-    local visualBounds = {
-        left = math.floor(self:getWidth() / 2 - textWidth / 2 - visualPaddingX + 0.5),
-        top = bounds.top + visualPaddingY,
-        width = math.floor(textWidth + visualPaddingX * 2 + 0.5),
-        height = bounds.height - visualPaddingY * 2 - 6,
-    }
+    local visualBounds = self:getSelectedOptionVisualBounds(textWidth, bounds)
+    self.lastSelectedVisualBounds = visualBounds
 
+    local leanX, leanY = self:getMouseLean(bounds)
     love.graphics.push()
     love.graphics.translate(math.floor(leanY * -1 + 0.5), math.floor(leanX * 1 + 0.5))
     SelectCorners.draw(visualBounds, {
         startedAt = self.lastSelectChange,
         scale = 2.25,
-        padding = 0,
+        padding = -1,
         color = {0.95, 0.92, 0.74, 1},
     })
     love.graphics.pop()
     self:drawHoverText(text, y, bounds)
+end
+
+function baseMenu:getSelectedOptionVisualBounds(textWidth, bounds)
+    local visualPaddingX = 10
+    local visualPaddingY = 2
+    return {
+        left = math.floor(self:getWidth() / 2 - textWidth / 2 - visualPaddingX + 0.5),
+        top = bounds.top + visualPaddingY,
+        width = math.floor(textWidth + visualPaddingX * 2 + 0.5),
+        height = bounds.height - visualPaddingY * 2 - 6,
+    }
+end
+
+function baseMenu:queueCornerExit(optionIndex, now)
+    local bounds = self.optionBounds and self.optionBounds[optionIndex]
+    if not bounds then
+        return
+    end
+
+    local optionText = self:getOptionLabel(optionIndex)
+    local normalizedText = Localization:normalizeText(optionText or "")
+    local ok, textWidth = pcall(function()
+        return self.fontOptions:getWidth(normalizedText)
+    end)
+    textWidth = ok and textWidth or math.max((bounds and bounds.width or 80) - 72, 24)
+
+    self.cornerExits = self.cornerExits or {}
+    self.cornerExits[#self.cornerExits + 1] = {
+        bounds = self:getSelectedOptionVisualBounds(textWidth, bounds),
+        startedAt = self.lastSelectChange,
+        exitedAt = now or love.timer.getTime(),
+    }
+end
+
+function baseMenu:drawCornerExits()
+    local exits = self.cornerExits
+    if not exits then
+        return
+    end
+
+    local now = love.timer.getTime()
+    for i = #exits, 1, -1 do
+        local exit = exits[i]
+        if now - exit.exitedAt >= 0.1 then
+            table.remove(exits, i)
+        else
+            SelectCorners.draw(exit.bounds, {
+                startedAt = exit.startedAt,
+                exitedAt = exit.exitedAt,
+                exitDuration = 0.1,
+                scale = 2.25,
+                padding = -1,
+                color = {0.95, 0.92, 0.74, 1},
+            })
+        end
+    end
 end
 
 function baseMenu:drawOption(text, x, y, def, isSelected, isInactive, bounds)
@@ -390,6 +471,8 @@ function baseMenu:draw()
 
     end
 
+    self:drawCornerExits()
+
     love.graphics.setColor(1, 1, 1)
 end
 
@@ -401,6 +484,10 @@ function baseMenu:update(dt)
     local mouseMoved = hadMousePosition and (self.lastMouseX ~= mouseX or self.lastMouseY ~= mouseY)
     self.lastMouseX = mouseX
     self.lastMouseY = mouseY
+
+    if self:isInteractionLocked() then
+        return
+    end
 
     if not mouseMoved then
         return
@@ -423,6 +510,7 @@ function baseMenu:update(dt)
     )
     if optionIndex and not self:isOptionIndexInactive(optionIndex) and optionIndex ~= self.selectedOption then
         local now = love.timer.getTime()
+        self:queueCornerExit(self.selectedOption, now)
         self.selectedOption = optionIndex
         self.lastSelectChange = now
         if now >= (self.hoverSoundCooldowns[optionIndex] or 0) then
@@ -450,6 +538,10 @@ function baseMenu:getOptionAtPosition(x, y)
 end
 
 function baseMenu:mousepressed(x, y, button)
+    if self:isInteractionLocked() then
+        return true
+    end
+
     if button ~= 1 then
         return
     end
@@ -464,27 +556,28 @@ function baseMenu:mousepressed(x, y, button)
     end
 
     self.inputMode = "mouse"
+    if optionIndex ~= self.selectedOption then
+        self:queueCornerExit(self.selectedOption, love.timer.getTime())
+    end
     self.selectedOption = optionIndex
     self.lastSelectChange = love.timer.getTime()
     self.mouseNeedsSync = false
-    self:playConfirmSound()
-    self:onSelect()
+    self:confirmSelectedOption()
     return true
 end
 
 function baseMenu:keypressed(key)
+    if self:isInteractionLocked() then
+        return true
+    end
+
     local handled = true
     if key == "up" then
         self:moveSelection(-1)
     elseif key == "down" then
         self:moveSelection(1)
     elseif key == "return" or key == "space" then
-        if self:isOptionIndexInactive(self.selectedOption) then
-            return
-        end
-        self:playConfirmSound()
-        self:onSelect()
-        self.lastSelectChange = love.timer.getTime()
+        self:confirmSelectedOption()
         return
     else
         handled = false
@@ -517,6 +610,9 @@ function baseMenu:moveSelection(direction)
         end
 
         if not self:isOptionIndexInactive(nextOption) then
+            if nextOption ~= self.selectedOption then
+                self:queueCornerExit(self.selectedOption, love.timer.getTime())
+            end
             self.selectedOption = nextOption
             return
         end

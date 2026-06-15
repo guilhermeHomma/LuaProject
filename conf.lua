@@ -1,7 +1,30 @@
-GAME_FLAGS = GAME_FLAGS or {
-    skipIntro = false,
+local function mergeDefaults(defaults, overrides)
+    local result = {}
+
+    for key, value in pairs(defaults or {}) do
+        if type(value) == "table" then
+            result[key] = mergeDefaults(value, nil)
+        else
+            result[key] = value
+        end
+    end
+
+    for key, value in pairs(overrides or {}) do
+        if type(value) == "table" and type(result[key]) == "table" then
+            result[key] = mergeDefaults(result[key], value)
+        else
+            result[key] = value
+        end
+    end
+
+    return result
+end
+
+local DEFAULT_GAME_FLAGS = {
+    skipIntro = true,
+    log = false,
     logFloorGeneration = false,
-    weaponTestLevel = true,
+    weaponTestLevel = false,
     experimentalZombieStressTest = false,
     cameraShake = true,
     brightness = 5,
@@ -16,9 +39,22 @@ GAME_FLAGS = GAME_FLAGS or {
         chromatic = 0.86,
         fast = true,
     },
+    levelTest = {
+        enabled = false,
+        floorId = 1,
+        rooms = {
+            batalha = 0,
+            endroom = 1,
+            lojas = 0,
+            cards = 0,
+        },
+    },
 }
 
-GAME_VERSION = "0.1.11a"
+GAME_FLAGS = mergeDefaults(DEFAULT_GAME_FLAGS, GAME_FLAGS)
+GAME_FLAGS.logFloorGeneration = GAME_FLAGS.logFloorGeneration or GAME_FLAGS.log == true
+
+GAME_VERSION = "0.1.14a"
 
 function love.conf(t)
     local Levels = require("scripts/config/levels")

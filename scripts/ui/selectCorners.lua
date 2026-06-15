@@ -37,7 +37,16 @@ function SelectCorners.draw(bounds, options)
     local scale = (options.scale or 3) * (0.58 + 0.42 * appear)
     local rotation = (1 - progress) * (options.rotation or 0.65)
     local padding = options.padding or 0
+    local arrivePadding = (options.arrivePadding or 0) * (1 - progress)
     local alpha = options.alpha or 1
+
+    if options.exitedAt then
+        local exitProgress = clamp((now - options.exitedAt) / (options.exitDuration or 0.1), 0, 1)
+        local exitEase = exitProgress * exitProgress
+        scale = scale * (1 - exitEase * 0.42)
+        rotation = rotation + exitEase * (options.exitRotation or 0.55)
+        alpha = alpha * (1 - exitProgress)
+    end
     local r, g, b = 1, 1, 1
 
     if options.color then
@@ -53,10 +62,10 @@ function SelectCorners.draw(bounds, options)
     local bottom = top + (bounds.height or bounds.h or 0)
 
     love.graphics.setColor(r, g, b, alpha)
-    drawCorner(quads.topLeft, left - padding, top - padding, -rotation, scale)
-    drawCorner(quads.topRight, right + padding, top - padding, rotation, scale)
-    drawCorner(quads.bottomLeft, left - padding, bottom + padding, rotation, scale)
-    drawCorner(quads.bottomRight, right + padding, bottom + padding, -rotation, scale)
+    drawCorner(quads.topLeft, left - padding - arrivePadding, top - padding - arrivePadding, -rotation, scale)
+    drawCorner(quads.topRight, right + padding + arrivePadding, top - padding - arrivePadding, rotation, scale)
+    drawCorner(quads.bottomLeft, left - padding - arrivePadding, bottom + padding + arrivePadding, rotation, scale)
+    drawCorner(quads.bottomRight, right + padding + arrivePadding, bottom + padding + arrivePadding, -rotation, scale)
     love.graphics.setColor(1, 1, 1, 1)
 end
 

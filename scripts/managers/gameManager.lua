@@ -163,8 +163,6 @@ function Game:resetRuntimeState()
     self.purchasedWeapons = {}
     self.nearbyEnemies = {}
     self.enemySpatialGrid = {}
-    self.crowTimer = math.random(20, 50)
-    self.cricketTimer = math.random(30, 40)
     self.drawtext = "init text\ninit text\nyou shouldnt see this"
     self.textAlpha = 0
     self.textAlphaTarget = 0
@@ -540,7 +538,7 @@ function Game:showBottomMessage(text, duration)
     self.textAlphaTarget = 1
 end
 
-function Game:enterFloorHollow()
+function Game:enterElevator()
     if self.floorChanging or FloorIntroManager:hasThanksScreen() then
         return
     end
@@ -566,6 +564,10 @@ function Game:enterFloorHollow()
     else
         self:startThanksScreen()
     end
+end
+
+function Game:enterFloorHollow()
+    return self:enterElevator()
 end
 
 function Game:openSouth()
@@ -638,26 +640,7 @@ end
 
 function Game:updateAmbientTimers(dt)
     self.timer = self.timer + dt
-    local theme = FloorManager:getCurrentRoomTheme()
-    local ambience = theme and theme.ambience or {}
-
-    if ambience.crow == false then
-        self.crowTimer = math.random(20, 50)
-    else
-        self.crowTimer = self.crowTimer - dt
-        if self.crowTimer <= 0 then
-            self:crowNoise()
-        end
-    end
-
-    if ambience.cricket == false then
-        self.cricketTimer = math.random(20, 30)
-    else
-        self.cricketTimer = self.cricketTimer - dt
-        if self.cricketTimer <= 0 then
-            self:cricketNoise()
-        end
-    end
+    AmbienceSound:updateRandomEvents(dt)
 end
 
 function Game:updatePitch(dt)
@@ -1086,28 +1069,10 @@ function Game:getLightSources()
 end
 
 function Game:crowNoise()
-    if not (Player.isAlive and Player.life > 2) then
-        return
-    end
-    local theme = FloorManager:getCurrentRoomTheme()
-    if theme and theme.ambience and theme.ambience.crow == false then
-        self.crowTimer = math.random(20, 50)
-        return
-    end
-    self.crowTimer = math.random(20, 50)
     AmbienceSound:playCrowSound()
 end
 
 function Game:cricketNoise()
-    if not (Player.isAlive and Player.life > 2) then
-        return
-    end
-    local theme = FloorManager:getCurrentRoomTheme()
-    if theme and theme.ambience and theme.ambience.cricket == false then
-        self.cricketTimer = math.random(20, 30)
-        return
-    end
-    self.cricketTimer = math.random(20, 30)
     AmbienceSound:playCricketSound()
 end
 

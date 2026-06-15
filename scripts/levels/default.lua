@@ -4,6 +4,7 @@ local tilemapSystem = require("scripts/tilemaps/defaultSystem")
 local FloorManager = require("scripts/managers/floorManager")
 local RoomConfig = require("scripts/config/defaultRoomConfig")
 local FloorEncounterConfig = require("scripts/config/floorEncounterConfig")
+local LevelTestConfig = require("scripts/config/levelTestConfig")
 
 local function copyTable(source)
     if type(source) ~= "table" then
@@ -68,6 +69,8 @@ DefaultLevel.tilemapConfig = {
     centerOrigin = true,
 }
 DefaultLevel.objectSpawnChances = copyTable(RoomConfig.objectSpawnChances)
+DefaultLevel.baseGrassConfig = copyTable(RoomConfig.grassConfig)
+DefaultLevel.grassConfig = copyTable(DefaultLevel.baseGrassConfig)
 DefaultLevel.floorPathTiles = copyTable(RoomConfig.floorPathTiles)
 DefaultLevel.wallVariantTiles = copyTable(RoomConfig.wallVariantTiles)
 DefaultLevel.objectSpawnChancesByTemplate = copyTable(RoomConfig.objectSpawnChancesByTemplate)
@@ -123,6 +126,7 @@ local function resolveRangeValue(value)
 end
 
 function DefaultLevel:applyFloorLevel(floorIndex)
+    floorIndex = LevelTestConfig.resolveFloorIndex(floorIndex)
     local floorLevel = getFloorLevel(self, floorIndex)
     if not floorLevel then
         return nil
@@ -132,6 +136,7 @@ function DefaultLevel:applyFloorLevel(floorIndex)
     local floorEncounter = FloorEncounterConfig.floors[self.currentFloorIndex] or {}
     self.roomEncounterConfig = mergeTables(self.baseRoomEncounterConfig, floorEncounter)
     self.roomEncounterConfig = mergeTables(self.roomEncounterConfig, floorLevel.roomEncounterConfig)
+    self.grassConfig = mergeTables(self.baseGrassConfig, floorLevel.grassConfig)
 
     if floorLevel.difficulty then
         self.roomEncounterConfig.difficulty = floorLevel.difficulty
@@ -153,6 +158,8 @@ function DefaultLevel:applyFloorLevel(floorIndex)
     if floorLevel.shopProducts then
         self.shopConfig.products = copyTable(floorLevel.shopProducts)
     end
+
+    LevelTestConfig.apply(self)
 
     return floorLevel
 end

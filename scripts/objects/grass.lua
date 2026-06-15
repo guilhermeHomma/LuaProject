@@ -68,25 +68,6 @@ end
 
 local grassSprites = {sprite, sprite2, sprite3, sprite4}
 
-local function isNearCamera(x, y)
-    if not (camera and camera.objectPosition) then
-        return true
-    end
-
-    local cameraPosition = camera:objectPosition()
-    if not cameraPosition then
-        return true
-    end
-
-    local visibleHalfWidth = (baseWidth or love.graphics.getWidth()) / math.max(WORLD_SCALE_X or 1, 0.001) * 0.5
-    local visibleHalfHeight = (baseHeight or love.graphics.getHeight()) / math.max(YSCALE or 1, 0.001) * 0.5
-    local margin = 28
-    return x >= cameraPosition.x - visibleHalfWidth - margin
-        and x <= cameraPosition.x + visibleHalfWidth + margin
-        and y >= cameraPosition.y - visibleHalfHeight - margin
-        and y <= cameraPosition.y + visibleHalfHeight + margin
-end
-
 function Grass:new(x, y, tile, state)
     local grass = setmetatable({}, Grass)
     state = state or {}
@@ -98,6 +79,7 @@ function Grass:new(x, y, tile, state)
     grass.shaderDirection = 1
     grass.collisionDirection = 0
     grass.tile = tile
+    grass.spatialRadius = 24
 
     grass.changedTarget = true
     grass.soundTimer = 2
@@ -150,13 +132,12 @@ function Grass:getTarget()
 end
 
 function Grass:update(dt)    
-    if not isNearCamera(self.x, self.y) then
-        return
-    end
-
     self.soundTimer = self.soundTimer + dt
     local target = self:getTarget()
     self.externalTargetDirection = nil
+    local windMultiplier = WIND_AMBIENCE_MULTIPLIER or 1
+    local windIntensity = WIND_AMBIENCE_INTENSITY or 1
+    local windTime = WIND_AMBIENCE_TIME or love.timer.getTime()
 
     local speed = 2
     if target ~= 0 then speed = 12 end
@@ -167,9 +148,10 @@ function Grass:update(dt)
         addToDrawQueue(self.y + 18, self)
     end
     
-    self.collisionDirection = self.collisionDirection + (target - self.collisionDirection) * dt * speed
+    self.collisionDirection = self.collisionDirection + (target - self.collisionDirection) * dt * speed * windMultiplier
 
-    self.shaderDirection = (math.sin(love.timer.getTime() + (self.y/10)   )) / 2 + 1  + self.collisionDirection*0.8
+    local windDirection = ((math.sin(windTime + (self.y / 10))) / 2 + 1) * windIntensity
+    self.shaderDirection = windDirection + self.collisionDirection * 0.8
 end
 
 function Grass:draw()

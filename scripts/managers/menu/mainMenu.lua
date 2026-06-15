@@ -1,6 +1,7 @@
 local baseMenu = require("scripts/managers/menu/baseMenu")
 local Localization = require("scripts/managers/localization")
 local Fonts = require("scripts/ui/fonts")
+local TransitionManager = require("scripts.managers.transitionManager")
 local MainMenu = {}
 
 setmetatable(MainMenu, { __index = baseMenu })
@@ -26,6 +27,7 @@ function MainMenu:load()
     self.MenuTItle = "mobize"
     self.menuOptions = {"start_game", "settings", "exit_game"}
     self.fontTitle = Fonts:logo("mainLogo")
+    self.lockOnSelect = true
 
     self.fontOptions = Fonts:translated("menuOption")
 
@@ -33,6 +35,10 @@ function MainMenu:load()
 end
 
 function MainMenu:update(dt)
+    if self:isInteractionLocked() and (not TransitionManager or not TransitionManager.isTransiting) then
+        self:unlockInteractions()
+    end
+
     animationTimer = animationTimer + dt
     if animationTimer >= frameDuration then
         animationTimer = animationTimer - frameDuration

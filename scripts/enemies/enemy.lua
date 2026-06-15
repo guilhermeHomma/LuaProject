@@ -11,6 +11,20 @@ local EnemyDeathProjectiles = require("scripts/enemies/enemyDeathProjectiles")
 
 require("scripts/utils")
 
+local function getParticleCount()
+    return #(Game and Game.particles or {})
+end
+
+local function getHitBloodRange()
+    local particleCount = getParticleCount()
+    if particleCount >= 180 then
+        return 1, 2
+    elseif particleCount >= 120 then
+        return 2, 3
+    end
+    return 4, 6
+end
+
 function Enemy:new(x, y)
     local enemy = setmetatable({}, Enemy)
 
@@ -59,11 +73,12 @@ function Enemy:isColliding(moveX, moveY)
 end
 
 function Enemy:takeDamage(damage, dx, dy)
-    if Game and Game.particles then
+    if Game and Game.particles and getParticleCount() < 160 then
         table.insert(Game.particles, DamageImpactParticle:new(self, dx, dy))
     end
     self.life = self.life - damage
-    BloodPixel.spawnBurst(self.x, self.y - 2, dx, dy, 4, 6)
+    local hitBloodMin, hitBloodMax = getHitBloodRange()
+    BloodPixel.spawnBurst(self.x, self.y - 2, dx, dy, hitBloodMin, hitBloodMax)
     DamageStretch:start(self)
 end
 

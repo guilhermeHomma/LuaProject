@@ -1,6 +1,7 @@
 
 local baseMenu = require("scripts/managers/menu/baseMenu")
 local Localization = require("scripts/managers/localization")
+local TransitionManager = require("scripts.managers.transitionManager")
 local gameOverMenu = {}
 
 setmetatable(gameOverMenu, { __index = baseMenu })
@@ -10,10 +11,19 @@ function gameOverMenu:load()
     baseMenu.load(self)
     self.MenuTItle = Localization:t("menu.game_over")
     self.menuOptions = {"new_run", "main_menu"}
+    self.lockOnSelect = true
 end
 
 function gameOverMenu:getOptionLabel(index)
     return Localization:t("menu." .. self.menuOptions[index])
+end
+
+function gameOverMenu:update(dt)
+    if self:isInteractionLocked() and not TransitionManager.isTransiting then
+        self:unlockInteractions()
+    end
+
+    baseMenu.update(self, dt)
 end
 
 function gameOverMenu:draw()

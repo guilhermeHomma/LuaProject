@@ -9,6 +9,123 @@ local Localization = {
     dictionaries = {},
 }
 
+local embeddedDictionaries = {
+    en = {
+        menu = {
+            settings = "SETTINGS",
+            paused = "PAUSED",
+            game_over = "GAME OVER",
+            confirm = "CONFIRM",
+            start_game = "start game",
+            continue = "continue",
+            new_run = "new run",
+            main_menu = "main menu",
+            exit_game = "exit game",
+            yes = "yes",
+            no = "no",
+            back = "back",
+        },
+        confirm = {
+            are_you_sure = "are you sure?",
+            return_menu = "return to main menu?",
+            restart = "start a new run?",
+            quit = "quit game?",
+        },
+        settings = {
+            sections = {
+                general = "GENERAL",
+                video = "VIDEO",
+                sound = "SOUND",
+            },
+            language = "language",
+            show_fps = "show fps",
+            screen_size = "screen size",
+            fullscreen = "fullscreen",
+            vsync = "vsync",
+            crt_filter = "crt filter",
+            camera_shake = "camera shake",
+            brightness = "brightness",
+            sound = "sound",
+            music = "music",
+            on = "on",
+            off = "off",
+        },
+        cards = {
+            choose = "CHOOSE A CARD",
+            rarity = {
+                common = "common",
+                rare = "rare",
+                epic = "epic",
+                legendary = "legendary",
+            },
+            speed = { name = "SPEED", description = "Move faster." },
+            speed_rare = { name = "SPEED", description = "Move much faster." },
+            primary_damage = { name = "DAMAGE", description = "Primary gun damage." },
+            primary_damage_epic = { name = "DAMAGE", description = "Primary gun damage." },
+            primary_range = { name = "RANGE", description = "Primary gun range." },
+            secondary_fill = { name = "CHARGE", amount = "FULL", description = "Fill secondary weapon." },
+            primary_reload = { name = "LOAD", description = "Primary gun loadspeed." },
+            primary_ricochet = { name = "BOUNCE", amount = "RICOCHET", description = "Primary shots bounce from walls and enemies." },
+            primary_death_shard = { name = "SPARK", description = "Missed primary shots split into short base-damage shots." },
+            primary_clean_split = { name = "SPLIT", description = "Missed primary shots split into more short base-damage shots." },
+            enemy_death_shard = { name = "BURST", description = "Enemies release short base-damage shots when they die." },
+            enemy_death_split = { name = "BURST", description = "Enemies release more short base-damage shots when they die." },
+            half_heart = { name = "HEART", amount = "HEAL 1", description = "Restore one lost heart only." },
+            full_heal = { name = "FULL HEAL", amount = "RESTORE", description = "Restore all lost hearts only." },
+            heart_container = { name = "HEART SLOT", amount = "+1 MAX", description = "Gain one max heart and fully heal." },
+        },
+        hud = {
+            fps = "FPS",
+        },
+        game = {
+            floor = "floor {floor}",
+            wave = "Wave {wave}",
+            room_cleared = "Room cleared",
+            clear_room_first = "Clear the room first",
+            press_open = "Press F to open",
+            press_pickup = "Press F to pick up",
+            next_floor = "press f to go to the next floor",
+            weapon_help = "press e to switch weapon\npress q to reload",
+            thanks = "thanks for playing",
+            made_by = "made by homma",
+        },
+        store = {
+            full_bullets = "full bullets",
+            card = "card",
+            buy = "click F to buy",
+        },
+    },
+}
+
+local function copyTable(source)
+    if type(source) ~= "table" then
+        return source
+    end
+
+    local result = {}
+    for key, value in pairs(source) do
+        result[key] = copyTable(value)
+    end
+    return result
+end
+
+local function mergeTables(base, overrides)
+    local result = copyTable(base) or {}
+    if type(overrides) ~= "table" then
+        return result
+    end
+
+    for key, value in pairs(overrides) do
+        if type(value) == "table" and type(result[key]) == "table" then
+            result[key] = mergeTables(result[key], value)
+        else
+            result[key] = copyTable(value)
+        end
+    end
+
+    return result
+end
+
 local cp1252ToCodepoint = {
     [0x80] = 0x20AC, [0x82] = 0x201A, [0x83] = 0x0192, [0x84] = 0x201E,
     [0x85] = 0x2026, [0x86] = 0x2020, [0x87] = 0x2021, [0x88] = 0x02C6,
@@ -180,7 +297,8 @@ function Localization:load()
     for _, language in ipairs(self.languages) do
         local path = "assets/i18n/" .. language.id .. ".json"
         local contents = love.filesystem.read(path)
-        self.dictionaries[language.id] = contents and decodeJson(contents) or {}
+        local embedded = embeddedDictionaries[language.id] or embeddedDictionaries[self.fallbackLanguage] or {}
+        self.dictionaries[language.id] = mergeTables(embedded, contents and decodeJson(contents) or {})
     end
 end
 

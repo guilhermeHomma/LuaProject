@@ -29,6 +29,8 @@ local cardArtImages = {
 local smoothCardSoundBase = love.audio.newSource("assets/sfx/ui/smooth-good-cards.mp3", "static")
 local shuffleCardSoundBase = love.audio.newSource("assets/sfx/ui/shuffle-card.mp3", "static")
 local singleCardSoundBase = love.audio.newSource("assets/sfx/ui/single-card-sound.mp3", "static")
+local hitCardSoundBase = love.audio.newSource("assets/sfx/effects/hit-card.mp3", "static")
+local cardGoodFeedbackFlashSoundBase = love.audio.newSource("assets/sfx/effects/card-good-feedback-flash.mp3", "static")
 
 local titleFont = Fonts:translated("cardTitle")
 local cardNameFont = Fonts:translated("cardName")
@@ -44,10 +46,25 @@ local colors = {
     {0.32, 0.08, 0.48, 1},
 }
 
-local cardScale = 3.825
-local selectedCardScale = 4.2
+local cardScale = 3.5
+local selectedCardScale = 4
 local cardPadding = 54
 local hoverDistance = 58
+local selectionPulseDuration = 0.16
+local selectionFlashDuration = 0.11
+local cornerExitDuration = 0.12
+local hoverEnterThreshold = 0.22
+local cardStretchXAmount = tonumber(os.getenv("CARD_CHOICE_STRETCH_X")) or 0.025
+local cardStretchYAmount = tonumber(os.getenv("CARD_CHOICE_STRETCH_Y")) or 0.022
+local cardFlashStrength = tonumber(os.getenv("CARD_CHOICE_FLASH_STRENGTH")) or 0.12
+local diamondFlashBlendStrength = tonumber(os.getenv("CARD_CHOICE_DIAMOND_FLASH_BLEND")) or 0.36
+local diamondFlashAlphaBoost = tonumber(os.getenv("CARD_CHOICE_DIAMOND_FLASH_ALPHA")) or 0.12
+local particleFlashStrength = tonumber(os.getenv("CARD_CHOICE_PARTICLE_FLASH_STRENGTH")) or 0.35
+local card3dHoverStrength = tonumber(os.getenv("CARD_CHOICE_3D_STRENGTH")) or 0.02
+local card3dLightStrength = tonumber(os.getenv("CARD_CHOICE_3D_LIGHT")) or 0.05
+local selectionShakeIntensity = tonumber(os.getenv("CARD_CHOICE_SHAKE_INTENSITY")) or 4.2
+local selectionShakeDecay = tonumber(os.getenv("CARD_CHOICE_SHAKE_DECAY")) or 0.64
+local finishFeedbackTime = tonumber(os.getenv("CARD_CHOICE_FINISH_FEEDBACK_TIME")) or 0.82
 local diamondFrameSize = 16
 local diamondFrameDuration = 0.10
 local diamondFrameCount = math.max(1, math.floor(diamondParticleImage:getWidth() / diamondFrameSize))
@@ -74,6 +91,23 @@ local diamondParticleShader = love.graphics.newShader([[
 
 diamondParticleShader:send("tintColor", {1, 1, 1, 1})
 
+local card3dShader = love.graphics.newShader([[
+    extern vec2 tilt;
+    extern number lightStrength;
+
+    vec4 effect(vec4 color, Image tex, vec2 texture_coords, vec2 screen_coords) {
+        vec4 pixel = Texel(tex, texture_coords);
+        vec2 centered = texture_coords - vec2(0.5, 0.5);
+        number mouseSide = dot(centered, tilt);
+        number shade = clamp(1.0 - mouseSide * lightStrength + (1.0 - length(centered * 1.45)) * 0.035, 0.78, 1.16);
+        pixel.rgb *= shade;
+        return pixel * color;
+    }
+]])
+
+card3dShader:send("tilt", {0, 0})
+card3dShader:send("lightStrength", card3dLightStrength)
+
 local diamondParticleConfigs = {
     rare = {
         count = 8,
@@ -96,6 +130,14 @@ local diamondEdgesByCount = {
 
 local function easeOut(t)
     return 1 - (1 - t) * (1 - t) * (1 - t)
+end
+
+local function easeInOut(t)
+    t = clamp(t, 0, 1)
+    if t < 0.5 then
+        return 2 * t * t
+    end
+    return 1 - ((-2 * t + 2) * (-2 * t + 2)) / 2
 end
 
 local function shuffle(list)
@@ -284,7 +326,9 @@ function CardChoice:load()
     self.phase = "idle"
     self.previewCard = nil
     self.selectedCardDef = nil
+    self.hoveredCardIndex = nil
     self.drawAlpha = 1
+    self.finishFeedbackPlayed = false
     if Dialog then
         Dialog.breakMovements = false
     end
@@ -359,8 +403,92 @@ function CardChoice:spawnBurst(x, y, count, speed)
             lifeTime = 0.28 + math.random() * 0.28,
             size = math.random(1, 2),
             color = colors[math.random(#colors)],
+            flashTime = selectionFlashDuration,
         }
     end
+end
+
+function CardChoice:pulseCard(card, direction)
+    if not card then
+        return
+    end
+
+    card.selectionPulseTimer = selectionPulseDuration
+    card.selectionPulseDuration = selectionPulseDuration
+    card.selectionPulseDirection = direction or 1
+    card.flashTimer = selectionFlashDuration
+    card.flashDuration = selectionFlashDuration
+end
+
+function CardChoice:enterCardHover(card)
+    if not card then
+        return
+    end
+
+    playSound(singleCardSoundBase, 0.28, 1.12 + math.random() * 0.10)
+    self:pulseCard(card, 1)
+end
+
+function CardChoice:playSelectionImpact()
+    playSound(hitCardSoundBase, 0.66, 1.02 + math.random() * 0.08)
+    if camera and camera.shake then
+        camera:shake(selectionShakeIntensity, selectionShakeDecay)
+    end
+end
+
+function CardChoice:playFinishFeedback()
+    if self.finishFeedbackPlayed then
+        return
+    end
+
+    self.finishFeedbackPlayed = true
+    if Player and Player.startCardPickupFlash then
+        Player:startCardPickupFlash()
+    end
+    playSound(cardGoodFeedbackFlashSoundBase, 0.72, 0.96 + math.random() * 0.08)
+end
+
+local function getCardFlash(card)
+    if not card.flashTimer or card.flashTimer <= 0 then
+        return 0
+    end
+
+    local duration = math.max(card.flashDuration or selectionFlashDuration, 0.01)
+    return clamp(card.flashTimer / duration, 0, 1)
+end
+
+local function drawCardLayer3d(image, cardW, cardH, leanX, leanY, hover)
+    if not image then
+        return
+    end
+
+    local strength = card3dHoverStrength * clamp(hover or 0, 0, 1)
+    if strength <= 0.001 then
+        love.graphics.draw(image, 0, 0, 0, 1, 1, image:getWidth() / 2, image:getHeight() / 2)
+        return
+    end
+
+    local w = image:getWidth()
+    local h = image:getHeight()
+    local halfW = w / 2
+    local halfH = h / 2
+    local xDepth = w * strength * clamp(leanY or 0, -1, 1)
+    local yDepth = h * strength * clamp(leanX or 0, -1, 1)
+    local vertices = {
+        {-halfW - xDepth * 0.35, -halfH - yDepth * 0.35, 0, 0},
+        { halfW - xDepth * 0.35, -halfH + yDepth,        1, 0},
+        { halfW - xDepth,         halfH - yDepth,        1, 1},
+        {-halfW + xDepth,         halfH + yDepth * 0.35, 0, 1},
+    }
+    local mesh = love.graphics.newMesh(vertices, "fan", "stream")
+    mesh:setTexture(image)
+
+    local previousShader = love.graphics.getShader()
+    card3dShader:send("tilt", {leanX or 0, leanY or 0})
+    card3dShader:send("lightStrength", card3dLightStrength)
+    love.graphics.setShader(card3dShader)
+    love.graphics.draw(mesh)
+    love.graphics.setShader(previousShader)
 end
 
 function CardChoice:spawnDiamondParticle(card, layer, edge, edgeT, initialTimer)
@@ -484,8 +612,12 @@ function CardChoice:start(worldX, worldY, options)
             selected = false,
             hover = 0,
             wasHovered = false,
+            cornerVisible = false,
+            cornerExitStartedAt = nil,
             tiltX = 0,
             tiltY = 0,
+            selectionPulseTimer = 0,
+            flashTimer = 0,
         }
     end
 
@@ -518,9 +650,12 @@ function CardChoice:update(dt)
     local mouseX, mouseY = getMouseCanvasPosition()
     local previewCard = nil
     local strongestHover = 0
+    local strongestHoverIndex = nil
 
-    for _, card in ipairs(self.cards) do
+    for cardIndex, card in ipairs(self.cards) do
         card.timer = card.timer + dt
+        card.selectionPulseTimer = math.max(0, (card.selectionPulseTimer or 0) - dt)
+        card.flashTimer = math.max(0, (card.flashTimer or 0) - dt)
         local t = math.max(0, math.min((card.timer - card.delay) / 0.32, 1))
         if not card.shufflePlayed and t > 0 then
             card.shufflePlayed = true
@@ -543,34 +678,58 @@ function CardChoice:update(dt)
         local outsideX = math.max(math.abs(dx) - halfW, 0)
         local outsideY = math.max(math.abs(dy) - halfH, 0)
         local outsideDistance = math.sqrt(outsideX * outsideX + outsideY * outsideY)
-        local targetHover = self.phase == "choosing" and math.max(0, 1 - outsideDistance / hoverDistance) or 0
-        local isHovered = targetHover > 0.72
-        if isHovered and not card.wasHovered then
-            playSound(singleCardSoundBase, 0.28, 1.12 + math.random() * 0.10)
+        local rawHover = self.phase == "choosing" and math.max(0, 1 - outsideDistance / hoverDistance) or 0
+        local targetHover = rawHover > hoverEnterThreshold and rawHover or 0
+        card.wasHovered = self.phase == "choosing" and targetHover > hoverEnterThreshold
+        if self.phase == "choosing" then
+            card.hover = approach(card.hover or 0, targetHover, 9, dt)
+        else
+            card.hover = 0
         end
-        card.wasHovered = isHovered
-        card.hover = approach(card.hover or 0, targetHover, 9, dt)
-        local selectActive = card.selected or card.hover > 0.22
+        local selectActive = card.selected or card.hover > hoverEnterThreshold
         if selectActive and not card.selectActive then
             card.selectStartTime = love.timer.getTime()
+            card.cornerExitStartedAt = nil
+        elseif not selectActive and card.selectActive then
+            card.cornerExitStartedAt = love.timer.getTime()
         end
         card.selectActive = selectActive
+        card.cornerVisible = selectActive or (
+            card.cornerExitStartedAt and love.timer.getTime() - card.cornerExitStartedAt < cornerExitDuration
+        )
         if card.hover > strongestHover then
             strongestHover = card.hover
             previewCard = card.def
+            strongestHoverIndex = cardIndex
         end
-        card.tiltX = approach(card.tiltX or 0, clamp(dx / math.max(halfW, 1), -1, 1), 7, dt)
-        card.tiltY = approach(card.tiltY or 0, clamp(dy / math.max(halfH, 1), -1, 1), 7, dt)
+        if self.phase == "choosing" then
+            card.tiltX = approach(card.tiltX or 0, clamp(dx / math.max(halfW, 1), -1, 1), 7, dt)
+            card.tiltY = approach(card.tiltY or 0, clamp(dy / math.max(halfH, 1), -1, 1), 7, dt)
+        else
+            card.tiltX = 0
+            card.tiltY = 0
+        end
         self:updateCardDiamondParticles(card, dt, particleAnchorDx, particleAnchorDy)
     end
 
     if self.phase == "choosing" then
-        self.previewCard = strongestHover > 0.22 and previewCard or nil
+        local nextHoveredIndex = strongestHover > hoverEnterThreshold and strongestHoverIndex or nil
+        if nextHoveredIndex ~= self.hoveredCardIndex then
+            if nextHoveredIndex then
+                self:enterCardHover(self.cards[nextHoveredIndex])
+            end
+            self.hoveredCardIndex = nextHoveredIndex
+        end
+        self.previewCard = strongestHover > hoverEnterThreshold and previewCard or nil
     elseif self.phase == "celebrate" then
         self.previewCard = self.selectedCardDef
     end
 
-    if self.phase == "celebrate" and self.timer >= 0.92 and #self.particles == 0 then
+    if self.phase == "celebrate" and self.timer >= finishFeedbackTime then
+        self:playFinishFeedback()
+    end
+
+    if self.phase == "celebrate" and self.timer >= 1.08 and #self.particles == 0 then
         self.active = false
         self.phase = "idle"
         self.previewCard = nil
@@ -596,12 +755,9 @@ function CardChoice:choose(index)
         card.def.apply()
     end
 
-    if Player and Player.startCardPickupFlash then
-        Player:startCardPickupFlash()
-    end
-
     self.phase = "celebrate"
     self.timer = 0
+    self.finishFeedbackPlayed = false
     self.cards = { card }
     card.targetX = baseWidth / 2
     card.targetY = baseHeight / 2 - 46
@@ -616,8 +772,16 @@ function CardChoice:choose(index)
     card.diamondSpawnIndex = 0
     card.selectActive = true
     card.selectStartTime = love.timer.getTime()
+    card.cornerVisible = true
+    card.cornerExitStartedAt = nil
+    card.hover = 0
+    card.tiltX = 0
+    card.tiltY = 0
+    card.wasHovered = false
+    self.hoveredCardIndex = nil
+    self:pulseCard(card, 1)
+    self:playSelectionImpact()
     self:spawnBurst(card.x, card.y, 44, 125)
-    playSound(smoothCardSoundBase, 0.58, 1.22 + math.random() * 0.12)
     playSound(singleCardSoundBase, 0.72, 0.96 + math.random() * 0.08)
 
     if Game and Game.particles and Player then
@@ -675,11 +839,13 @@ function CardChoice:drawDiamondParticles(card, layer, alpha)
         local frame = math.min(diamondFrameCount, math.floor(p.timer / diamondFrameDuration) + 1)
         local frameAlpha = math.max(0, 1 - math.max(0, p.timer - p.lifeTime + diamondFrameDuration * 1.5) / (diamondFrameDuration * 1.5))
         local tint = applyDiamondColorVariation(getDiamondParticleColor(p, config), p.colorVariation)
+        local flash = getCardFlash(card)
+        tint = lerpColor(tint, {1, 1, 1, tint[4] or 1}, flash * diamondFlashBlendStrength)
         diamondParticleShader:send("tintColor", {
             tint[1],
             tint[2],
             tint[3],
-            (tint[4] or 1) * (alpha or 1) * frameAlpha,
+            (tint[4] or 1) * (alpha or 1) * frameAlpha * (1 + flash * diamondFlashAlphaBoost),
         })
         love.graphics.setColor(1, 1, 1, 1)
         love.graphics.draw(
@@ -703,14 +869,23 @@ function CardChoice:drawCard(card, index)
     local alpha = self.drawAlpha or 1
     local time = love.timer.getTime()
     local bob = math.sin(time * 1.4 + index) * 1.8
-    local baseRot = math.sin(time * 0.85 + index * 0.7) * 0.025
     local hover = card.hover or 0
     local leanX = (card.tiltX or 0) * hover
     local leanY = (card.tiltY or 0) * hover
-    local rot = baseRot + leanX * 0.12
-    local shearX = leanX * 0.035
-    local shearY = leanY * 0.022
+    local rot = 0
+    local shearX = 0
+    local shearY = 0
+    local pulse = 0
+    if card.selectionPulseTimer and card.selectionPulseTimer > 0 then
+        local pulseT = 1 - card.selectionPulseTimer / math.max(card.selectionPulseDuration or selectionPulseDuration, 0.01)
+        pulse = math.sin(easeInOut(pulseT) * math.pi)
+        rot = rot + pulse * 0.075 * (card.selectionPulseDirection or 1)
+        shearX = leanX * 0.035 * pulse
+        shearY = leanY * 0.022 * pulse
+    end
     local scale = (card.selected and selectedCardScale or cardScale) * (1 + hover * 0.08)
+    local stretchX = 1 + pulse * cardStretchXAmount
+    local stretchY = 1 - pulse * cardStretchYAmount
     local x = card.x
     local y = card.y + bob - hover * 8
     local def = card.def
@@ -728,12 +903,23 @@ function CardChoice:drawCard(card, index)
     love.graphics.push()
     love.graphics.translate(x, y)
     love.graphics.rotate(rot)
-    love.graphics.scale(scale, scale)
+    love.graphics.scale(scale * stretchX, scale * stretchY)
     love.graphics.shear(shearX, shearY)
     love.graphics.setColor(1, 1, 1, alpha)
-    love.graphics.draw(cardImage, 0, 0, 0, 1, 1, cardW / 2, cardH / 2)
+    drawCardLayer3d(cardImage, cardW, cardH, leanX, leanY, hover)
     if artImage then
-        love.graphics.draw(artImage, 0, 0, 0, 1, 1, artImage:getWidth() / 2, artImage:getHeight() / 2)
+        drawCardLayer3d(artImage, cardW, cardH, leanX, leanY, hover)
+    end
+    local flash = getCardFlash(card)
+    if flash > 0 then
+        local previousBlendMode, previousAlphaMode = love.graphics.getBlendMode()
+        love.graphics.setBlendMode("add", "alphamultiply")
+        love.graphics.setColor(1, 1, 1, alpha * flash * cardFlashStrength)
+        drawCardLayer3d(cardImage, cardW, cardH, leanX, leanY, hover)
+        if artImage then
+            drawCardLayer3d(artImage, cardW, cardH, leanX, leanY, hover)
+        end
+        love.graphics.setBlendMode(previousBlendMode, previousAlphaMode)
     end
     love.graphics.pop()
 
@@ -775,7 +961,7 @@ function CardChoice:drawCard(card, index)
     love.graphics.printf(cardDescription, descriptionX, descriptionY, descriptionW, "center")
 
     self:drawDiamondParticles(card, "above", alpha)
-    if card.selectActive then
+    if card.cornerVisible then
         SelectCorners.draw({
             left = x - screenCardW / 2,
             top = y - screenCardH / 2,
@@ -784,7 +970,11 @@ function CardChoice:drawCard(card, index)
         }, {
             startedAt = card.selectStartTime,
             scale = 3.2,
-            padding = 2,
+            padding = -2,
+            rotation = 1.05,
+            arrivePadding = 12,
+            exitedAt = not card.selectActive and card.cornerExitStartedAt or nil,
+            exitDuration = cornerExitDuration,
             alpha = alpha,
             color = {0.96, 0.93, 0.72, 1},
         })
@@ -797,8 +987,8 @@ function CardChoice:draw()
     end
 
     local fadeAlpha = 1
-    if self.phase == "celebrate" and self.timer > 0.28 then
-        fadeAlpha = math.max(0, 1 - (self.timer - 0.28) / 0.64)
+    if self.phase == "celebrate" and self.timer > 0.60 then
+        fadeAlpha = math.max(0, 1 - (self.timer - 0.60) / 0.48)
     end
 
     love.graphics.setColor(0.02, 0.01, 0.04, 0.62 * fadeAlpha)
@@ -806,7 +996,13 @@ function CardChoice:draw()
 
     for _, p in ipairs(self.particles) do
         local alpha = 1 - math.min(p.timer / p.lifeTime, 1)
-        love.graphics.setColor(p.color[1], p.color[2], p.color[3], alpha * fadeAlpha)
+        local flash = p.flashTime and math.max(0, 1 - p.timer / p.flashTime) or 0
+        love.graphics.setColor(
+            p.color[1] + (1 - p.color[1]) * flash * particleFlashStrength,
+            p.color[2] + (1 - p.color[2]) * flash * particleFlashStrength,
+            p.color[3] + (1 - p.color[3]) * flash * particleFlashStrength,
+            alpha * fadeAlpha
+        )
         love.graphics.rectangle("fill", math.floor(p.x + 0.5), math.floor(p.y + 0.5), p.size, p.size)
     end
 

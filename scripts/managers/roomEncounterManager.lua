@@ -8,11 +8,13 @@ local BigZombie = require("scripts/enemies/bigZombie")
 local NoHead = require("scripts/enemies/noHead")
 local Spider = require("scripts/enemies/spider")
 local Scarecrow = require("scripts/enemies/scarecrow")
-local Hollow = require("scripts/objects/hollow")
+local Elevator = require("scripts/objects/elevator")
 local SpiderWeb = require("scripts/particles/spiderWeb")
 local Localization = require("scripts/managers/localization")
 
 local TILE_WORLD_SIZE = 16
+local SPAWN_SAFE_DISTANCE_TILES = 5
+local ENEMY_SPAWN_SPACING_TILES = 3
 
 local EnemyFactories = {
     zombie = Zombie,
@@ -130,6 +132,9 @@ local function setBattleMusicActive(active)
 end
 
 local function updateRoomMusicContext(room)
+    if Music and Music.setEndRoomActive then
+        Music:setEndRoomActive(room and room.isEndRoom == true)
+    end
     if Music and Music.setShopOrChestRoomActive then
         local isShopOrChestRoom = room and (room.isShopRoom == true or room.isCardRoom == true)
         Music:setShopOrChestRoomActive(isShopOrChestRoom == true)
@@ -398,15 +403,23 @@ end
 local function getEncounterSpawnMinDistance(config)
     local tileDistance = (config and config.spawnMinDistanceTiles or 4) * TILE_WORLD_SIZE
     local worldDistance = config and config.spawnMinDistance or 0
-    return math.max(TILE_WORLD_SIZE * 4, tileDistance, worldDistance)
+    return math.max(TILE_WORLD_SIZE * SPAWN_SAFE_DISTANCE_TILES, tileDistance, worldDistance)
 end
 
 local function getEncounterSpawnMinDistanceForWave(config, waveIndex)
     if waveIndex and waveIndex > 1 then
-        return TILE_WORLD_SIZE * 3
+        local tileDistance = (config and config.spawnPlayerAvoidDistanceTiles or SPAWN_SAFE_DISTANCE_TILES) * TILE_WORLD_SIZE
+        local worldDistance = config and config.spawnPlayerAvoidDistance or 0
+        return math.max(TILE_WORLD_SIZE * SPAWN_SAFE_DISTANCE_TILES, tileDistance, worldDistance)
     end
 
     return getEncounterSpawnMinDistance(config)
+end
+
+local function getEncounterEntryAvoidDistance(config)
+    local tileDistance = (config and config.spawnEntryAvoidDistanceTiles or SPAWN_SAFE_DISTANCE_TILES) * TILE_WORLD_SIZE
+    local worldDistance = config and config.spawnEntryAvoidDistance or 0
+    return math.max(TILE_WORLD_SIZE * SPAWN_SAFE_DISTANCE_TILES, tileDistance, worldDistance)
 end
 
 local function getEncounterSpawnAvoidPoints(config, waveIndex, spawnedPositions, enemies)
@@ -419,7 +432,7 @@ local function getEncounterSpawnAvoidPoints(config, waveIndex, spawnedPositions,
         avoidPoints[#avoidPoints + 1] = {
             x = entryPoint.x,
             y = entryPoint.y,
-            radius = TILE_WORLD_SIZE * (config and config.spawnEntryAvoidDistanceTiles or 4),
+            radius = getEncounterEntryAvoidDistance(config),
         }
     end
 
@@ -428,7 +441,7 @@ local function getEncounterSpawnAvoidPoints(config, waveIndex, spawnedPositions,
             avoidPoints[#avoidPoints + 1] = {
                 x = enemy.x,
                 y = enemy.y,
-                radius = TILE_WORLD_SIZE * 3,
+                radius = TILE_WORLD_SIZE * ENEMY_SPAWN_SPACING_TILES,
             }
         end
     end
@@ -437,7 +450,7 @@ local function getEncounterSpawnAvoidPoints(config, waveIndex, spawnedPositions,
         avoidPoints[#avoidPoints + 1] = {
             x = position.x,
             y = position.y,
-            radius = TILE_WORLD_SIZE * 3,
+            radius = TILE_WORLD_SIZE * ENEMY_SPAWN_SPACING_TILES,
         }
     end
 
@@ -667,17 +680,31 @@ function RoomEncounterManager:spawnStartRoomScarecrow(currentRoom)
     return true
 end
 
-function RoomEncounterManager:spawnEndRoomHollow(currentRoom)
+function RoomEncounterManager:spawnEndRoomElevator(currentRoom)
     if not (currentRoom and currentRoom.isEndRoom) then
         return
     end
 
     local map = Tilemap:getTilemap()
-    local centerX = map and #(map[1] or {}) / 2 or 16
-    local centerY = map and #map / 2 or 16
-    local worldX, worldY = Tilemap:mapToWorld(centerX + 0.5, centerY + 0.5)
-    self.objects[#self.objects + 1] = Hollow:new(worldX, worldY)
+    currentRoom.state = currentRoom.state or {}
+    local state = currentRoom.state
+    if not (state and state.elevatorPosition) then
+        local centerX = map and #(map[1] or {}) / 2 or 16
+        local centerY = map and #map / 2 or 16
+        local worldX, worldY = Tilemap:mapToWorld(centerX + 0.5, centerY + 0.5)
+        local offsetX = math.random(0, 1) == 0 and -TILE_WORLD_SIZE / 2 or TILE_WORLD_SIZE / 2
+        local offsetY = math.random(0, 1) == 0 and -TILE_WORLD_SIZE / 2 or TILE_WORLD_SIZE / 2
+        state.elevatorPosition = {
+            x = worldX + offsetX,
+            y = worldY + TILE_WORLD_SIZE * 2 + offsetY,
+        }
+    end
+
+    local position = state and state.elevatorPosition
+    self.objects[#self.objects + 1] = Elevator:new(position.x, position.y)
 end
+
+RoomEncounterManager.spawnEndRoomHollow = RoomEncounterManager.spawnEndRoomElevator
 
 function RoomEncounterManager:setupCurrentRoom(options)
     options = options or {}
@@ -736,7 +763,7 @@ function RoomEncounterManager:setupCurrentRoom(options)
         state.encounterCompleted = true
         self.enemies = {}
         self.nearbyEnemies = {}
-        self:spawnEndRoomHollow(currentRoom)
+        self:spawnEndRoomElevator(currentRoom)
         return
     end
 
@@ -872,7 +899,7 @@ function RoomEncounterManager:spawnAdditionalEncounterWave(currentRoom, encounte
 
     local enemyCount = getEncounterEnemyCount(encounterConfig, waveConfig)
     local waveId = (state.encounterWaveSerial or 0) + 1
-    local spawnMinDistance = getEncounterSpawnMinDistanceForWave(encounterConfig, 1)
+    local spawnMinDistance = getEncounterSpawnMinDistanceForWave(encounterConfig, 2)
     local spawnedCounts = {}
     local spawnedAny = false
 
@@ -882,7 +909,7 @@ function RoomEncounterManager:spawnAdditionalEncounterWave(currentRoom, encounte
     for _ = 1, enemyCount do
         local enemyId = chooseEnemyType(encounterConfig, waveConfig, spawnedCounts)
         local factory = EnemyFactories[enemyId] or EnemyFactories.zombie
-        local spawnAvoidPoints = getEncounterSpawnAvoidPoints(encounterConfig, 1, spawnedPositions, self.enemies)
+        local spawnAvoidPoints = getEncounterSpawnAvoidPoints(encounterConfig, 2, spawnedPositions, self.enemies)
         local x, y = Tilemap:getRandomReachableSpawnPosition(Player, spawnMinDistance, spawnAvoidPoints)
 
         if x and y then
@@ -1042,7 +1069,8 @@ end
 
 function RoomEncounterManager.attach(game)
     game.spawnStartRoomScarecrow = RoomEncounterManager.spawnStartRoomScarecrow
-    game.spawnEndRoomHollow = RoomEncounterManager.spawnEndRoomHollow
+    game.spawnEndRoomElevator = RoomEncounterManager.spawnEndRoomElevator
+    game.spawnEndRoomHollow = RoomEncounterManager.spawnEndRoomElevator
     game.setupCurrentRoom = RoomEncounterManager.setupCurrentRoom
     game.spawnInitialSpiderWebsForRoom = RoomEncounterManager.spawnInitialSpiderWebsForRoom
     game.spawnCurrentRoomWave = RoomEncounterManager.spawnCurrentRoomWave

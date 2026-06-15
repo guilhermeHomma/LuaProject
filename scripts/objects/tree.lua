@@ -42,6 +42,7 @@ end
 
 local shader = love.graphics.newShader([[
     extern float time;
+    extern float windStrength;
     extern float invScaleY10;
     extern float camPhaseOffset;
     extern vec2 spriteSize;
@@ -54,13 +55,14 @@ local shader = love.graphics.newShader([[
         vec2 localUV = clamp((texture_coords - frameUV.xy) / frameSize, vec2(0.0), vec2(1.0));
         vec2 pixelCoord = localUV * spriteSize;
         float relY = clamp(1.0 - pixelCoord.y / spriteSize.y, 0.0, 1.0);
-        float sway = relY * relY * 0.42;
+        float sway = relY * relY * 0.42 * windStrength;
         texture_coords.x = clamp(texture_coords.x + direction / spriteSize.x * sway, frameUV.x, frameUV.z);
         return Texel(tex, texture_coords) * color;
     }
 ]])
 
 shader:send("time", 0.0)
+shader:send("windStrength", 1.0)
 shader:send("invScaleY10", 1.0 / (2.4 * 18.0))
 shader:send("camPhaseOffset", 0.0)
 shader:send("spriteSize", {64.0, 96.0})
@@ -72,12 +74,16 @@ local lastTreeShaderWidth = 64
 local lastTreeShaderHeight = 96
 local lastTreeShaderFrameUV = nil
 local lastShaderUpdateTime = -1
+local lastShaderWindStrength = -1
 
 local function updateTreeShaderGlobals()
-    local t = love.timer.getTime()
-    if t == lastShaderUpdateTime then return end
+    local t = WIND_AMBIENCE_TIME or love.timer.getTime()
+    local windStrength = WIND_AMBIENCE_INTENSITY or 1
+    if t == lastShaderUpdateTime and windStrength == lastShaderWindStrength then return end
     lastShaderUpdateTime = t
+    lastShaderWindStrength = windStrength
     shader:send("time", t)
+    shader:send("windStrength", windStrength)
     if camera and YSCALE then
         local zy = camera.zoomY or 1
         local inv = 1.0 / (YSCALE * zy * 18.0)

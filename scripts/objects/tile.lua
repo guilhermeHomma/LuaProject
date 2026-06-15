@@ -326,6 +326,10 @@ function Tile:drawDebug()
 end
 
 function Tile:drawShadow()
+    if self.touchesWalkableGround ~= true then
+        return
+    end
+
     if self.quadIndex == 5 or self.quadIndex == 15 or self.quadIndex == 35 then
         return
     end

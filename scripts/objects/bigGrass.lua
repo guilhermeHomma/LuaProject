@@ -61,6 +61,7 @@ function BigGrass:new(x, y, options)
     grass.changedTarget = true
     grass.phase = options.phase or math.random() * math.pi * 2
     grass.drawPriority = options.drawPriority or math.random() * 0.1
+    grass.spatialRadius = 24
     grass.blades = {}
 
     if options.blades then
@@ -150,11 +151,14 @@ function BigGrass:update(dt)
 
     local target = self:getTarget()
     self.externalTargetDirection = nil
+    local windMultiplier = WIND_AMBIENCE_MULTIPLIER or 1
+    local windIntensity = WIND_AMBIENCE_INTENSITY or 1
+    local windTime = WIND_AMBIENCE_TIME or love.timer.getTime()
     local speed = 2
     if target ~= 0 then speed = 14 end
 
-    self.collisionDirection = self.collisionDirection + (target - self.collisionDirection) * dt * speed
-    self.shaderDirection = math.sin(love.timer.getTime() + self.phase) * 0.25 + self.collisionDirection * 0.55
+    self.collisionDirection = self.collisionDirection + (target - self.collisionDirection) * dt * speed * windMultiplier
+    self.shaderDirection = math.sin(windTime + self.phase) * 0.25 * windIntensity + self.collisionDirection * 0.55
 
     addToDrawQueue(self.y + self.ySortOffset + self.drawPriority, self, false)
 end

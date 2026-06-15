@@ -126,7 +126,7 @@ $includeDirectories = @(
 $allowedExtensionsByDirectory = @{
     'scripts/' = @('.lua', '.glsl')
     'jumperj/' = @('.lua')
-    'assets/' = @('.png', '.mp3', '.ogg', '.wav', '.ttf', '.otf')
+    'assets/' = @('.png', '.mp3', '.ogg', '.wav', '.ttf', '.otf', '.json')
 }
 
 function Test-ShouldIncludeFile {

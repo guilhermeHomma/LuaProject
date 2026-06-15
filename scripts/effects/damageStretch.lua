@@ -24,10 +24,15 @@ function DamageStretch:getScale(target)
         return 1, 1
     end
 
+    if target.damageStretchStartTime == -math.huge then
+        return 1, 1
+    end
+
     local duration = target.damageStretchDuration or defaultDuration
     local elapsed = love.timer.getTime() - target.damageStretchStartTime
 
     if elapsed < 0 or elapsed >= duration then
+        target.damageStretchStartTime = -math.huge
         return 1, 1
     end
 

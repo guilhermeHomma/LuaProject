@@ -27,6 +27,7 @@ rsync -a \
     --include='*.wav' \
     --include='*.ttf' \
     --include='*.otf' \
+    --include='*.json' \
     --exclude='*' \
     "./assets/" "$TMP_BUILD_DIR/assets/"
 

@@ -31,7 +31,7 @@ VisualThemes.themes = {
         lootLightBoost = false,
         ambience = {
             crow = false,
-            cricket = false,
+            cricket = true,
             owl = false,
         },
         generalShadow = {
@@ -39,25 +39,6 @@ VisualThemes.themes = {
             color = {0.42, 0.24, 0.12},
         },
         removeSurroundedPoles = true,
-        ambientDust = {
-            enabled = true,
-            count = 86,
-            anchorCount = 96,
-            spreadX = 22,
-            spreadY = 15,
-            driftMinX = -1.4,
-            driftMaxX = 1.4,
-            driftMinY = -0.35,
-            driftMaxY = 0.45,
-            driftDistance = 34,
-            alphaMin = 0.12,
-            alphaMax = 0.34,
-            sizeMin = 0.8,
-            sizeMax = 1.8,
-            color = {0.62, 0.54, 0.45},
-            brightColor = {0.82, 0.72, 0.58},
-            whiteChance = 0.08,
-        },
     },
 }
 

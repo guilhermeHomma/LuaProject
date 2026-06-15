@@ -14,6 +14,7 @@ local Pathfinder = require("jumperj.pathfinder")
 local tileSize = 16
 local treeFadeCellSize = 64
 local tileUpdateCellSize = 128
+local GRASS_RENDER_CULL_MARGIN = 24
 local pathCacheMaxEntries = 96
 local pathCacheTTL = 0.6
 local tilemap = nil
@@ -65,6 +66,9 @@ local TILE_CONTAINER = 13
 local TILE_CHEST = 15
 local TILE_CHEST_MARKER = 6
 local GRASS_WALKABLE_RADIUS = 4
+local DEFAULT_GRASS_SPAWN_CHANCE = 0.14
+local DEFAULT_BIG_GRASS_SPAWN_CHANCE = 0.05
+local DEFAULT_NON_WALKABLE_BIG_GRASS_SPAWN_CHANCE = 0.05
 local DEFAULT_OBJECT_BORDER_CULL_LAYERS_X = 3
 local DEFAULT_OBJECT_BORDER_CULL_LAYERS_TOP = 5
 local DEFAULT_OBJECT_BORDER_CULL_LAYERS_BOTTOM = 3
@@ -324,6 +328,31 @@ local function currentThemeAllowsWallGrass()
     return not theme or theme.wallGrass ~= false
 end
 
+local function clampChance(value, fallback)
+    if value == nil then
+        return fallback
+    end
+
+    return math.max(0, math.min(value, 1))
+end
+
+local function getGrassConfigChance(key, fallback)
+    local config = CURRENT_LEVEL and CURRENT_LEVEL.grassConfig
+    return clampChance(config and config[key], fallback)
+end
+
+local function getNonWalkableGrassSpawnChance()
+    return getGrassConfigChance("nonWalkableChance", DEFAULT_GRASS_SPAWN_CHANCE)
+end
+
+local function getBigGrassSpawnChance()
+    return getGrassConfigChance("bigGrassChance", DEFAULT_BIG_GRASS_SPAWN_CHANCE)
+end
+
+local function getNonWalkableBigGrassSpawnChance()
+    return getGrassConfigChance("nonWalkableBigGrassChance", DEFAULT_NON_WALKABLE_BIG_GRASS_SPAWN_CHANCE)
+end
+
 local function isGrassBlockingObjectTile(tile)
     return tile == TILE_CHEST
         or tile == TILE_CHEST_MARKER
@@ -399,11 +428,13 @@ local function shouldCreateGrass(tile, collider, x, y)
     end
 
     local canUseTile = tile == 0 or tile == 5 or tile == 6
+    local spawnChance = DEFAULT_GRASS_SPAWN_CHANCE
     if tile == 1 and currentThemeAllowsWallGrass() and not isWallTouchingWalkableGround(x, y) then
         canUseTile = true
+        spawnChance = getNonWalkableGrassSpawnChance()
     end
 
-    return canUseTile and math.random() > 0.86
+    return canUseTile and math.random() < spawnChance
 end
 
 local function getTileKey(x, y)
@@ -898,7 +929,10 @@ local function shouldCreateBigGrass(tile, collider, x, y, occupied)
         return false
     end
 
-    return (tile == 0 or tile == 5 or tile == 6) and isFloorNearWall(x, y) and not occupied[getTileKey(x, y)] and math.random() < 0.05
+    return (tile == 0 or tile == 5 or tile == 6)
+        and isFloorNearWall(x, y)
+        and not occupied[getTileKey(x, y)]
+        and math.random() < getBigGrassSpawnChance()
 end
 
 local function shouldCreateDecorativeBigGrass(tile, collider, x, y, occupied)
@@ -915,7 +949,7 @@ local function shouldCreateDecorativeBigGrass(tile, collider, x, y, occupied)
         and not isWallTouchingWalkableGround(x, y)
         and hasTreeNearby(x, y)
         and not occupied[getTileKey(x, y)]
-        and math.random() < 0.05
+        and math.random() < getNonWalkableBigGrassSpawnChance()
 end
 
 local function canCreateBigGrassAt(x, y, occupied)
@@ -962,7 +996,11 @@ local function randomGrassIndex(tile)
     return 4
 end
 
-local function canRenderGrassEntry(entry)
+local function canRenderGrassEntry(entry, blockedTiles)
+    if blockedTiles and blockedTiles[getTileKey(entry.x, entry.y)] then
+        return false
+    end
+
     local tile = tilemap[entry.y] and tilemap[entry.y][entry.x]
     if not tile then
         return false
@@ -1064,6 +1102,72 @@ local function appendBigGrassCluster(bigGrassList, startX, startY, occupied, can
     end
 end
 
+local function buildEntryLookup(entries)
+    local lookup = {}
+    for _, entry in ipairs(entries or {}) do
+        lookup[getTileKey(entry.x, entry.y)] = true
+    end
+    return lookup
+end
+
+local function worldToMapPosition(x, y)
+    local mapX = math.floor((x - tilemapWorldX) / tileSize + 0.5) + 1
+    local mapY = math.floor((y - tilemapWorldY) / tileSize + 0.5) + 1
+    return mapX, mapY
+end
+
+local function ensureEndRoomElevatorPosition(room)
+    local state = room and room.state
+    if not (room and room.isEndRoom and state) then
+        return nil
+    end
+
+    if not state.elevatorPosition then
+        local centerX = tilemap and #(tilemap[1] or {}) / 2 or 16
+        local centerY = tilemap and #tilemap / 2 or 16
+        local worldX = tilemapWorldX + (centerX - 0.5) * tileSize
+        local worldY = tilemapWorldY + centerY * tileSize
+        local offsetX = math.random(0, 1) == 0 and -tileSize / 2 or tileSize / 2
+        local offsetY = math.random(0, 1) == 0 and -tileSize / 2 or tileSize / 2
+        state.elevatorPosition = {
+            x = worldX + offsetX,
+            y = worldY + tileSize * 2 + offsetY,
+        }
+    end
+
+    return state.elevatorPosition
+end
+
+local function buildEndRoomElevatorBaseLookup(room)
+    local lookup = {}
+    local position = ensureEndRoomElevatorPosition(room)
+    if not position then
+        return lookup
+    end
+
+    local pattern = {
+        "xxxxx",
+        "xxxxx",
+        "xxxxx",
+        "xxxxx",
+    }
+    local rows = #pattern
+    local cols = #pattern[1]
+    local left = position.x - cols * tileSize / 2
+    local top = position.y - rows * tileSize
+
+    for rowIndex = 1, rows do
+        for colIndex = 1, cols do
+            local centerX = left + (colIndex - 0.5) * tileSize
+            local centerY = top + (rowIndex - 0.5) * tileSize
+            local mapX, mapY = worldToMapPosition(centerX, centerY)
+            lookup[getTileKey(mapX, mapY)] = true
+        end
+    end
+
+    return lookup
+end
+
 local function buildFloorPathState()
     local room = FloorManager:getCurrentRoom()
     local state = room and room.state
@@ -1093,17 +1197,17 @@ local function buildFloorPathState()
     local branchMax = config.branchMax or 5
     local looseChance = config.looseChance or 0.006
     local used = {}
-    local hollowClearCenterX = room and room.isEndRoom and (#(tilemap[1] or {}) + 1) / 2 or nil
-    local hollowClearCenterY = room and room.isEndRoom and (#tilemap + 1) / 2 or nil
+    local elevatorClearCenterX = room and room.isEndRoom and (#(tilemap[1] or {}) + 1) / 2 or nil
+    local elevatorClearCenterY = room and room.isEndRoom and (#tilemap + 1) / 2 or nil
 
     local function addPathTile(x, y)
         local key = getTileKey(x, y)
         if used[key] or not (tilemap[y] and canDrawFloorPathOnTile(tilemap[y][x])) then
             return false
         end
-        if hollowClearCenterX
-            and math.abs(x - hollowClearCenterX) <= 2
-            and math.abs(y - hollowClearCenterY) <= 2 then
+        if elevatorClearCenterX
+            and math.abs(x - elevatorClearCenterX) <= 2
+            and math.abs(y - elevatorClearCenterY) <= 2 then
             return false
         end
 
@@ -1962,7 +2066,12 @@ function DefaultTilemap:updatePathfinderTile(x, y)
 end
 
 local function isSpecialStoneWallRoom(room)
-    return room and (room.isShopRoom or room.isCardRoom or room.templateId == "store_32x32" or room.templateId == "cards_32x32")
+    return room and (room.isShopRoom
+        or room.isCardRoom
+        or room.isEndRoom
+        or room.templateId == "store_32x32"
+        or room.templateId == "cards_32x32"
+        or room.templateId == "end_32x32")
 end
 
 function DefaultTilemap:createTile(x, y, tile, collider)
@@ -2207,6 +2316,21 @@ function DefaultTilemap:load()
     local specialMoonbeamTargets = {}
     local walkablePositions = {}
     local floorPathEntries = buildFloorPathState()
+    local floorPathLookup = buildEntryLookup(floorPathEntries)
+    local elevatorBaseLookup = buildEndRoomElevatorBaseLookup(FloorManager:getCurrentRoom())
+    local grassBlockLookup = {}
+    for key in pairs(floorPathLookup) do
+        grassBlockLookup[key] = true
+    end
+    for key in pairs(elevatorBaseLookup) do
+        grassBlockLookup[key] = true
+    end
+    local function canCreateBigGrassWithoutFloorPath(checkX, checkY, occupied)
+        return not grassBlockLookup[getTileKey(checkX, checkY)] and canCreateBigGrassAt(checkX, checkY, occupied)
+    end
+    local function canCreateDecorativeBigGrassWithoutFloorPath(checkX, checkY, occupied)
+        return not grassBlockLookup[getTileKey(checkX, checkY)] and canCreateDecorativeBigGrassAt(checkX, checkY, occupied)
+    end
     wallVariantLookup = buildWallVariantState()
     local roomState = FloorManager:getCurrentRoomState()
     local generatingGrassState = roomState and roomState.grassTiles == nil
@@ -2257,15 +2381,17 @@ function DefaultTilemap:load()
             end
 
             if generatingGrassState then
-                if shouldCreateBigGrass(tile, collider, x, y, bigGrassOccupied) then
-                    appendBigGrassCluster(bigGrassState, x, y, bigGrassOccupied, canCreateBigGrassAt, {yOffset = 0, ySortOffset = 2, interactive = true}, 2, 4)
+                local blocksGrass = grassBlockLookup[getTileKey(x, y)] == true
+
+                if not blocksGrass and shouldCreateBigGrass(tile, collider, x, y, bigGrassOccupied) then
+                    appendBigGrassCluster(bigGrassState, x, y, bigGrassOccupied, canCreateBigGrassWithoutFloorPath, {yOffset = 0, ySortOffset = 2, interactive = true}, 2, 4)
                 end
 
-                if shouldCreateDecorativeBigGrass(tile, collider, x, y, bigGrassOccupied) then
-                    appendBigGrassCluster(bigGrassState, x, y, bigGrassOccupied, canCreateDecorativeBigGrassAt, {yOffset = 16, ySortOffset = 10, interactive = false})
+                if not blocksGrass and shouldCreateDecorativeBigGrass(tile, collider, x, y, bigGrassOccupied) then
+                    appendBigGrassCluster(bigGrassState, x, y, bigGrassOccupied, canCreateDecorativeBigGrassWithoutFloorPath, {yOffset = 16, ySortOffset = 10, interactive = false})
                 end
 
-                if not bigGrassOccupied[getTileKey(x, y)] and shouldCreateGrass(tile, collider, x, y) then
+                if not blocksGrass and not bigGrassOccupied[getTileKey(x, y)] and shouldCreateGrass(tile, collider, x, y) then
                     appendGrassState(grassState, x, y, worldX, worldY, tile)
                 end
             end
@@ -2273,6 +2399,7 @@ function DefaultTilemap:load()
             if shouldCreateTileObject(tile, x, y) then
                 local createdTile = self:createTile(x, y, tile, collider)
                 if createdTile then
+                    createdTile.touchesWalkableGround = hasAdjacentWalkableGroundEdge(x, y) == true
                     self.tiles[#self.tiles + 1] = createdTile
                     self.tileLookup[getTileKey(x, y)] = createdTile
                     self.tileLookupByMap[y] = self.tileLookupByMap[y] or {}
@@ -2292,7 +2419,7 @@ function DefaultTilemap:load()
     end
 
     for _, entry in ipairs(grassState) do
-        if canRenderGrassEntry(entry) then
+        if canRenderGrassEntry(entry, grassBlockLookup) then
             local worldX, worldY = self:mapToWorld(entry.x, entry.y)
             self.grass[#self.grass + 1] = Grass:new(
                 worldX + (entry.offsetX or 0),
@@ -2304,7 +2431,7 @@ function DefaultTilemap:load()
     end
 
     for _, entry in ipairs(bigGrassState) do
-        if canRenderGrassEntry(entry) then
+        if canRenderGrassEntry(entry, grassBlockLookup) then
             local worldX, worldY = self:mapToWorld(entry.x, entry.y)
             self.bigGrass[#self.bigGrass + 1] = BigGrass:new(worldX, worldY, entry.options)
         end
@@ -2443,6 +2570,25 @@ local function getCameraWorldBox(margin)
     }
 end
 
+local function getCameraVisibleWorldBox(margin)
+    if not camera then
+        return nil
+    end
+
+    margin = margin or 0
+    local scaleX = math.max(WORLD_SCALE_X or 1, 0.001)
+    local scaleY = math.max(YSCALE or 1, 0.001)
+    local viewWidth = camera.viewWidth or ((baseWidth or love.graphics.getWidth()) / math.max(camera.zoomX or 1, 0.001))
+    local viewHeight = camera.viewHeight or ((baseHeight or love.graphics.getHeight()) / math.max(camera.zoomY or 1, 0.001))
+
+    return {
+        minX = camera.x / scaleX - margin,
+        maxX = (camera.x + viewWidth) / scaleX + margin,
+        minY = camera.y / scaleY - margin,
+        maxY = (camera.y + viewHeight) / scaleY + margin,
+    }
+end
+
 local function getObjectSpatialBounds(object)
     local x = object and (object.xWorld or object.x)
     local y = object and (object.yWorld or object.y)
@@ -2528,7 +2674,9 @@ function DefaultTilemap:getVisibleObjectsFromGrid(gridName, margin)
         return nil
     end
 
-    local box = getCameraWorldBox(margin)
+    local box = (gridName == "grass" or gridName == "bigGrass")
+        and getCameraVisibleWorldBox(margin)
+        or getCameraWorldBox(margin)
     if not box then
         return nil
     end
@@ -2555,7 +2703,14 @@ function DefaultTilemap:getVisibleObjectsFromGrid(gridName, margin)
                 for _, object in ipairs(bucket) do
                     if object.__tilemapVisibleStamp ~= stamp then
                         object.__tilemapVisibleStamp = stamp
-                        result[#result + 1] = object
+                        local objectMinX, objectMinY, objectMaxX, objectMaxY = getObjectSpatialBounds(object)
+                        if not objectMinX
+                            or (objectMaxX >= box.minX
+                                and objectMinX <= box.maxX
+                                and objectMaxY >= box.minY
+                                and objectMinY <= box.maxY) then
+                            result[#result + 1] = object
+                        end
                     end
                 end
             end
@@ -2662,11 +2817,11 @@ function DefaultTilemap:update(dt)
         beam:update(dt)
     end
 
-    for _, g in ipairs(self:getVisibleObjectsFromGrid("bigGrass", 220) or self.bigGrass) do
+    for _, g in ipairs(self:getVisibleObjectsFromGrid("bigGrass", GRASS_RENDER_CULL_MARGIN) or self.bigGrass) do
         g:update(dt)
     end
 
-    for _, g in ipairs(self:getVisibleObjectsFromGrid("grass", 170) or self.grass) do
+    for _, g in ipairs(self:getVisibleObjectsFromGrid("grass", GRASS_RENDER_CULL_MARGIN) or self.grass) do
         g:update(dt)
     end
 

@@ -1,6 +1,7 @@
 local FloorManager = {}
 
 local RoomTemplates = require("scripts/rooms/roomTemplates")
+local RoomSelector = require("scripts/rooms/roomSelector")
 local WeaponDefinitions = require("scripts/player/weapons/init")
 local VisualThemes = require("scripts/config/visualThemes")
 
@@ -14,68 +15,7 @@ local directions = {
 local directionOrder = {"north", "south", "west", "east"}
 
 local function copyTable(source)
-    if not source then
-        return nil
-    end
-
-    local copied = {}
-    for key, value in pairs(source) do
-        if type(value) == "table" then
-            copied[key] = copyTable(value)
-        else
-            copied[key] = value
-        end
-    end
-    return copied
-end
-
-local function getWeightedValue(item, weights)
-    local id = type(item) == "table" and item.id or item
-    if weights and id and weights[id] ~= nil then
-        return weights[id]
-    end
-
-    if type(item) == "table" then
-        return item.weight or item.chance or 1
-    end
-
-    return 1
-end
-
-local function chooseWeighted(list, weights)
-    local totalWeight = 0
-
-    for _, item in ipairs(list or {}) do
-        local weight = getWeightedValue(item, weights)
-        if weight > 0 then
-            totalWeight = totalWeight + weight
-        end
-    end
-
-    if totalWeight <= 0 then
-        return nil
-    end
-
-    local roll = math.random() * totalWeight
-    for _, item in ipairs(list or {}) do
-        local weight = getWeightedValue(item, weights)
-        if weight > 0 then
-            roll = roll - weight
-            if roll <= 0 then
-                return item
-            end
-        end
-    end
-
-    return list[#list]
-end
-
-local function chooseTemplateTilemapConfig(template)
-    if template and template.tilemapConfigs then
-        return copyTable(chooseWeighted(template.tilemapConfigs))
-    end
-
-    return copyTable(template and template.tilemapConfig)
+    return RoomSelector.copyTable(source)
 end
 
 local function resolveOccupiedOffsets(roomConfig, template)
@@ -128,7 +68,7 @@ local function createRoom(roomConfig, level)
         neighbors = copyTable(roomConfig.neighbors) or {},
         doorSlots = copyTable(roomConfig.doorSlots or (template and template.doorSlots)) or {},
         spawnPoints = copyTable(roomConfig.spawnPoints or (template and template.spawnPoints)) or {},
-        tilemapConfig = copyTable(roomConfig.tilemapConfig or chooseTemplateTilemapConfig(template) or level.tilemapConfig),
+        tilemapConfig = copyTable(roomConfig.tilemapConfig or RoomSelector.chooseTemplateTilemapConfig(template) or level.tilemapConfig),
         isShopRoom = roomConfig.isShopRoom == true or templateId == "store_32x32",
         isCardRoom = roomConfig.isCardRoom == true or templateId == "cards_32x32",
         isEndRoom = roomConfig.isEndRoom == true or templateId == "end_32x32",
@@ -267,96 +207,10 @@ local function tryConnectRooms(roomA, roomB, direction, roomACell, roomBCell)
     return false
 end
 
-local function getTemplateCandidates(generateConfig)
-    if generateConfig.templateIds then
-        return generateConfig.templateIds
-    end
-
-    if generateConfig.templateId then
-        return {generateConfig.templateId}
-    end
-
-    return nil
-end
-
-local function getTemplateOccupancyOptions(template)
-    local options = {}
-
-    if template.occupancyVariants then
-        for variantId, offsets in pairs(template.occupancyVariants) do
-            options[#options + 1] = {
-                variantId = variantId,
-                offsets = offsets,
-            }
-        end
-    else
-        options[#options + 1] = {
-            variantId = nil,
-            offsets = template.occupiedOffsets or {
-                {x = 0, y = 0},
-            },
-        }
-    end
-
-    return options
-end
-
-local function canPlaceOccupancy(x, y, offsets, occupiedCells)
-    for _, offset in ipairs(offsets) do
-        local cellId = getRoomId(x + offset.x, y + offset.y)
-        if occupiedCells[cellId] then
-            return false
-        end
-    end
-
-    return true
-end
-
 local function reserveRoomCells(room, occupiedCells)
     for _, cell in ipairs(getOccupiedCells(room)) do
         occupiedCells[getRoomId(cell.x, cell.y)] = room
     end
-end
-
-local function chooseTemplatePlacement(doors, generateConfig, x, y, occupiedCells)
-    local templateWeights = generateConfig and generateConfig.templateWeights
-    local templateIds = getTemplateCandidates(generateConfig)
-    local compatibleTemplates = RoomTemplates:getCompatible(doors, templateIds)
-    local candidates = {}
-
-    if generateConfig and generateConfig.useEndTemplateWeights then
-        templateWeights = generateConfig.endTemplateWeights or templateWeights
-    end
-
-    for _, template in ipairs(compatibleTemplates) do
-        local placements = {}
-        for _, option in ipairs(getTemplateOccupancyOptions(template)) do
-            if canPlaceOccupancy(x, y, option.offsets, occupiedCells) then
-                placements[#placements + 1] = {
-                    template = template,
-                    variantId = option.variantId,
-                    offsets = option.offsets,
-                }
-            end
-        end
-
-        if #placements > 0 then
-            candidates[#candidates + 1] = {
-                id = template.id,
-                template = template,
-                placements = placements,
-            }
-        end
-    end
-
-    local selected = chooseWeighted(candidates, templateWeights)
-    if not selected then
-        return nil
-    end
-
-    local placement = selected.placements[math.random(1, #selected.placements)]
-    placement.tilemapConfig = chooseTemplateTilemapConfig(selected.template)
-    return placement
 end
 
 local function getRoomConnectionCount(room)
@@ -490,7 +344,7 @@ local function createEndRoomFromAnchor(anchorRoom, generateConfig, generatedRoom
             local x = anchorCell.x + directionConfig.dx
             local y = anchorCell.y + directionConfig.dy
             if not anchorRoom.neighbors[direction] and not occupiedCells[getRoomId(x, y)] then
-                local placement = chooseTemplatePlacement(
+                local placement = RoomSelector.chooseTemplatePlacement(
                     {[directionConfig.opposite] = true},
                     {templateIds = {endTemplateId}},
                     x,
@@ -595,7 +449,7 @@ local function createShopRoomFromAnchor(anchorRoom, generateConfig, generatedRoo
             local x = anchorCell.x + directionConfig.dx
             local y = anchorCell.y + directionConfig.dy
             if not anchorRoom.neighbors[direction] and not occupiedCells[getRoomId(x, y)] then
-                local placement = chooseTemplatePlacement(
+                local placement = RoomSelector.chooseTemplatePlacement(
                     {[directionConfig.opposite] = true},
                     {templateIds = {shopTemplateId}},
                     x,
@@ -643,7 +497,7 @@ local function createCardRoomFromAnchor(anchorRoom, generateConfig, generatedRoo
             local x = anchorCell.x + directionConfig.dx
             local y = anchorCell.y + directionConfig.dy
             if not anchorRoom.neighbors[direction] and not occupiedCells[getRoomId(x, y)] then
-                local placement = chooseTemplatePlacement(
+                local placement = RoomSelector.chooseTemplatePlacement(
                     {[directionConfig.opposite] = true},
                     {templateIds = {cardTemplateId}},
                     x,
@@ -721,12 +575,12 @@ end
 
 local function createCardRooms(generateConfig, generatedRooms, roomIds, occupiedCells)
     if not (generateConfig and generateConfig.cardRoomTemplateId) then
-        return
+        return 0, 0
     end
 
     local cardRoomChance = generateConfig.cardRoomChance
     if cardRoomChance ~= nil and math.random() > cardRoomChance then
-        return
+        return 0, 0
     end
 
     local countConfig = generateConfig.cardRoomCount or {min = 2, max = 3}
@@ -775,7 +629,7 @@ local function createCardRooms(generateConfig, generatedRooms, roomIds, occupied
         local candidates = getSortedCardAnchors()
 
         if #candidates == 0 then
-            return
+            return created, targetCount
         end
 
         local placedRoom = nil
@@ -790,9 +644,11 @@ local function createCardRooms(generateConfig, generatedRooms, roomIds, occupied
             placedCardRooms[#placedCardRooms + 1] = placedRoom
             created = created + 1
         else
-            return
+            return created, targetCount
         end
     end
+
+    return created, targetCount
 end
 
 local function isLargeGeneratedRoom(room)
@@ -885,7 +741,7 @@ local function addOppositeExitFromLargeRoom(room, generateConfig, generatedRooms
         return false
     end
 
-    local placement = chooseTemplatePlacement(
+    local placement = RoomSelector.chooseTemplatePlacement(
         {[directionConfig.opposite] = true},
         generateConfig,
         x,
@@ -943,15 +799,18 @@ isRoomStillCompatible = function(room)
 end
 
 local function createGraphRooms(generateConfig)
-    local roomCount = generateConfig.roomCount or 8
+    local battleRoomCount = generateConfig.battleRoomCount
+    local roomCount = battleRoomCount and (math.floor(battleRoomCount) + 1) or (generateConfig.roomCount or 8)
     local extraConnectionChance = generateConfig.extraConnectionChance or 0
+    local shopRoomCount = generateConfig.shopRoomCount
     local hasMandatoryShop = generateConfig.shopRoomTemplateId ~= nil
-    local normalRoomCount = hasMandatoryShop and math.max(1, roomCount - 1) or roomCount
+    local normalRoomCount = hasMandatoryShop and not shopRoomCount and math.max(1, roomCount - 1) or roomCount
+    local endRoomCount = generateConfig.endRoomCount or (generateConfig.endRoomTemplateId and 1 or 0)
     local generatedRooms = {}
     local roomIds = {}
     local occupiedCells = {}
 
-    local startPlacement = chooseTemplatePlacement({}, getStartGenerateConfig(generateConfig), 0, 0, occupiedCells)
+    local startPlacement = RoomSelector.chooseTemplatePlacement({}, getStartGenerateConfig(generateConfig), 0, 0, occupiedCells)
     assert(startPlacement, "No room template can be placed at the start room")
     local startRoom = createGeneratedRoom(0, 0, startPlacement)
     startRoom.distanceFromStart = 0
@@ -985,7 +844,7 @@ local function createGraphRooms(generateConfig)
                     placementConfig = copyTable(generateConfig)
                     placementConfig.useEndTemplateWeights = true
                 end
-                local placement = chooseTemplatePlacement(newRoomDoors, placementConfig, x, y, occupiedCells)
+                local placement = RoomSelector.chooseTemplatePlacement(newRoomDoors, placementConfig, x, y, occupiedCells)
 
                 if placement then
                     local room = createGeneratedRoom(x, y, placement)
@@ -1015,18 +874,28 @@ local function createGraphRooms(generateConfig)
         end
     end
 
+    if battleRoomCount then
+        assert(#generatedRooms >= normalRoomCount, "Could not place requested battle rooms")
+    end
+
+    addOppositeExitsForLargeRooms(generateConfig, generatedRooms, roomIds, occupiedCells)
+
     if hasMandatoryShop then
-        addOppositeExitsForLargeRooms(generateConfig, generatedRooms, roomIds, occupiedCells)
-        createShopRoomAtDistance(startRoom, generateConfig, generatedRooms, roomIds, occupiedCells)
+        local targetShopCount = shopRoomCount or 1
+        for _ = 1, targetShopCount do
+            local shopRoom = createShopRoomAtDistance(startRoom, generateConfig, generatedRooms, roomIds, occupiedCells)
+            assert(shopRoom or not shopRoomCount, "Could not place requested shop room")
+        end
     end
 
-    if not hasMandatoryShop then
-        addOppositeExitsForLargeRooms(generateConfig, generatedRooms, roomIds, occupiedCells)
+    for _ = 1, endRoomCount do
+        local endRoom = createEndRoom(generateConfig, generatedRooms, roomIds, occupiedCells)
+        assert(endRoom, "Could not place requested end room")
     end
-
-    local endRoom = createEndRoom(generateConfig, generatedRooms, roomIds, occupiedCells)
-    assert(not generateConfig.endRoomTemplateId or endRoom, "Could not place mandatory end room")
-    createCardRooms(generateConfig, generatedRooms, roomIds, occupiedCells)
+    local cardRoomsCreated, cardRoomsRequested = createCardRooms(generateConfig, generatedRooms, roomIds, occupiedCells)
+    if generateConfig.cardRoomCount and generateConfig.cardRoomCount.min == generateConfig.cardRoomCount.max then
+        assert(cardRoomsCreated >= cardRoomsRequested, "Could not place requested card rooms")
+    end
 
     for _, room in ipairs(generatedRooms) do
         local canAddExtraConnections = not room.isShopRoom

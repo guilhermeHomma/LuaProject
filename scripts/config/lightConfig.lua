@@ -88,7 +88,7 @@ local LightConfig = {
                     },
                 },
                 projectile = {
-                    enabled = true,
+                    enabled = false,
                     calculationDistance = 180,
                     visual = {
                         enabled = false,
@@ -114,7 +114,7 @@ local LightConfig = {
                     },
                 },
                 enemyProjectile = {
-                    enabled = true,
+                    enabled = false,
                     calculationDistance = 180,
                     visual = {
                         enabled = false,

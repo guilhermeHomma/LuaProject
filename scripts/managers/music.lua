@@ -44,6 +44,7 @@ function Music:load()
     self.targetVolume = MENU_VOLUME_TARGET
     self.volume = MENU_VOLUME_TARGET
     self.battleActive = false
+    self.endRoomActive = false
     self.defaultFadeInSpeed = FADE_IN_SPEED
     self.defaultFadeOutSpeed = FADE_OUT_SPEED
     self.fadeSpeedOverride = nil
@@ -69,6 +70,7 @@ end
 
 function Music:startGame()
     self:setBattleActive(false, true)
+    self.endRoomActive = false
     self.fadeSpeedOverride = nil
     self.pendingTrack = nil
     self.pendingTrackTargetVolume = nil
@@ -116,6 +118,7 @@ end
 
 function Music:startMenu()
     self:setBattleActive(false, true)
+    self.endRoomActive = false
     self.pendingTrack = nil
     self.pendingTrackTargetVolume = nil
     self.fadeSpeedOverride = nil
@@ -137,6 +140,11 @@ end
 function Music:setBattleActive(active, immediate)
     self.battleActive = false
 
+    if self.endRoomActive then
+        self.targetVolume = 0
+        return
+    end
+
     if state == STATES.game and Player and Player.isAlive and not MusicPlayer:isPlaying() and (self.startDelayTimer or 0) <= 0 then
         self:startMusic(self.currentTrack or GAME_TRACK)
     end
@@ -152,7 +160,26 @@ function Music:setShopOrChestRoomActive(active)
         return
     end
 
+    if self.endRoomActive then
+        return
+    end
+
     self:startMusic(active and HORROR_TRACK or GAME_TRACK, GAME_VOLUME_TARGET)
+end
+
+function Music:setEndRoomActive(active)
+    self.endRoomActive = active == true
+    if self.endRoomActive then
+        self.pendingTrack = nil
+        self.pendingTrackTargetVolume = nil
+        self.fadeSpeedOverride = nil
+        self.volume = 0
+        self.targetVolume = 0
+        self.battleActive = false
+        MusicPlayer:setVolume(0)
+    elseif state == STATES.game and Player and Player.isAlive then
+        self:startMusic(GAME_TRACK, GAME_VOLUME_TARGET)
+    end
 end
 
 function Music:changePause(isPaused)
@@ -177,6 +204,7 @@ end
 
 function Music:closeGame()
     self.battleActive = false
+    self.endRoomActive = false
     self:setBattleActive(false)
     self.targetVolume = 0.0
     self.damagePitchTimer = 0
@@ -185,6 +213,7 @@ end
 
 function Music:closeForFloorIntro()
     self.fadeSpeedOverride = FLOOR_INTRO_FADE_OUT_SPEED
+    self.endRoomActive = false
     self:setBattleActive(false, true)
     self.targetVolume = 0
     self.damagePitchTimer = 0
@@ -229,7 +258,9 @@ function Music:update(dt)
     if self.pendingTrack then
         self.targetVolume = 0
     elseif state == STATES.game then
-        if Player.isAlive then
+        if self.endRoomActive then
+            self.targetVolume = 0
+        elseif Player.isAlive then
             if Player.life <= 1 then
                 self.targetVolume = 0.5
             else 
@@ -275,7 +306,7 @@ function Music:update(dt)
         self.battleActive = false
     end
 
-    local keepGameMusicAlive = state == STATES.game and Player and Player.isAlive
+    local keepGameMusicAlive = state == STATES.game and Player and Player.isAlive and not self.endRoomActive
     local keepMenuMusicAlive = (state == STATES.mainMenu
         or (state == STATES.settings and self.currentTrack == MENU_TRACK)
         or (state == STATES.confirm and self.currentTrack == MENU_TRACK))
@@ -289,7 +320,7 @@ function Music:update(dt)
     MusicPlayer:setVolume(self.volume * MUSIC_VOLUME)
     MusicPlayer:setPitch(self.pitch)
 
-    if not MusicPlayer:isPlaying() and state == STATES.game and (self.startDelayTimer or 0) <= 0 then
+    if not MusicPlayer:isPlaying() and state == STATES.game and not self.endRoomActive and (self.startDelayTimer or 0) <= 0 then
         if Player.isAlive then
             self:startMusic(self.currentTrack or GAME_TRACK, getStateVolumeTarget())
         end

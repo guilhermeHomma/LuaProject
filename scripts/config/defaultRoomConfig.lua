@@ -15,6 +15,11 @@ DefaultRoomConfig.floorLevels = {
             startRoomUseDefault = true,
             areas = {},
         },
+        grassConfig = {
+            nonWalkableChance = 0.16,
+            bigGrassChance = 0.05,
+            nonWalkableBigGrassChance = 0.15,
+        },
         enemyDropMultiplier = 1,
         shopProducts = {
             { id = "squaregun", weight = 5 },
@@ -32,6 +37,11 @@ DefaultRoomConfig.floorLevels = {
             default = "cave",
             startRoomUseDefault = false,
             areas = {},
+        },
+        grassConfig = {
+            nonWalkableChance = 0,
+            bigGrassChance = 0.05,
+            nonWalkableBigGrassChance = 0,
         },
         enemyDropMultiplier = 1.2,
         shopProducts = {
@@ -68,6 +78,12 @@ DefaultRoomConfig.roomEncounterConfig = {
 DefaultRoomConfig.objectSpawnChances = {
     box = 0.70,
     chest = 0.50,
+}
+
+DefaultRoomConfig.grassConfig = {
+    nonWalkableChance = 0.14,
+    bigGrassChance = 0.05,
+    nonWalkableBigGrassChance = 0.05,
 }
 
 DefaultRoomConfig.objectSpawnChancesByTemplate = {

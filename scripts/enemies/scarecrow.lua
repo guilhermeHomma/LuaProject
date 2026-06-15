@@ -55,6 +55,20 @@ local function getLightTint(enemy)
     return brightness, brightness, brightness
 end
 
+local function getParticleCount()
+    return #(Game and Game.particles or {})
+end
+
+local function getHitBloodRange()
+    local particleCount = getParticleCount()
+    if particleCount >= 180 then
+        return 1, 2
+    elseif particleCount >= 120 then
+        return 2, 3
+    end
+    return 4, 6
+end
+
 function Scarecrow:new(x, y)
     local scarecrow = setmetatable({}, Scarecrow)
     scarecrow.x = x
@@ -95,7 +109,7 @@ function Scarecrow:getDamageImpactPosition()
 end
 
 function Scarecrow:spawnDamageImpact(dx, dy)
-    if Game and Game.particles then
+    if Game and Game.particles and getParticleCount() < 160 then
         table.insert(Game.particles, DamageImpactParticle:new(self, dx, dy))
     end
 end
@@ -109,7 +123,8 @@ function Scarecrow:takeDamage(damage, dx, dy)
     self.hitFlashTimer = self.hitFlashDuration
     DamageStretch:start(self)
     self.life = self.life - (damage or 10)
-    BloodPixel.spawnBurst(self.x, self.y - 8, 0, -1, 4, 6, strawBloodPalette)
+    local hitBloodMin, hitBloodMax = getHitBloodRange()
+    BloodPixel.spawnBurst(self.x, self.y - 8, 0, -1, hitBloodMin, hitBloodMax, strawBloodPalette)
     playClonedSound(enemyDamageBase, 0.8, (1 + math.random() * 0.1) * GAME_PITCH)
 
     if self.life <= 0 then
