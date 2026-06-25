@@ -47,7 +47,7 @@ end
 
 function baseMenu:playNavigateSound()
     navigateSound:stop()
-    navigateSound:setVolume(0.4 * (SOUND_VOLUME or 1))
+    setSourceVolume(navigateSound, 0.4 * (SOUND_VOLUME or 1))
     navigateSound:setPitch(0.95 + math.random() * 0.1)
     navigateSound:play()
 end
@@ -55,7 +55,7 @@ end
 function baseMenu:playConfirmSound()
     confirmSound:stop()
     confirmSound:setPitch(1)
-    confirmSound:setVolume(0.7 * (SOUND_VOLUME or 1))
+    setSourceVolume(confirmSound, 0.7 * (SOUND_VOLUME or 1))
     confirmSound:play()
 end
 

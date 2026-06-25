@@ -74,8 +74,11 @@ DefaultLevel.grassConfig = copyTable(DefaultLevel.baseGrassConfig)
 DefaultLevel.floorPathTiles = copyTable(RoomConfig.floorPathTiles)
 DefaultLevel.wallVariantTiles = copyTable(RoomConfig.wallVariantTiles)
 DefaultLevel.objectSpawnChancesByTemplate = copyTable(RoomConfig.objectSpawnChancesByTemplate)
-DefaultLevel.floorConfig = copyTable(RoomConfig.floorConfig)
-DefaultLevel.shopConfig = copyTable(RoomConfig.shopConfig)
+DefaultLevel.roomTemplateSets = copyTable(RoomConfig.roomTemplateSets)
+DefaultLevel.baseFloorConfig = copyTable(RoomConfig.floorConfig)
+DefaultLevel.floorConfig = copyTable(DefaultLevel.baseFloorConfig)
+DefaultLevel.baseShopConfig = copyTable(RoomConfig.shopConfig)
+DefaultLevel.shopConfig = copyTable(DefaultLevel.baseShopConfig)
 
 DefaultLevel.cameraBounds = {
 }
@@ -133,6 +136,9 @@ function DefaultLevel:applyFloorLevel(floorIndex)
     end
 
     self.currentFloorIndex = floorIndex or self.currentFloorIndex or 1
+    self.floorConfig = copyTable(self.baseFloorConfig)
+    self.shopConfig = copyTable(self.baseShopConfig)
+
     local floorEncounter = FloorEncounterConfig.floors[self.currentFloorIndex] or {}
     self.roomEncounterConfig = mergeTables(self.baseRoomEncounterConfig, floorEncounter)
     self.roomEncounterConfig = mergeTables(self.roomEncounterConfig, floorLevel.roomEncounterConfig)
@@ -153,6 +159,21 @@ function DefaultLevel:applyFloorLevel(floorIndex)
 
     if floorLevel.cardRoomCount then
         self.floorConfig.generate.cardRoomCount = copyTable(floorLevel.cardRoomCount)
+    end
+
+    local roomTemplateSet = floorLevel.roomTemplateSet
+        and self.roomTemplateSets
+        and self.roomTemplateSets[floorLevel.roomTemplateSet]
+    if roomTemplateSet then
+        if roomTemplateSet.templateIds then
+            self.floorConfig.generate.templateIds = copyTable(roomTemplateSet.templateIds)
+        end
+        if roomTemplateSet.templateWeights then
+            self.floorConfig.generate.templateWeights = copyTable(roomTemplateSet.templateWeights)
+        end
+        if roomTemplateSet.endTemplateWeights then
+            self.floorConfig.generate.endTemplateWeights = copyTable(roomTemplateSet.endTemplateWeights)
+        end
     end
 
     if floorLevel.shopProducts then

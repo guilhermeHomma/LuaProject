@@ -7,7 +7,7 @@ local TransitionManager = require("scripts.managers.transitionManager")
 function HeartSound:load()    
     soundPlayer:stop()
     soundPlayer:setLooping(false) 
-    soundPlayer:setVolume(0.32)
+    setSourceVolume(soundPlayer, 0.32)
 
 end
 
@@ -28,9 +28,9 @@ function HeartSound:update(dt)
     end
     
     if Player.life == 1 then
-        soundPlayer:setVolume(0.28)
+        setSourceVolume(soundPlayer, 0.28)
     elseif Player.life == 2 then
-        soundPlayer:setVolume(0.025)
+        setSourceVolume(soundPlayer, 0.025)
     else 
         self:stop()
     end

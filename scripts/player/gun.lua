@@ -46,7 +46,7 @@ local function playClonedSound(baseSource, volume, pitch)
     end
 
     local sound = baseSource:clone()
-    sound:setVolume(volume)
+    setSourceVolume(sound, volume)
     sound:setPitch(pitch)
     sound:play()
     return sound
@@ -98,7 +98,7 @@ end
 
 local function playErrorSound(volume, pitch)
     local sound = errorSoundBase:clone()
-    sound:setVolume(volume)
+    setSourceVolume(sound, volume)
     sound:setPitch((pitch or 1) * GAME_PITCH)
     sound:play()
 end

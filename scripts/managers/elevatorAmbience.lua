@@ -40,14 +40,14 @@ function ElevatorAmbience:load()
     self.isHigh = false
 
     elevatorWoodSound:setLooping(true)
-    elevatorWoodSound:setVolume(0)
+    setSourceVolume(elevatorWoodSound, 0)
     elevatorWoodSound:setPitch(1)
 end
 
 function ElevatorAmbience:silence()
     self.volume = 0
     self.targetVolume = 0
-    elevatorWoodSound:setVolume(0)
+    setSourceVolume(elevatorWoodSound, 0)
     elevatorWoodSound:pause()
 end
 
@@ -62,7 +62,7 @@ function ElevatorAmbience:update(dt, audible)
 
     if not active then
         self.volume = 0
-        elevatorWoodSound:setVolume(0)
+        setSourceVolume(elevatorWoodSound, 0)
         if elevatorWoodSound:isPlaying() then
             elevatorWoodSound:pause()
         end
@@ -82,7 +82,7 @@ function ElevatorAmbience:update(dt, audible)
     local speed = self.config.transitionSpeed or 0.7
     self.volume = self.volume + (targetVolume - self.volume) * math.min(dt * speed, 1)
 
-    elevatorWoodSound:setVolume(self.volume * (SOUND_VOLUME or 1))
+    setSourceVolume(elevatorWoodSound, self.volume * (SOUND_VOLUME or 1))
     elevatorWoodSound:setPitch(1)
 end
 

@@ -88,7 +88,7 @@ local function playSplat(x, y, options)
     end
 
     local sound = splatBase:clone()
-    sound:setVolume(volume * (options.volumeMultiplier or 1))
+    setSourceVolume(sound, volume * (options.volumeMultiplier or 1))
     sound:setPitch(randomRange(0.76, 1.24) * (options.pitchMultiplier or 1) * (GAME_PITCH or 1))
     sound:play()
 end

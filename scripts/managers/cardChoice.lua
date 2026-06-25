@@ -51,7 +51,7 @@ local selectedCardScale = 4
 local cardPadding = 54
 local hoverDistance = 58
 local selectionPulseDuration = 0.16
-local selectionFlashDuration = 0.11
+local selectionFlashDuration = 0.16
 local cornerExitDuration = 0.12
 local hoverEnterThreshold = 0.22
 local cardStretchXAmount = tonumber(os.getenv("CARD_CHOICE_STRETCH_X")) or 0.025
@@ -68,6 +68,11 @@ local finishFeedbackTime = tonumber(os.getenv("CARD_CHOICE_FINISH_FEEDBACK_TIME"
 local diamondFrameSize = 16
 local diamondFrameDuration = 0.10
 local diamondFrameCount = math.max(1, math.floor(diamondParticleImage:getWidth() / diamondFrameSize))
+local selectionDiamondBurstCount = 52
+local selectionDiamondBurstLifeMin = 0.32
+local selectionDiamondBurstLifeMax = 0.48
+local selectionDiamondBurstSpeedMin = 72
+local selectionDiamondBurstSpeedMax = 142
 local diamondParticleQuads = {}
 
 for i = 1, diamondFrameCount do
@@ -309,7 +314,7 @@ end
 
 local function playSound(baseSource, volume, pitch)
     local sound = baseSource:clone()
-    sound:setVolume(volume or 1)
+    setSourceVolume(sound, volume or 1)
     sound:setPitch((pitch or 1) * (GAME_PITCH or 1))
     sound:play()
 end
@@ -445,7 +450,7 @@ function CardChoice:playFinishFeedback()
     if Player and Player.startCardPickupFlash then
         Player:startCardPickupFlash()
     end
-    playSound(cardGoodFeedbackFlashSoundBase, 0.72, 0.96 + math.random() * 0.08)
+    playSound(cardGoodFeedbackFlashSoundBase, 0.72, 1.16 + math.random() * 0.08)
 end
 
 local function getCardFlash(card)
@@ -522,6 +527,39 @@ function CardChoice:spawnDiamondParticle(card, layer, edge, edgeT, initialTimer)
     }
 end
 
+function CardChoice:spawnSelectionDiamondBurst(card)
+    if not card then
+        return
+    end
+
+    local bounds = getCardScreenBounds(card, card.selected == true)
+    local centerInset = math.min(bounds.w * 0.07, bounds.h * 0.052)
+    local edges = getDiamondEdgeSequence(selectionDiamondBurstCount)
+    card.diamondBurstParticles = card.diamondBurstParticles or {}
+
+    for i = 1, selectionDiamondBurstCount do
+        local edge = edges[((i - 1) % #edges) + 1]
+        local edgeT = (i * 0.38196601125 + math.random() * 0.16) % 1
+        local x, y = getEdgePoint(bounds, edge, edgeT, centerInset)
+        x, y = addEdgeJitter(x, y, edge, bounds)
+
+        local spread = math.pi * 0.42
+        local angle = getEdgeAngle(edge, false) + (math.random() * 2 - 1) * spread
+        local speed = selectionDiamondBurstSpeedMin + math.random() * (selectionDiamondBurstSpeedMax - selectionDiamondBurstSpeedMin)
+        local lifeTime = selectionDiamondBurstLifeMin + math.random() * (selectionDiamondBurstLifeMax - selectionDiamondBurstLifeMin)
+
+        card.diamondBurstParticles[#card.diamondBurstParticles + 1] = {
+            x = x,
+            y = y,
+            vx = math.cos(angle) * speed,
+            vy = math.sin(angle) * speed,
+            timer = 0,
+            lifeTime = lifeTime,
+            scale = bounds.scale * (1.00 + math.random() * 0.45),
+        }
+    end
+end
+
 function CardChoice:ensureDiamondParticles(card, layer, targetCount, initialFill)
     local list = layer == "above" and card.diamondParticlesAbove or card.diamondParticlesBehind
     local edges = getDiamondEdgeSequence(targetCount)
@@ -534,6 +572,29 @@ function CardChoice:ensureDiamondParticles(card, layer, targetCount, initialFill
         edgeT = clamp(edgeT, 0.10, 0.90)
         local initialTimer = initialFill and math.random() * diamondFrameCount * diamondFrameDuration * 0.72 or 0
         self:spawnDiamondParticle(card, layer, edge, edgeT, initialTimer)
+    end
+end
+
+function CardChoice:updateDiamondBurstParticles(card, dt, anchorDx, anchorDy)
+    local list = card and card.diamondBurstParticles
+    if not list then
+        return
+    end
+
+    anchorDx = anchorDx or 0
+    anchorDy = anchorDy or 0
+
+    for i = #list, 1, -1 do
+        local p = list[i]
+        p.timer = p.timer + dt
+        local progress = clamp(p.timer / math.max(p.lifeTime or 0.01, 0.01), 0, 1)
+        local drag = 1 - progress * 0.55
+        p.x = p.x + anchorDx + p.vx * drag * dt
+        p.y = p.y + anchorDy + p.vy * drag * dt
+
+        if p.timer >= p.lifeTime then
+            table.remove(list, i)
+        end
     end
 end
 
@@ -554,6 +615,8 @@ function CardChoice:updateDiamondParticleList(list, dt, anchorDx, anchorDy)
 end
 
 function CardChoice:updateCardDiamondParticles(card, dt, anchorDx, anchorDy)
+    self:updateDiamondBurstParticles(card, dt, anchorDx, anchorDy)
+
     local config = getDiamondParticleConfig(card.def)
     if not config then
         card.diamondParticlesBehind = nil
@@ -768,6 +831,7 @@ function CardChoice:choose(index)
     card.selected = true
     card.diamondParticlesBehind = nil
     card.diamondParticlesAbove = nil
+    card.diamondBurstParticles = {}
     card.diamondParticlesInitialized = false
     card.diamondSpawnIndex = 0
     card.selectActive = true
@@ -782,6 +846,7 @@ function CardChoice:choose(index)
     self:pulseCard(card, 1)
     self:playSelectionImpact()
     self:spawnBurst(card.x, card.y, 44, 125)
+    self:spawnSelectionDiamondBurst(card)
     playSound(singleCardSoundBase, 0.72, 0.96 + math.random() * 0.08)
 
     if Game and Game.particles and Player then
@@ -847,6 +912,38 @@ function CardChoice:drawDiamondParticles(card, layer, alpha)
             tint[3],
             (tint[4] or 1) * (alpha or 1) * frameAlpha * (1 + flash * diamondFlashAlphaBoost),
         })
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.draw(
+            diamondParticleImage,
+            diamondParticleQuads[frame],
+            math.floor(p.x + 0.5),
+            math.floor(p.y + 0.5),
+            0,
+            p.scale,
+            p.scale,
+            diamondFrameSize / 2,
+            diamondFrameSize / 2
+        )
+    end
+
+    love.graphics.setShader(previousShader)
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
+function CardChoice:drawSelectionDiamondBurst(card, alpha)
+    local list = card and card.diamondBurstParticles
+    if not list or #list == 0 then
+        return
+    end
+
+    local previousShader = love.graphics.getShader()
+    love.graphics.setShader(diamondParticleShader)
+
+    for _, p in ipairs(list) do
+        local progress = clamp(p.timer / math.max(p.lifeTime or 0.01, 0.01), 0, 1)
+        local frame = math.min(diamondFrameCount, math.floor(progress * diamondFrameCount) + 1)
+        local particleAlpha = math.pow(1 - progress, 1.25)
+        diamondParticleShader:send("tintColor", {1, 1, 1, (alpha or 1) * particleAlpha})
         love.graphics.setColor(1, 1, 1, 1)
         love.graphics.draw(
             diamondParticleImage,
@@ -961,6 +1058,7 @@ function CardChoice:drawCard(card, index)
     love.graphics.printf(cardDescription, descriptionX, descriptionY, descriptionW, "center")
 
     self:drawDiamondParticles(card, "above", alpha)
+    self:drawSelectionDiamondBurst(card, alpha)
     if card.cornerVisible then
         SelectCorners.draw({
             left = x - screenCardW / 2,

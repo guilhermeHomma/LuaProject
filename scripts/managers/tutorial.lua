@@ -29,7 +29,7 @@ end
 function Tutorial:playSound()
     if (self.drawWalk or self.drawmouse or self.drawInteract) and self.tutorialTimer > self.startTutorialTime then
         local sound = love.audio.newSource("assets/sfx/logo/madewith.mp3", "static")
-        sound:setVolume(0.03)
+        setSourceVolume(sound, 0.03)
         sound:setPitch(0.7)
         sound:play()
 
@@ -54,7 +54,7 @@ function Tutorial:update(dt)
 
 
             local sound = love.audio.newSource("assets/sfx/logo/madewith.mp3", "static")
-            sound:setVolume(0.02)
+            setSourceVolume(sound, 0.02)
             sound:setPitch(0.75)
             sound:play()
         end

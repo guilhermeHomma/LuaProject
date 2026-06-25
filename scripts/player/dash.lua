@@ -163,7 +163,7 @@ local function playSound(config)
     end
 
     local source = love.audio.newSource(config.soundPath, "static")
-    source:setVolume((config.soundVolume) * (SOUND_VOLUME or 1))
+    setSourceVolume(source, (config.soundVolume) * (SOUND_VOLUME or 1))
     source:setPitch(((config.soundPitchMin or 1.1) + math.random() * ((config.soundPitchMax or 1.3) - (config.soundPitchMin or 1.2))) * (GAME_PITCH or 1))
     source:play()
 end

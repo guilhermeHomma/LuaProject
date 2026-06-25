@@ -76,7 +76,7 @@ function AmbienceWind:load()
     self.time = 0
 
     windSound:setLooping(true)
-    windSound:setVolume(self.volume)
+    setSourceVolume(windSound, self.volume)
     windSound:setPitch(1)
     WIND_AMBIENCE_MULTIPLIER = self.motionMultiplier
     WIND_AMBIENCE_INTENSITY = self.intensityMultiplier
@@ -92,7 +92,7 @@ end
 function AmbienceWind:silence()
     self.targetVolume = 0
     self.volume = 0
-    windSound:setVolume(0)
+    setSourceVolume(windSound, 0)
 end
 
 function AmbienceWind:pickNextState()
@@ -123,7 +123,7 @@ function AmbienceWind:update(dt, audible)
     WIND_AMBIENCE_INTENSITY = self.intensityMultiplier
     WIND_AMBIENCE_TIME = self.time
 
-    windSound:setVolume(self.volume * (SOUND_VOLUME or 1))
+    setSourceVolume(windSound, self.volume * (SOUND_VOLUME or 1))
     windSound:setPitch(1)
 end
 

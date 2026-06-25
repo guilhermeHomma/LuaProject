@@ -7,6 +7,7 @@ local BabyZombie = require("scripts/enemies/babyZombie")
 local BigZombie = require("scripts/enemies/bigZombie")
 local NoHead = require("scripts/enemies/noHead")
 local Spider = require("scripts/enemies/spider")
+local Fly = require("scripts/enemies/fly")
 local Scarecrow = require("scripts/enemies/scarecrow")
 local Elevator = require("scripts/objects/elevator")
 local SpiderWeb = require("scripts/particles/spiderWeb")
@@ -22,6 +23,7 @@ local EnemyFactories = {
     bigZombie = BigZombie,
     noHead = NoHead,
     spider = Spider,
+    fly = Fly,
     scarecrow = Scarecrow,
 }
 
@@ -136,14 +138,18 @@ local function updateRoomMusicContext(room)
         Music:setEndRoomActive(room and room.isEndRoom == true)
     end
     if Music and Music.setShopOrChestRoomActive then
-        local isShopOrChestRoom = room and (room.isShopRoom == true or room.isCardRoom == true)
+        local roomState = room and room.state
+        local isShopOrChestRoom = room
+            and (room.isShopRoom == true or room.isCardRoom == true)
+            and roomState
+            and roomState.shopOrCardMusicActiveForEntry == true
         Music:setShopOrChestRoomActive(isShopOrChestRoom == true)
     end
 end
 
 local function playWaveClearFeedback()
     waveClearFeedbackSound:stop()
-    waveClearFeedbackSound:setVolume(0.35 * (SOUND_VOLUME or 1))
+    setSourceVolume(waveClearFeedbackSound, 0.35 * (SOUND_VOLUME or 1))
     waveClearFeedbackSound:setPitch((1.08 + math.random() * 0.12) * GAME_PITCH)
     waveClearFeedbackSound:play()
 end
@@ -748,6 +754,9 @@ function RoomEncounterManager:setupCurrentRoom(options)
 
     if currentRoom.isShopRoom or currentRoom.isCardRoom then
         setBattleMusicActive(false)
+        state.shopOrCardMusicActiveForEntry = state.shopOrCardMusicEntered ~= true
+        state.shopOrCardMusicEntered = true
+        updateRoomMusicContext(currentRoom)
         state.cleared = true
         state.skipEncounter = true
         state.encounterSpawned = false
@@ -757,6 +766,7 @@ function RoomEncounterManager:setupCurrentRoom(options)
 
     if currentRoom.isEndRoom then
         setBattleMusicActive(false)
+        updateRoomMusicContext(currentRoom)
         state.cleared = true
         state.skipEncounter = true
         state.encounterSpawned = false
@@ -902,12 +912,14 @@ function RoomEncounterManager:spawnAdditionalEncounterWave(currentRoom, encounte
     local spawnMinDistance = getEncounterSpawnMinDistanceForWave(encounterConfig, 2)
     local spawnedCounts = {}
     local spawnedAny = false
+    local additionalEnemyId = state.additionalEncounterEnemyId or chooseEnemyType(encounterConfig, waveConfig, spawnedCounts)
+    state.additionalEncounterEnemyId = additionalEnemyId
 
     state.encounterWaveSerial = waveId
     state.activeEncounterWaves = state.activeEncounterWaves or {}
 
     for _ = 1, enemyCount do
-        local enemyId = chooseEnemyType(encounterConfig, waveConfig, spawnedCounts)
+        local enemyId = additionalEnemyId
         local factory = EnemyFactories[enemyId] or EnemyFactories.zombie
         local spawnAvoidPoints = getEncounterSpawnAvoidPoints(encounterConfig, 2, spawnedPositions, self.enemies)
         local x, y = Tilemap:getRandomReachableSpawnPosition(Player, spawnMinDistance, spawnAvoidPoints)

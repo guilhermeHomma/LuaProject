@@ -11,6 +11,8 @@ local BloodDecal = require("scripts/particles/bloodDecal")
 local Tilemap = require("scripts/tilemap")
 local TransitionManager = require("scripts.managers.transitionManager")
 local Dash = require("scripts/player/dash")
+local CardPickupEffects = require("scripts/player/cardPickupEffects")
+local PlayerAnimation = require("scripts/player/playerAnimation")
 local playerGlitchShader = love.graphics.newShader("scripts/shaders/playerGlitch.glsl")
 local footstepBase = love.audio.newSource("assets/sfx/footsteps/foot-steps-0.mp3", "static")
 local damageBase = love.audio.newSource("assets/sfx/player/ow-damage.mp3", "static")
@@ -38,7 +40,7 @@ heartImage:setFilter("nearest", "nearest")
 
 local function playClonedSound(baseSource, volume, pitch)
     local sound = baseSource:clone()
-    sound:setVolume(volume)
+    setSourceVolume(sound, volume)
     sound:setPitch(pitch)
     sound:play()
     return sound
@@ -63,10 +65,10 @@ function Player:load(camera, spawnX, spawnY)
     self.life = self.totalLife
     self.isAlive = true
     self.flipX = false
-    self.playerSheet = love.graphics.newImage("assets/sprites/player/soldier/pink-girl.png")
+    self.playerSheet = love.graphics.newImage("assets/sprites/player/alice/alice.png")
     self.playerShadow = love.graphics.newImage("assets/sprites/player/shadow.png")
     self.handImage = love.graphics.newImage("assets/sprites/player/hand.png")
-    self.idleHandSheet = love.graphics.newImage("assets/sprites/player/soldier/hand.png")
+    self.idleHandSheet = love.graphics.newImage("assets/sprites/player/alice/hand.png")
     self.handImage:setFilter("nearest", "nearest")
     self.idleHandSheet:setFilter("nearest", "nearest")
     self.playerSheet:setFilter("nearest", "nearest")
@@ -87,34 +89,8 @@ function Player:load(camera, spawnX, spawnY)
     self.moveX = 0
     self.moveY = 0
     self.sideChangeTimer = 0
-    self.quads = {}
-    local sheetWidth = self.playerSheet:getWidth()
-    for i = 0, 5 do
-        local quad = love.graphics.newQuad(
-            i * self.spriteSize, 0,
-            self.spriteSize, self.spriteSize,
-            sheetWidth, self.playerSheet:getHeight()
-        )
-        table.insert(self.quads, quad)
-    end
-
-    for i = 0, 5 do
-        local quad = love.graphics.newQuad(
-            i * self.spriteSize, 40,
-            self.spriteSize, self.spriteSize,
-            sheetWidth, self.playerSheet:getHeight()
-        )
-        table.insert(self.quads, quad)
-    end
-
-    for i = 0, 5 do
-        local quad = love.graphics.newQuad(
-            i * self.spriteSize, 80,
-            self.spriteSize, self.spriteSize,
-            sheetWidth, self.playerSheet:getHeight()
-        )
-        table.insert(self.quads, quad)
-    end
+    self.quads = PlayerAnimation.createGridQuads(self.playerSheet, self.spriteSize, 3, 6)
+    PlayerAnimation.load(self)
 
     self.damageAlha = 0
 
@@ -124,8 +100,7 @@ function Player:load(camera, spawnX, spawnY)
     self.glitchDisplacementPixels = 2
     self.whiteFlashDuration = 0.12
     self.whiteFlashTimer = 0
-    self.cardPickupFlashDuration = 0.42
-    self.cardPickupFlashTimer = 0
+    CardPickupEffects.init(self)
     self.pendingDamageOwTimer = 0
     self.pendingDamageOwPitch = 1
     self.damageBlinkDelay = 0.1
@@ -150,7 +125,7 @@ function Player:isDashing()
 end
 
 function Player:isActionLocked()
-    return self:isDashing()
+    return self:isDashing() or PlayerAnimation.isFallIntroActive(self)
 end
 
 function Player:getDashVisualOffsetY()
@@ -237,7 +212,7 @@ function Player:updateAnimation(dt, moving)
             table.insert(Game.particles, particle)
             self.SquareParticleTime = 0
 
-            playClonedSound(footstepBase, 0.3, (2.5 + math.random() * 0.4) * GAME_PITCH)
+            playClonedSound(footstepBase, 0.18, (2.5 + math.random() * 0.4) * GAME_PITCH)
 
         end
         self.currentAnimation = newAnimation
@@ -291,7 +266,7 @@ function Player:updateAnimation(dt, moving)
 
         if moving and self.currentFrame % 2 == 0 then
             
-            playClonedSound(footstepBase, 0.55, (0.7 + math.random() * 0.6) * GAME_PITCH)
+            playClonedSound(footstepBase, 0.34, (0.7 + math.random() * 0.6) * GAME_PITCH)
             
             local lifetime = math.random(45, 55) / 100
             local particle = WalkParticle:new(self.x, self.y, lifetime)
@@ -329,7 +304,7 @@ function Player:update(dt)
     self.damageTimer = self.damageTimer + dt
     self.glitchTimer = math.max(0, self.glitchTimer - dt)
     self.whiteFlashTimer = math.max(0, self.whiteFlashTimer - dt)
-    self.cardPickupFlashTimer = math.max(0, (self.cardPickupFlashTimer or 0) - dt)
+    CardPickupEffects.update(self, dt)
     self.webSlowTimer = math.max(0, (self.webSlowTimer or 0) - dt)
     local dashMoveX, dashMoveY, dashActive = 0, 0, false
     if self.dash then
@@ -612,8 +587,7 @@ function Player:catchLife()
 end
 
 function Player:startCardPickupFlash()
-    self.cardPickupFlashTimer = self.cardPickupFlashDuration or 0.55
-    self.whiteFlashTimer = math.max(self.whiteFlashTimer or 0, self.whiteFlashDuration or 0.12)
+    CardPickupEffects.start(self)
 end
 
 function Player:getCollisionBox()
@@ -1053,12 +1027,19 @@ function Player:drawShadow()
         return
     end
 
+    local alpha = PlayerAnimation.getFallIntroShadowAlpha(self)
+    if alpha <= 0 then
+        return
+    end
+
+    love.graphics.setColor(1, 1, 1, alpha)
     if math.floor(self.shadowTimer * 2) % 2 == 0 then
         love.graphics.draw(self.playerShadow, self.x, self.y, 0, 1, 1, 8, 8)
     else
         love.graphics.draw(self.playerShadow, self.x, self.y, 0, 0.98, 1, 8, 8)
 
     end
+    love.graphics.setColor(1, 1, 1, 1)
     
 end
 
@@ -1241,7 +1222,7 @@ function Player:drawPlayerImage(image, quad, x, y, rotation, scaleX, scaleY, ori
     end
 
     if quad then
-        local flashProgress = math.max(0, math.min((self.cardPickupFlashTimer or 0) / (self.cardPickupFlashDuration or 0.55), 1))
+        local flashProgress = CardPickupEffects.getFlashProgress(self)
         if flashProgress > 0 then
             local previousBlendMode, previousAlphaMode = love.graphics.getBlendMode()
             love.graphics.setShader()
@@ -1263,6 +1244,10 @@ end
 
 function Player:draw()
     if not self.isAlive then return end
+
+    if PlayerAnimation.drawFallIntro(self) then
+        return
+    end
 
     if self.dash then
         self.dash:drawAfterimages(self)

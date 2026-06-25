@@ -56,7 +56,7 @@ function Music:load()
     self.damagePitch = 0.58
 
     MusicPlayer:setLooping(true)
-    MusicPlayer:setVolume(self.volume * MUSIC_VOLUME)
+    setSourceVolume(MusicPlayer, self.volume * MUSIC_VOLUME, "music")
 end
 
 function Music:death()
@@ -89,7 +89,7 @@ function Music:switchToTrack(trackName, targetVolume)
     self.currentTrack = trackName
     MusicPlayer = MusicList[trackName] or MusicList[GAME_TRACK]
     MusicPlayer:setLooping(true)
-    MusicPlayer:setVolume((self.volume or 0) * MUSIC_VOLUME)
+    setSourceVolume(MusicPlayer, (self.volume or 0) * MUSIC_VOLUME, "music")
     MusicPlayer:setPitch(self.pitch or 1)
     MusicPlayer:play()
     self.targetVolume = targetVolume or getStateVolumeTarget()
@@ -134,7 +134,7 @@ function Music:startMenu()
     end
 
     self.volume = MENU_VOLUME_TARGET
-    MusicPlayer:setVolume(self.volume * MUSIC_VOLUME)
+    setSourceVolume(MusicPlayer, self.volume * MUSIC_VOLUME, "music")
 end
 
 function Music:setBattleActive(active, immediate)
@@ -151,7 +151,7 @@ function Music:setBattleActive(active, immediate)
 
     if immediate then
         self.volume = self.targetVolume or 1
-        MusicPlayer:setVolume(self.volume * MUSIC_VOLUME)
+        setSourceVolume(MusicPlayer, self.volume * MUSIC_VOLUME, "music")
     end
 end
 
@@ -168,16 +168,21 @@ function Music:setShopOrChestRoomActive(active)
 end
 
 function Music:setEndRoomActive(active)
+    local wasEndRoomActive = self.endRoomActive == true
     self.endRoomActive = active == true
     if self.endRoomActive then
+        if wasEndRoomActive then
+            self.targetVolume = 0
+            return
+        end
         self.pendingTrack = nil
         self.pendingTrackTargetVolume = nil
         self.fadeSpeedOverride = nil
         self.volume = 0
         self.targetVolume = 0
         self.battleActive = false
-        MusicPlayer:setVolume(0)
-    elseif state == STATES.game and Player and Player.isAlive then
+        setSourceVolume(MusicPlayer, 0, "music")
+    elseif wasEndRoomActive and state == STATES.game and Player and Player.isAlive then
         self:startMusic(GAME_TRACK, GAME_VOLUME_TARGET)
     end
 end
@@ -317,7 +322,7 @@ function Music:update(dt)
         MusicPlayer:stop()
     end
     
-    MusicPlayer:setVolume(self.volume * MUSIC_VOLUME)
+    setSourceVolume(MusicPlayer, self.volume * MUSIC_VOLUME, "music")
     MusicPlayer:setPitch(self.pitch)
 
     if not MusicPlayer:isPlaying() and state == STATES.game and not self.endRoomActive and (self.startDelayTimer or 0) <= 0 then

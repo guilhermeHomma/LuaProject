@@ -108,7 +108,7 @@ end
 
 function DoorsManager:openSound()
     local sound = love.audio.newSource("assets/sfx/ambience/opendoor.mp3", "static")
-    sound:setVolume(1)
+    setSourceVolume(sound, 1)
     sound:setPitch((0.95 + math.random() * 0.1) * GAME_PITCH)
     sound:play()
 end

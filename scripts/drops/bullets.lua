@@ -73,7 +73,7 @@ function Bullets:onCatch()
     end
 
     local pickupSound = pickupSoundBase:clone()
-    pickupSound:setVolume(0.55)
+    setSourceVolume(pickupSound, 0.55)
     pickupSound:setPitch((1.32 + math.random() * 0.08) * (GAME_PITCH or 1))
     pickupSound:play()
 

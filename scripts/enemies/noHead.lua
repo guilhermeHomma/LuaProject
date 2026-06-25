@@ -34,7 +34,7 @@ local gunQuad = love.graphics.newQuad(0, 0, gunFrameSize, gunFrameSize, gunSheet
 
 local function playClonedSound(baseSource, volume, pitch)
     local sound = baseSource:clone()
-    sound:setVolume(volume)
+    setSourceVolume(sound, volume)
     sound:setPitch(pitch)
     sound:play()
     return sound

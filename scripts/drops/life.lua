@@ -280,7 +280,7 @@ function Life:onCatch()
     end
 
     local coinSound = love.audio.newSource("assets/sfx/drops/life-catch.mp3", "static")
-    coinSound:setVolume(0.8)
+    setSourceVolume(coinSound, 0.8)
     coinSound:setPitch((1) * GAME_PITCH)
     coinSound:play()
     if recoveredLife > 0 then

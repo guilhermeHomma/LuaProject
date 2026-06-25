@@ -38,7 +38,7 @@ bulletSprite:setFilter("nearest", "nearest")
 
 local function playWallImpactSound()
     local sound = wallImpactSoundBase:clone()
-    sound:setVolume(0.12)
+    setSourceVolume(sound, 0.12)
     sound:setPitch((1.05 + math.random() * 0.18) * (GAME_PITCH or 1))
     sound:play()
 end

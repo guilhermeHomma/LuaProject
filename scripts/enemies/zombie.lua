@@ -229,7 +229,7 @@ end
 
 local function playClonedSound(baseSource, volume, pitch)
     local sound = baseSource:clone()
-    sound:setVolume(volume)
+    setSourceVolume(sound, volume)
     sound:setPitch(pitch)
     sound:play()
     return sound
@@ -754,7 +754,7 @@ function Zombie:noiseCheck(dt)
         local volume = getDistanceVolume(playerDistance, 0.1, 180)
         self.noise:stop()
         setSourcePositionIfMono(self.noise, soundPositionX, soundPositionY, 0)
-        self.noise:setVolume(volume)
+        setSourceVolume(self.noise, volume)
         self.noise:setPitch((1.2 + math.random() * 0.2) * GAME_PITCH)
         self.noise:play()
     end

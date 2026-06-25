@@ -81,7 +81,7 @@ function AmbienceEvents:play(eventId)
     end
 
     local sound = love.audio.newSource(path, "static")
-    sound:setVolume(randomRange(config.volume or {min = 0.02, max = 0.05}) * (SOUND_VOLUME or 1))
+    setSourceVolume(sound, randomRange(config.volume or {min = 0.02, max = 0.05}) * (SOUND_VOLUME or 1))
     sound:setPitch(randomRange(config.pitch or {min = 1, max = 1}) * (GAME_PITCH or 1))
 
     if eventId == "crow" or eventId == "owl" then

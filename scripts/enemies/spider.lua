@@ -53,7 +53,7 @@ local function playSpiderFootstep(playerDistance)
     Spider.lastFootstepSoundTime = now
     local baseSound = footstepSounds[math.random(1, #footstepSounds)]
     local sound = baseSound:clone()
-    sound:setVolume(getDistanceVolume(playerDistance, 0.38, 175))
+    setSourceVolume(sound, getDistanceVolume(playerDistance, 0.38, 175))
     sound:setPitch((1.3 + math.random() * 0.3) * (GAME_PITCH or 1))
     sound:play()
 end
@@ -120,7 +120,7 @@ function Spider:noiseCheck(dt)
     local volume = getDistanceVolume(playerDistance, 0.18, 180)
     self.noise:stop()
     setSourcePositionIfMono(self.noise, soundPositionX, soundPositionY, 0)
-    self.noise:setVolume(volume)
+    setSourceVolume(self.noise, volume)
     self.noise:setPitch((1.1 + math.random() * 0.1) * (GAME_PITCH or 1))
     self.noise:play()
 end
@@ -132,13 +132,13 @@ end
 
 function Spider:getShotCollisionCircles()
     return {
-        { x = self.x, y = self.y, radius = 6 },
-        { x = self.x, y = self.y - 4, radius = 6 },
+        { x = self.x, y = self.y, radius = 7 },
+        { x = self.x, y = self.y - 4, radius = 7 },
     }
 end
 
 function Spider:checkShotCollision(bullet)
-    local radius = (bullet.radius or 1.1) + 6
+    local radius = (bullet.radius or 1.1) + 7
     local radiusSq = radius * radius
     local dx = bullet.x - self.x
     local dy = bullet.y - self.y

@@ -45,7 +45,7 @@ local GRASS_MARK_INTERVAL = 0.055
 
 local function playWallImpactSound(x, y, volume)
     local sound = wallImpactSoundBase:clone()
-    sound:setVolume(volume or 0.12)
+    setSourceVolume(sound, volume or 0.12)
     sound:setPitch((1.05 + math.random() * 0.18) * (GAME_PITCH or 1))
     sound:play()
 end

@@ -670,6 +670,9 @@ function love.draw()
     if keepRoomUiFixed then
         drawFixedRoomLayer()
     end
+    if isGameplayState() and Game and Game.drawStartupFade then
+        Game:drawStartupFade()
+    end
     if state == STATES.game and Game and Game.drawPlayerDamageFlash then
         Game:drawPlayerDamageFlash(scale or 1)
     end

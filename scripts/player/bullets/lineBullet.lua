@@ -42,7 +42,7 @@ local defaultTrail = {
 
 local function playWallImpactSound(volume)
     local sound = wallImpactSoundBase:clone()
-    sound:setVolume(volume or 0.11)
+    setSourceVolume(sound, volume or 0.11)
     sound:setPitch((1.05 + math.random() * 0.18) * (GAME_PITCH or 1))
     sound:play()
 end

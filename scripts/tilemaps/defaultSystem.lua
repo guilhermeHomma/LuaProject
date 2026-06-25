@@ -77,6 +77,14 @@ local objectBorderCullLayers = {
     top = DEFAULT_OBJECT_BORDER_CULL_LAYERS_TOP,
     bottom = DEFAULT_OBJECT_BORDER_CULL_LAYERS_BOTTOM,
 }
+local nonWalkableDarknessConfig = {
+    startDistance = 2,
+    maxDistance = 6,
+    minDarkness = 0.10,
+    maxDarkness = 0.40,
+    extraDarkChance = 0.20,
+    extraDarkSteps = 1,
+}
 
 local function isWalkableTile(tile)
     return tile == TILE_FLOOR or tile == TILE_DOOR_BACK
@@ -377,6 +385,67 @@ local function hasWalkableTileWithin(x, y, radius)
     end
 
     return false
+end
+
+local function isDarknessReferenceGroundTile(tile)
+    return canDrawFloorPathOnTile(tile)
+end
+
+local function shouldDarkenNonWalkableTile(tile, createdTile)
+    return not isDarknessReferenceGroundTile(tile)
+        and not (createdTile and createdTile.isWater)
+end
+
+local function getDistanceToNearestFloorTile(x, y, maxDistance)
+    for distance = 1, maxDistance do
+        for checkY = y - distance, y + distance do
+            local row = tilemap[checkY]
+            if row then
+                for checkX = x - distance, x + distance do
+                    local dx = math.abs(checkX - x)
+                    local dy = math.abs(checkY - y)
+                    if dx + dy == distance and isDarknessReferenceGroundTile(row[checkX]) then
+                        return distance
+                    end
+                end
+            end
+        end
+    end
+
+    return maxDistance + 1
+end
+
+local function getExtraDarkDistanceOffset(x, y, config)
+    local chance = math.max(0, math.min(config.extraDarkChance or 0, 1))
+    local value = ((x * 37 + y * 67 + x * y * 17) % 1000) / 1000
+    if value < chance then
+        return config.extraDarkSteps or 1
+    end
+
+    return 0
+end
+
+local function getNonWalkableTileDarkness(x, y)
+    local config = nonWalkableDarknessConfig
+    local startDistance = config.startDistance or 3
+    local maxDistance = math.max(startDistance, config.maxDistance or 6)
+    local minDarkness = config.minDarkness or 0.1
+    local maxDarkness = math.max(minDarkness, config.maxDarkness or 0.4)
+    local distance = getDistanceToNearestFloorTile(x, y, maxDistance)
+
+    if distance < startDistance then
+        return 0, distance
+    end
+
+    if distance > maxDistance then
+        return maxDarkness, distance
+    end
+
+    local effectiveDistance = math.max(startDistance, math.min(maxDistance, distance + getExtraDarkDistanceOffset(x, y, config)))
+    local distanceRange = math.max(maxDistance - startDistance, 1)
+    local progress = (effectiveDistance - startDistance) / distanceRange
+    local darkness = minDarkness + (maxDarkness - minDarkness) * progress
+    return math.min(darkness, maxDarkness), distance
 end
 
 local function shouldCreateTileObject(tile, x, y)
@@ -2400,6 +2469,11 @@ function DefaultTilemap:load()
                 local createdTile = self:createTile(x, y, tile, collider)
                 if createdTile then
                     createdTile.touchesWalkableGround = hasAdjacentWalkableGroundEdge(x, y) == true
+                    if shouldDarkenNonWalkableTile(tile, createdTile) then
+                        local darkness, distance = getNonWalkableTileDarkness(x, y)
+                        createdTile.walkableGroundDistance = distance
+                        createdTile.nonWalkableDarkness = darkness
+                    end
                     self.tiles[#self.tiles + 1] = createdTile
                     self.tileLookup[getTileKey(x, y)] = createdTile
                     self.tileLookupByMap[y] = self.tileLookupByMap[y] or {}

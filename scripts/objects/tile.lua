@@ -1,11 +1,8 @@
 Tile = {}
 Tile.__index = Tile
 TileSet = require("scripts.objects.tileset")
-local Ball = require("scripts/particles/ballParticle")
-local BoxParticle = require("scripts/particles/boxParticle")
-local FootStep = require("scripts/particles/footstep")
-local BloodPixel = require("scripts/particles/bloodPixel")
 local DamageStretch = require("scripts/effects/damageStretch")
+local BoxBreakBurst = require("scripts/effects/boxBreakBurst")
 local DropTemplates = require("scripts/drops/dropTemplates")
 local breakBoxBase = love.audio.newSource("assets/sfx/particles/break-box.mp3", "static")
 local coinDropBase = love.audio.newSource("assets/sfx/drops/coin-drop.mp3", "static")
@@ -17,19 +14,6 @@ local centerTilePriorityOffset = {
     [35] = true,
     [48] = true,
 }
-local boxPixelPalette = {
-    {0.62, 0.60, 0.54, 1},
-    {0.50, 0.49, 0.44, 1},
-    {0.42, 0.41, 0.37, 1},
-    {0.70, 0.66, 0.56, 1},
-    {0.36, 0.35, 0.32, 1},
-}
-local mortarBallOptions = {
-    sizeMultiplier = 1.15,
-    speedMultiplier = 1.4,
-    speedDownMultiplier = 1.4,
-}
-
 local function getBoxParticleDropKey(tile)
     local FloorManager = require("scripts/managers/floorManager")
     local room = FloorManager:getCurrentRoom()
@@ -75,10 +59,15 @@ end
 
 local function playClonedSound(baseSource, volume, pitch)
     local sound = baseSource:clone()
-    sound:setVolume(volume)
+    setSourceVolume(sound, volume)
     sound:setPitch(pitch)
     sound:play()
     return sound
+end
+
+local function getTileTint(tile)
+    local darkness = math.max(0, math.min(tile.nonWalkableDarkness or 0, 0.95))
+    return 1 - darkness
 end
 
 
@@ -208,33 +197,15 @@ function Tile:explodeBox()
     self.hasExploded = true
     self.isBreaking = false
     self.isAlive = false
-    BloodPixel.spawnBurst(self.xWorld, self.yWorld - 5, 0, -1, 10, 16, boxPixelPalette)
-
-    for i = 1, 3 do
-        local angle = math.random() * 2 * math.pi
-
-        local dx = math.cos(angle)
-        local dy = math.sin(angle)
-        
-        local lifetime = math.random(40, 50) / 100
-        local size = math.random(8, 10) / 10
-        local particle = Ball:new(self.xWorld, self.yWorld, 1,dx, dy, lifetime, size, mortarBallOptions)
-        table.insert(Game.particles, particle)
-        local particle = Ball:new(self.xWorld, self.yWorld, 1,-dx, -dy, lifetime, size, mortarBallOptions)
-        table.insert(Game.particles, particle)
-    end
-
-    local footstep = FootStep:new(self.xWorld, self.yWorld-8)
-    table.insert(Game.footsteps, footstep)
 
     if not self.hasDroppedBoxParticle and not hasDroppedBoxParticle(self) and not hasNearbyBoxParticle(self) then
         self.hasDroppedBoxParticle = true
         markBoxParticleDropped(self)
-        local bp = BoxParticle:new(self.xWorld, self.yWorld)
-        table.insert(Game.particles, bp)
+        BoxBreakBurst.spawn(self.xWorld, self.yWorld)
     else
         self.hasDroppedBoxParticle = true
         markBoxParticleDropped(self)
+        BoxBreakBurst.spawn(self.xWorld, self.yWorld, { boxParticle = false })
     end
 
     local playerDistance = distance(Player, self)
@@ -270,6 +241,10 @@ function Tile:draw()
     local tileSet = TileSet:getTileSet()
     local tileSize = TileSet.tileSize
     local tilesetImage = TileSet.tilesetImage
+    local previousR, previousG, previousB, previousA = love.graphics.getColor()
+    local tint = getTileTint(self)
+
+    love.graphics.setColor(previousR * tint, previousG * tint, previousB * tint, previousA)
 
     if self.quadIndex == 14 or self.quadIndex == 18 then --box
         local scaleX = 1
@@ -301,7 +276,7 @@ function Tile:draw()
         love.graphics.draw(tilesetImage, self.quad, self.xWorld, self.yWorld + yOffset, 0, scaleX, scaleY, tileSize/2, tileSize*2)
         if useFlashShader then
             love.graphics.setShader()
-            love.graphics.setColor(1, 1, 1, 1)
+            love.graphics.setColor(previousR * tint, previousG * tint, previousB * tint, previousA)
         end
 
     elseif self.quadIndex == 1 or self.quadIndex == 2 or self.quadIndex == 3
@@ -312,6 +287,8 @@ function Tile:draw()
     else
        love.graphics.draw(tilesetImage, self.quad, self.xWorld, self.yWorld, 0, 1, 1, tileSize/2, tileSize)
     end
+
+    love.graphics.setColor(previousR, previousG, previousB, previousA)
 end
 
 function Tile:drawDebug()

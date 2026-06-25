@@ -112,14 +112,14 @@ end
 
 local function playErrorSound(volume, pitch)
     local sound = errorSoundBase:clone()
-    sound:setVolume(volume)
+    setSourceVolume(sound, volume)
     sound:setPitch((pitch or 1) * GAME_PITCH)
     sound:play()
 end
 
 local function playSoftDenySound()
     local sound = softDenySoundBase:clone()
-    sound:setVolume(0.08)
+    setSourceVolume(sound, 0.08)
     sound:setPitch((1.18 + math.random() * 0.08) * GAME_PITCH)
     sound:play()
 end
@@ -241,10 +241,10 @@ function Store:performBuy()
 
     local sound = love.audio.newSource("assets/sfx/store/buy-item.mp3", "static")
     if self.product.kind == "card" then
-        sound:setVolume(0.5)
+        setSourceVolume(sound, 0.5)
         sound:setPitch((1.15 + math.random() * 0.1) * GAME_PITCH)
     else
-        sound:setVolume(1)
+        setSourceVolume(sound, 1)
         sound:setPitch((0.95 + math.random() * 0.1) * GAME_PITCH)
     end
     sound:play()

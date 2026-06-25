@@ -2,56 +2,177 @@ local DefaultRoomConfig = {}
 
 DefaultRoomConfig.currentFloorIndex = 1
 
-DefaultRoomConfig.floorLevels = {
-    {
-        id = 1,
-        name = "Floor 1",
-        difficulty = 1,
-        roomCount = {min = 8, max = 12},
-        cardRoomChance = 1.0,
-        cardRoomCount = {min = 3, max = 3},
+DefaultRoomConfig.roomTemplateSets = {
+    florest = {
+        templateIds = {
+            "basic_32x32",
+            "wide_48x32",
+            "tall_32x48",
+            "large_48x48",
+        },
+        templateWeights = {
+            basic_32x32 = 5,
+            wide_48x32 = 2,
+            tall_32x48 = 2,
+            large_48x48 = 1,
+        },
+        endTemplateWeights = {
+            basic_32x32 = 4,
+            wide_48x32 = 1,
+            tall_32x48 = 1,
+            large_48x48 = 1,
+        },
+    },
+    cave = {
+        templateIds = {
+            "basic_32x32",
+            "wide_48x32",
+            "tall_32x48",
+            "large_48x48",
+        },
+        templateWeights = {
+            basic_32x32 = 4,
+            wide_48x32 = 2,
+            tall_32x48 = 2,
+            large_48x48 = 2,
+        },
+        endTemplateWeights = {
+            basic_32x32 = 3,
+            wide_48x32 = 1,
+            tall_32x48 = 1,
+            large_48x48 = 2,
+        },
+    },
+}
+
+DefaultRoomConfig.shopProductSets = {
+    florestEarly = {
+        { id = "squaregun", weight = 5 },
+        { id = "longshot", weight = 3 },
+    },
+    florestLate = {
+        { id = "squaregun", weight = 5 },
+        { id = "longshot", weight = 5 },
+        { id = "cakegun", weight = 2 },
+    },
+    cave = {
+        { id = "cakegun", weight = 35 },
+        { id = "shotgun", weight = 25 },
+        { id = "raygun", weight = 3 },
+    },
+}
+
+local function createFloorLevel(options)
+    return {
+        id = options.id,
+        name = options.name or ("Floor " .. tostring(options.id)),
+        difficulty = options.difficulty,
+        roomCount = options.roomCount,
+        cardRoomChance = options.cardRoomChance or 1.0,
+        cardRoomCount = options.cardRoomCount or {min = 2, max = 3},
+        roomTemplateSet = options.roomTemplateSet or options.theme,
         visualThemes = {
-            default = "florest",
-            startRoomUseDefault = true,
+            default = options.theme,
+            startRoomUseDefault = options.startRoomUseDefault,
             areas = {},
         },
+        grassConfig = options.grassConfig,
+        enemyDropMultiplier = options.enemyDropMultiplier or 1,
+        shopProducts = DefaultRoomConfig.shopProductSets[options.shopProductSet] or options.shopProducts,
+    }
+end
+
+DefaultRoomConfig.floorLevels = {
+    createFloorLevel({
+        id = 1,
+        difficulty = 1,
+        roomCount = {min = 8, max = 12},
+        cardRoomCount = {min = 3, max = 3},
+        theme = "florest",
+        startRoomUseDefault = true,
         grassConfig = {
             nonWalkableChance = 0.16,
             bigGrassChance = 0.05,
             nonWalkableBigGrassChance = 0.15,
         },
         enemyDropMultiplier = 1,
-        shopProducts = {
-            { id = "squaregun", weight = 5 },
-            { id = "longshot", weight = 3 },
-        },
-    },
-    {
+        shopProductSet = "florestEarly",
+    }),
+    createFloorLevel({
         id = 2,
-        name = "Floor 2",
         difficulty = 2,
         roomCount = {min = 10, max = 14},
-        cardRoomChance = 1.0,
         cardRoomCount = {min = 2, max = 3},
-        visualThemes = {
-            default = "cave",
-            startRoomUseDefault = false,
-            areas = {},
+        theme = "florest",
+        startRoomUseDefault = true,
+        grassConfig = {
+            nonWalkableChance = 0.14,
+            bigGrassChance = 0.05,
+            nonWalkableBigGrassChance = 0.12,
         },
+        enemyDropMultiplier = 1.1,
+        shopProductSet = "florestEarly",
+    }),
+    createFloorLevel({
+        id = 3,
+        difficulty = 3,
+        roomCount = {min = 11, max = 15},
+        cardRoomCount = {min = 2, max = 3},
+        theme = "florest",
+        startRoomUseDefault = true,
+        grassConfig = {
+            nonWalkableChance = 0.12,
+            bigGrassChance = 0.05,
+            nonWalkableBigGrassChance = 0.10,
+        },
+        enemyDropMultiplier = 1.2,
+        shopProductSet = "florestLate",
+    }),
+    createFloorLevel({
+        id = 4,
+        difficulty = 4,
+        roomCount = {min = 10, max = 14},
+        cardRoomCount = {min = 2, max = 3},
+        theme = "cave",
+        startRoomUseDefault = false,
         grassConfig = {
             nonWalkableChance = 0,
             bigGrassChance = 0.05,
             nonWalkableBigGrassChance = 0,
         },
-        enemyDropMultiplier = 1.2,
-        shopProducts = {
-            --{ id = "squaregun", weight = 10 },
-            --{ id = "longshot", weight = 15 },
-            { id = "cakegun", weight = 35 },
-            { id = "shotgun", weight = 25 },
-            { id = "raygun", weight = 3 },
+        enemyDropMultiplier = 1.3,
+        shopProductSet = "cave",
+    }),
+    createFloorLevel({
+        id = 5,
+        difficulty = 5,
+        roomCount = {min = 11, max = 15},
+        cardRoomCount = {min = 2, max = 3},
+        theme = "cave",
+        startRoomUseDefault = false,
+        grassConfig = {
+            nonWalkableChance = 0,
+            bigGrassChance = 0.04,
+            nonWalkableBigGrassChance = 0,
         },
-    },
+        enemyDropMultiplier = 1.4,
+        shopProductSet = "cave",
+    }),
+    createFloorLevel({
+        id = 6,
+        difficulty = 6,
+        roomCount = {min = 12, max = 16},
+        cardRoomCount = {min = 2, max = 3},
+        theme = "cave",
+        startRoomUseDefault = false,
+        grassConfig = {
+            nonWalkableChance = 0,
+            bigGrassChance = 0.03,
+            nonWalkableBigGrassChance = 0,
+        },
+        enemyDropMultiplier = 1.5,
+        shopProductSet = "cave",
+    }),
 }
 
 DefaultRoomConfig.roomEncounterConfig = {
@@ -153,25 +274,10 @@ DefaultRoomConfig.floorConfig = {
         cardRoomChance = 1.0,
         cardRoomCount = {min = 2, max = 3},
         largeRoomOppositeExit = true,
-        templateIds = {
-            "basic_32x32",
-            "wide_48x32",
-            "tall_32x48",
-            "large_48x48",
-        },
-        templateWeights = {
-            basic_32x32 = 5,
-            wide_48x32 = 2,
-            tall_32x48 = 2,
-            large_48x48 = 1,
-        },
+        templateIds = DefaultRoomConfig.roomTemplateSets.florest.templateIds,
+        templateWeights = DefaultRoomConfig.roomTemplateSets.florest.templateWeights,
         endRoomChance = 0.35,
-        endTemplateWeights = {
-            basic_32x32 = 4,
-            wide_48x32 = 1,
-            tall_32x48 = 1,
-            large_48x48 = 1,
-        },
+        endTemplateWeights = DefaultRoomConfig.roomTemplateSets.florest.endTemplateWeights,
         extraConnectionChance = 0.12,
     },
 }

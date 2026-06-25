@@ -58,6 +58,8 @@
     "primary_clean_split": { "name": "DIVIDIR", "description": "Tiros primários errados se dividem em mais disparos curtos de dano base." },
     "enemy_death_shard": { "name": "EXPLOSÃO", "description": "Inimigos soltam disparos curtos de dano base ao morrer." },
     "enemy_death_split": { "name": "EXPLOSÃO", "description": "Inimigos soltam mais disparos curtos de dano base ao morrer." },
+    "coins_rare": { "name": "MOEDAS", "amount": "+50", "description": "Ganha 50 moedas." },
+    "coins_epic": { "name": "MOEDAS", "amount": "+200", "description": "Ganha 200 moedas." },
     "half_heart": { "name": "CORAÇÃO", "amount": "CURA 1", "description": "Restaura apenas um coração perdido." },
     "full_heal": { "name": "CURA TOTAL", "amount": "RESTAURA", "description": "Restaura apenas todos os corações perdidos." },
     "heart_container": { "name": "ESPAÇO DE CORAÇÃO", "amount": "+1 MÁX", "description": "Ganha um coração máximo e cura tudo." }

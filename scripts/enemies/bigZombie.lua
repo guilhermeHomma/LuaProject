@@ -66,7 +66,7 @@ end
 
 local function playClonedSound(baseSource, volume, pitch)
     local sound = baseSource:clone()
-    sound:setVolume(volume)
+    setSourceVolume(sound, volume)
     sound:setPitch(pitch)
     sound:play()
     return sound
@@ -698,7 +698,7 @@ function BigZombie:noiseCheck(dt)
         local volume = getDistanceVolume(playerDistance, 0.2, 180)
         self.noise:stop()
         self.noise:setPosition(soundPositionX, soundPositionY, 0)
-        self.noise:setVolume(volume)
+        setSourceVolume(self.noise, volume)
         self.noise:setPitch((0.75 + math.random() * 0.2) * GAME_PITCH)
         self.noise:play()
     end

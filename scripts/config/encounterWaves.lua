@@ -58,6 +58,7 @@ EncounterWaves.additional = {
         },
         enemyTypes = {
             { id = "spider", weight = 1 },
+            { id = "fly", weight = 1 },
         },
     },
 }

@@ -76,7 +76,7 @@ function logoIntro:playLogoSound()
     if logoPlayed then return end
     local sound = love.audio.newSource("assets/sfx/logo/intro-logo.mp3", "static")
     logoPlayed = true
-    sound:setVolume(0.4)
+    setSourceVolume(sound, 0.4)
     --sound:setPitch()
     sound:play()
 end
@@ -84,7 +84,7 @@ end
 function logoIntro:playMadeWithSound()
     if madeWithPlayed then return end
     local sound = love.audio.newSource("assets/sfx/logo/madewith.mp3", "static")
-    sound:setVolume(0.1)
+    setSourceVolume(sound, 0.1)
     --sound:setPitch(0.8)
     madeWithPlayed = true
     sound:play()

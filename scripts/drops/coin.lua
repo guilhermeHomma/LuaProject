@@ -54,7 +54,7 @@ function Coin:onCatch()
 
     local coinSound = love.audio.newSource("assets/sfx/drops/catch-coin.mp3", "static")
 
-    coinSound:setVolume(0.1)
+    setSourceVolume(coinSound, 0.1)
     coinSound:setPitch((1) * GAME_PITCH)
     coinSound:play()
 

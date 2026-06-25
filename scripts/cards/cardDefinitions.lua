@@ -200,6 +200,40 @@ CardDefinitions.cards = {
         end,
     },
     {
+        id = "coins_rare",
+        name = "COINS",
+        amount = "+50",
+        rarity = "common",
+        visualType = "player",
+        description = "Gain 50 coins.",
+        requiresSecondary = false,
+        apply = function()
+            if Game and Game.increasePlayerPoints then
+                Game:increasePlayerPoints(50)
+                return true
+            end
+
+            return false
+        end,
+    },
+    {
+        id = "coins_epic",
+        name = "COINS",
+        amount = "+200",
+        rarity = "epic",
+        visualType = "player",
+        description = "Gain 200 coins.",
+        requiresSecondary = false,
+        apply = function()
+            if Game and Game.increasePlayerPoints then
+                Game:increasePlayerPoints(200)
+                return true
+            end
+
+            return false
+        end,
+    },
+    {
         id = "half_heart",
         name = "HEART",
         amount = "HEAL 1",

@@ -7,6 +7,9 @@ local function snapToPixel(value, zoom)
     return math.floor(value * zoom + 0.5) / zoom
 end
 
+local AIM_LOOK_OFFSET = 5
+local AIM_LOOK_SPEED = 16
+
 function Camera:new(x, y, target)
     if not x then x = 0 end
     if not y then y = 0 end 
@@ -48,6 +51,8 @@ function Camera:new(x, y, target)
     cam.damageZoomOutSpeed = 4.5
     cam.damageZoomHoldDuration = 0.05
     cam.damageZoomHoldTimer = 0
+    cam.aimLookOffsetX = 0
+    cam.aimLookOffsetY = 0
 
     cam.targetDistanceX = 0.5
     cam.targetDistanceY = 0.5
@@ -105,6 +110,37 @@ function Camera:getFocusPosition()
     return focusX, focusY
 end
 
+function Camera:getAimLookTargetOffset()
+    if not (self.target and Player and self.target == Player and STATES and state == STATES.game) then
+        return 0, 0
+    end
+
+    if not (Player.gun and Player.gun.showGun == true) then
+        return 0, 0
+    end
+
+    local mouseX = ((love.mouse.getX() - viewportOffsetX) / scale) / math.max(self.zoomX or 1, 0.001)
+    local mouseY = ((love.mouse.getY() - viewportOffsetY) / scale) / math.max(self.zoomY or 1, 0.001)
+    local mouseWorldX = (mouseX + self.x) / math.max(self.worldScaleX or 1, 0.001)
+    local mouseWorldY = (mouseY + self.y) / math.max(self.worldScaleY or 1, 0.001)
+    local dx = mouseWorldX - self.target.x
+    local dy = mouseWorldY - self.target.y
+    local length = math.sqrt(dx * dx + dy * dy)
+
+    if length <= 0.001 then
+        return 0, 0
+    end
+
+    return (dx / length) * AIM_LOOK_OFFSET, (dy / length) * AIM_LOOK_OFFSET
+end
+
+function Camera:updateAimLookOffset(dt)
+    local targetX, targetY = self:getAimLookTargetOffset()
+    local step = math.min((dt or 0) * AIM_LOOK_SPEED, 1)
+    self.aimLookOffsetX = (self.aimLookOffsetX or 0) + (targetX - (self.aimLookOffsetX or 0)) * step
+    self.aimLookOffsetY = (self.aimLookOffsetY or 0) + (targetY - (self.aimLookOffsetY or 0)) * step
+end
+
 function Camera:updateViewZoom()
     self.zoomX = baseWidth / self.viewWidth
     self.zoomY = baseHeight / self.viewHeight
@@ -124,6 +160,8 @@ function Camera:snapToCurrentMode()
     self:updateViewZoom()
 
     local focusX, focusY = self:getFocusPosition()
+    self.aimLookOffsetX = 0
+    self.aimLookOffsetY = 0
     local targetX = focusX * self.worldScaleX - self.viewWidth / 2
     local targetY = focusY * self.worldScaleY - self.viewHeight / 2
 
@@ -161,7 +199,10 @@ function Camera:update(dt)
     self.viewHeight = transitionValue(self.viewHeight, self.targetViewHeight, self.viewTransitionSpeed, dt)
     self:updateViewZoom()
 
+    self:updateAimLookOffset(dt)
     local focusX, focusY = self:getFocusPosition()
+    focusX = focusX + (self.aimLookOffsetX or 0)
+    focusY = focusY + (self.aimLookOffsetY or 0)
 
     local targetX = focusX * self.worldScaleX - self.viewWidth / 2
     local targetY = focusY * self.worldScaleY - self.viewHeight / 2

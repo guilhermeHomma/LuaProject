@@ -41,7 +41,7 @@ function TransitionManager:startTransition(callback, speed, timer)
     if not speed or speed <= 0 then speed = 4 end
     if not timer or timer < 0 or timer >= 10 then timer = 2 end
     
-    sound:setVolume(0.1)
+    setSourceVolume(sound, 0.1)
     sound:setPitch(0.4 + math.random() * 0.1)
     sound:play()
     self.callback = callback
@@ -77,7 +77,7 @@ end
 function TransitionManager:finishTransition()
 
 
-    sound:setVolume(0.1)    
+    setSourceVolume(sound, 0.1)    
     sound:setPitch(1.2 + math.random() * 0.3)
     sound:play()
     GAME_PITCH = 1

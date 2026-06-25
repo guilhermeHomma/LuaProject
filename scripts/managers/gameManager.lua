@@ -27,6 +27,7 @@ local PlayerVisualEffects = require("scripts/managers/playerVisualEffects")
 local WorldRenderer = require("scripts/render/worldRenderer")
 local RoomEncounterManager = require("scripts/managers/roomEncounterManager")
 local RoomFlowManager = require("scripts/managers/roomFlowManager")
+local PlayerAnimation = require("scripts/player/playerAnimation")
 
 RoomEncounterManager.attach(Game)
 RoomFlowManager.attach(Game)
@@ -95,6 +96,12 @@ local function isGroundLightNearCamera(config, x, y)
         and screenY <= baseHeight + radius
 end
 
+local function isFirstDefaultFloor()
+    return CURRENT_LEVEL
+        and CURRENT_LEVEL.id == "default"
+        and (CURRENT_LEVEL.currentFloorIndex or 1) == 1
+end
+
 function Game:load(options)
     options = options or {}
     ACTIVE_LIGHT_MANAGER = self
@@ -119,7 +126,7 @@ function Game:load(options)
         target = 60,
         speed = SPOTLIGHT_START_SPEED,
         speedIncrease = SPOTLIGHT_EXIT_SPEED,
-        enabled = true,
+        enabled = not isFirstDefaultFloor(),
     }
 
     Tutorial:load()
@@ -141,6 +148,7 @@ function Game:load(options)
     self:resetRuntimeState()
     self:setupCurrentRoom()
     self:restoreCurrentRoomDrops()
+    self.pendingPlayerFallIntro = options.startPlayerFallIntro ~= false and isFirstDefaultFloor()
     if options.startFloorIntro ~= false then
         self:startFloorIntro(CURRENT_LEVEL and CURRENT_LEVEL.currentFloorIndex or 1, options.onFloorIntroComplete)
     end
@@ -485,7 +493,7 @@ function Game:loadFloor(floorIndex, onIntroComplete)
     self.spot.target = 60
     self.spot.speed = SPOTLIGHT_START_SPEED
     self.spot.speedIncrease = SPOTLIGHT_EXIT_SPEED
-    self.spot.enabled = true
+    self.spot.enabled = not isFirstDefaultFloor()
 
     local spawnX, spawnY = RoomFlowManager.getStartRoomPlayerSpawn()
     Player.x = spawnX
@@ -601,7 +609,7 @@ function Game:playSLSound()
     if self.sPSoundPlayed then return end
     local sound = love.audio.newSource("assets/sfx/spotlight/spotlight1.mp3", "static")
     self.sPSoundPlayed = true
-    sound:setVolume(0.2)
+    setSourceVolume(sound, 0.2)
     sound:setPitch(1.3)
     sound:play()
 end
@@ -609,7 +617,7 @@ end
 function Game:playSLSoundOutro()
     if self.sPSoundPlayedOutro then return end
     local sound = love.audio.newSource("assets/sfx/spotlight/spotlight2.mp3", "static")
-    sound:setVolume(0.1)
+    setSourceVolume(sound, 0.1)
     sound:setPitch(1.1)
     self.sPSoundPlayedOutro = true
     sound:play()
@@ -884,7 +892,21 @@ function Game:updateManagers(dt)
     if CardChoice:isActive() then
         Dialog.breakMovements = true
     end
-    if FloorIntroManager:isActive() then
+    if self.pendingPlayerFallIntro and not FloorIntroManager:isActive() and Player and Player.isAlive then
+        PlayerAnimation.startFallIntro(Player)
+        self.pendingPlayerFallIntro = false
+    end
+    if PlayerAnimation.isFallIntroActive(Player) then
+        Dialog.breakMovements = true
+        local introStillActive = PlayerAnimation.updateFallIntro(Player, dt)
+        if not introStillActive then
+            Dialog.breakMovements = false
+        end
+        if Player and Player.isAlive then
+            Player.gun:update(dt, Player.x, Player.y)
+            addToDrawQueue(Player.y + 6, Player)
+        end
+    elseif FloorIntroManager:isActive() then
         Dialog.breakMovements = true
         if FloorIntroManager:hasFloorIntro() and Player and Player.isAlive then
             Player.velocityX = 0
@@ -1084,6 +1106,24 @@ function Game:drawRoomFade()
 
     love.graphics.setColor(0, 0, 0, alpha)
     love.graphics.rectangle("fill", 0, 0, baseWidth, baseHeight)
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
+function Game:drawStartupFade()
+    if self.pendingPlayerFallIntro then
+        love.graphics.setColor(0, 0, 0, 1)
+        love.graphics.rectangle("fill", 0, 0, love.graphics.getWidth(), love.graphics.getHeight())
+        love.graphics.setColor(1, 1, 1, 1)
+        return
+    end
+
+    local alpha = PlayerAnimation.getFallIntroFadeAlpha(Player)
+    if alpha <= 0 then
+        return
+    end
+
+    love.graphics.setColor(0, 0, 0, alpha)
+    love.graphics.rectangle("fill", 0, 0, love.graphics.getWidth(), love.graphics.getHeight())
     love.graphics.setColor(1, 1, 1, 1)
 end
 

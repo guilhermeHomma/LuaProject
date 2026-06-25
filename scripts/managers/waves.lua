@@ -98,13 +98,13 @@ function WaveManager:startNextWave()
 
     if self.wave >= 4 and currentThemeAllowsAmbience("owl") then
         local sound = love.audio.newSource("assets/sfx/ambience/owl.mp3", "static")
-        sound:setVolume(0.15)
+        setSourceVolume(sound, 0.15)
         sound:setPitch((0.9 + math.random() * 0.1) * GAME_PITCH)
         sound:play()
     end
 
     local sound = love.audio.newSource("assets/sfx/ambience/nextWave.mp3", "static")
-    sound:setVolume(0.3)
+    setSourceVolume(sound, 0.3)
     sound:setPitch((0.9 + math.random() * 0.1) * GAME_PITCH)
     sound:play()
 

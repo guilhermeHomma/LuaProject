@@ -74,7 +74,7 @@ end
 
 local function playTransitionWhoosh()
     local sound = whooshSoundBase:clone()
-    sound:setVolume(0.7 * (SOUND_VOLUME or 1))
+    setSourceVolume(sound, 0.7 * (SOUND_VOLUME or 1))
     sound:setPitch((1 + math.random() * 0.3) * (GAME_PITCH or 1))
     sound:play()
 end

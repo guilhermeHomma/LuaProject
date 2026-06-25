@@ -61,6 +61,16 @@ DropTemplates.enemies = {
             { id = "life", amount = 1, chance = 0.002 },
         },
     },
+    fly = {
+        points = 0,
+        drops = {
+            { id = "coins", amount = 2, weight = 6 },
+            { id = "none", weight = 10 },
+        },
+        extraDrops = {
+            { id = "life", amount = 1, chance = 0.002 },
+        },
+    },
 }
 
 DropTemplates.objects = {

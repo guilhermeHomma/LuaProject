@@ -71,6 +71,17 @@ function clamp(value, min, max)
     return math.max(min, math.min(max, value))
 end
 
+AUDIO_OUTPUT_GAIN = AUDIO_OUTPUT_GAIN or 1.8
+SFX_OUTPUT_GAIN = SFX_OUTPUT_GAIN or AUDIO_OUTPUT_GAIN
+MUSIC_OUTPUT_GAIN = MUSIC_OUTPUT_GAIN or AUDIO_OUTPUT_GAIN
+
+function setSourceVolume(source, volume, kind)
+    if not source then return end
+
+    local gain = (kind == "music") and (MUSIC_OUTPUT_GAIN or 1) or (SFX_OUTPUT_GAIN or 1)
+    source:setVolume((tonumber(volume) or 0) * gain)
+end
+
 
 function getScreenHeight()
     return baseHeight
