@@ -8,7 +8,7 @@ local function snapToPixel(value, zoom)
 end
 
 local AIM_LOOK_OFFSET = 5
-local AIM_LOOK_SPEED = 16
+local AIM_LOOK_SPEED = 10
 
 function Camera:new(x, y, target)
     if not x then x = 0 end

@@ -54,7 +54,7 @@ local DEFAULT_GAME_FLAGS = {
 GAME_FLAGS = mergeDefaults(DEFAULT_GAME_FLAGS, GAME_FLAGS)
 GAME_FLAGS.logFloorGeneration = GAME_FLAGS.logFloorGeneration or GAME_FLAGS.log == true
 
-GAME_VERSION = "0.1.16a"
+GAME_VERSION = "0.1.17a"
 
 function love.conf(t)
     local Levels = require("scripts/config/levels")
