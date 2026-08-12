@@ -5,26 +5,26 @@ local FloorManager = require("scripts/managers/floorManager")
 local windSound = love.audio.newSource("assets/sfx/ambience/wind-leaves.mp3", "stream")
 
 local CONFIG = {
-    baseVolume = 0.10,
+    baseVolume = 0.03,
     endRoomVolumeMultiplier = 1.10,
     transitionSpeed = 0.55,
     states = {
         low = {
-            volume = 0.05,
+            volume = 0.015,
             motionMultiplier = 0.70,
             intensityMultiplier = 0.55,
             duration = {min = 10, max = 30},
             weight = 3,
         },
         base = {
-            volume = 0.10,
+            volume = 0.03,
             motionMultiplier = 1.00,
             intensityMultiplier = 0.80,
             duration = {min = 10, max = 30},
             weight = 5,
         },
         high = {
-            volume = 0.15,
+            volume = 0.045,
             motionMultiplier = 1.20,
             intensityMultiplier = 1.20,
             duration = {min = 2, max = 4},

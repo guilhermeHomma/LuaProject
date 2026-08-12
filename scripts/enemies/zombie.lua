@@ -978,7 +978,7 @@ function Zombie:death()
     end
 
     if self.deathBodyParticleEnabled ~= false then
-        local particle = ZParticle:new(self.x, self.y, self.spriteSheet)
+        local particle = ZParticle:new(self.x, self.y, self.spriteSheet, self.deathBodyParticleOptions)
         table.insert(Game.particles, particle)
     end
     BloodPixel.spawnBurst(

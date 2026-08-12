@@ -73,7 +73,14 @@ function Fly:new(x, y)
     }
     enemy.deadDropParticleMin = 1
     enemy.deadDropParticleMax = 2
-    enemy.deathBodyParticleEnabled = false
+    enemy.deathBodyParticleEnabled = true
+    enemy.deathBodyParticleOptions = {
+        hitFrame = FLY_DEAD_FRAME,
+        deadFrame = FLY_DEAD_FRAME,
+        drawYOffset = 0,
+        scaleY = 1,
+        drawShadowEnabled = false,
+    }
     enemy.mouthVariant = "none"
     enemy.spawnIntroDuration = 0.16
     enemy.spawnIntroTimer = enemy.spawnIntroDuration
@@ -100,6 +107,10 @@ function Fly:drawShadow()
 end
 
 function Fly:getShotCollisionCircles()
+    if self.life <= 0 or self.isAlive == false then
+        return {}
+    end
+
     return {
         { x = self.x, y = self.y - 9, radius = 9 },
         { x = self.x, y = self.y - 2, radius = 8 },
@@ -107,6 +118,10 @@ function Fly:getShotCollisionCircles()
 end
 
 function Fly:checkShotCollision(bullet)
+    if self.life <= 0 or self.isAlive == false then
+        return false
+    end
+
     local radius = (bullet.radius or 1.1) + 9
     local dx = bullet.x - self.x
     local dy = bullet.y - (self.y - 7)
@@ -114,6 +129,10 @@ function Fly:checkShotCollision(bullet)
 end
 
 function Fly:takeDamage(damage, dx, dy)
+    if self.life <= 0 or self.isAlive == false then
+        return
+    end
+
     Zombie.takeDamage(self, damage, dx, dy)
     self.damageKnockbackTimer = self.damageKnockbackDuration or 0.10
     self.damageKnockbackX, self.damageKnockbackY = normalize(dx or 0, dy or 0)
@@ -226,7 +245,7 @@ function Fly:playFootstepSound(playerDistance)
     local soundPositionX, soundPositionY = soundPosition(Player, self)
     setSourcePositionIfMono(sound, soundPositionX, soundPositionY, 0)
     setSourceVolume(sound, volume)
-    sound:setPitch((1.55 + math.random() * 0.25) * (GAME_PITCH or 1))
+    sound:setPitch((1.10 + math.random() * 0.15) * (GAME_PITCH or 1))
     sound:play()
     return true
 end

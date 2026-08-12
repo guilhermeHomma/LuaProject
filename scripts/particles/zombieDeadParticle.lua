@@ -24,11 +24,20 @@ local function playClonedSound(baseSource, volume, pitch)
 end
 
 
-function ZombieParticle:new(x, y, sprite)
+function ZombieParticle:new(x, y, sprite, options)
 
     local particle = Particle.new(self, x, y, 10, 7, 0.9)
+    options = options or {}
     particle.sprite = sprite
     particle.spriteShadow = spriteShadow
+    particle.hitFrame = options.hitFrame or 7
+    particle.deadFrame = options.deadFrame or 8
+    particle.frameWidth = options.frameWidth or 32
+    particle.frameHeight = options.frameHeight or 32
+    particle.drawYOffset = options.drawYOffset or 3
+    particle.drawScaleX = options.scaleX or 1
+    particle.drawScaleY = options.scaleY or 1.4
+    particle.drawShadowEnabled = options.drawShadowEnabled ~= false
     DamageStretch:init(particle, 0.1, 0.1)
     particle.deathStretchStarted = false
 
@@ -58,7 +67,7 @@ end
 
 function ZombieParticle:drawShadow()
 
-    if not self.isAlive then
+    if not self.isAlive or not self.drawShadowEnabled then
         return
     end
 
@@ -99,13 +108,25 @@ function ZombieParticle:draw()
     love.graphics.setColor(1, 1, 1, 1)
     local sheetWidth = self.sprite:getWidth()
     local sheetHeight = self.sprite:getHeight()
-    self.quadDead = self.quadDead or love.graphics.newQuad(7 * 32, 0, 32, 32, sheetWidth, sheetHeight)
-    self.quadHit = self.quadHit or love.graphics.newQuad(6 * 32, 0, 32, 32, sheetWidth, sheetHeight)
+    local frameWidth = self.frameWidth or 32
+    local frameHeight = self.frameHeight or 32
+    self.quadDead = self.quadDead or love.graphics.newQuad((self.deadFrame - 1) * frameWidth, 0, frameWidth, frameHeight, sheetWidth, sheetHeight)
+    self.quadHit = self.quadHit or love.graphics.newQuad((self.hitFrame - 1) * frameWidth, 0, frameWidth, frameHeight, sheetWidth, sheetHeight)
     local quad = self.quadDead
     if self.timer < 0.2 then
         quad = self.quadHit
     end
-    love.graphics.draw(self.sprite, quad, self.x, self.y + 3, 0, stretchScaleX, 1.4 * stretchScaleY, 32 / 2, 32)
+    love.graphics.draw(
+        self.sprite,
+        quad,
+        self.x,
+        self.y + (self.drawYOffset or 0),
+        0,
+        (self.drawScaleX or 1) * stretchScaleX,
+        (self.drawScaleY or 1) * stretchScaleY,
+        frameWidth / 2,
+        frameHeight
+    )
     love.graphics.setShader()   
 
     --love.graphics.circle("fill", self.x, self.y -self.height, self.radius)
