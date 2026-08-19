@@ -49,7 +49,7 @@ end
 
 function Coin:onCatch()
     if Player then
-        Game:increasePlayerPoints(5)
+        Game:increasePlayerPoints(1)
     end
 
     local coinSound = love.audio.newSource("assets/sfx/drops/catch-coin.mp3", "static")
@@ -59,7 +59,7 @@ function Coin:onCatch()
     coinSound:play()
 
 
-    PickupNumber.spawnPickup(self.x, self.y, self.height, "+5", "coin")
+    PickupNumber.spawnPickup(self.x, self.y, self.height, "+1", "coin")
 end
 
 

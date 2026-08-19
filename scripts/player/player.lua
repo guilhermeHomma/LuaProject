@@ -24,6 +24,10 @@ local PLAYER_DAMAGE_OW_CHANCE = 0.40
 local heartImage = love.graphics.newImage("assets/sprites/ui/heart.png")
 local heartWhiteShader = love.graphics.newShader("scripts/shaders/whiteShader.glsl")
 local heartFrameSize = 16
+local HEART_BOUNCE_INTERVAL = 10
+local HEART_BOUNCE_DELAY = 0.13
+local HEART_BOUNCE_DURATION = 0.42
+local HEART_BOUNCE_HEIGHT = 3
 local heartFrames = {
     full = love.graphics.newQuad(0, 0, heartFrameSize, heartFrameSize, heartImage:getDimensions()),
     half = love.graphics.newQuad(heartFrameSize, 0, heartFrameSize, heartFrameSize, heartImage:getDimensions()),
@@ -49,6 +53,7 @@ end
 function Player:load(camera, spawnX, spawnY)
     self.x = spawnX or 30
     self.y = spawnY or 340
+    self.heartAnimationStartTime = love.timer.getTime()
     self.baseSpeed = 100
     self.speed = self.baseSpeed
     self.velocityX = 0
@@ -389,6 +394,10 @@ function Player:update(dt)
     end
 
     self:resolveStuckCollision()
+
+    if dashActive then
+        self:breakDashBoxesAtOffset(sumMoveX, sumMoveY)
+    end
 
     local resolvedMoveX, resolvedMoveY = self:resolveCollisionMove(sumMoveX, sumMoveY)
     local dashCollided = dashActive and (resolvedMoveX ~= sumMoveX or resolvedMoveY ~= sumMoveY)
@@ -734,6 +743,21 @@ local function getCircleTileCollision(centerX, centerY, radius, tile)
     return {normalX = 0, normalY = 1, penetration = radius}
 end
 
+function Player:breakDashBoxesAtOffset(moveX, moveY)
+    local playerBox = self:getCollisionBox()
+    playerBox.x = playerBox.x + (moveX or 0)
+    playerBox.y = playerBox.y + (moveY or 0)
+
+    local centerX = self.x + (moveX or 0)
+    local centerY = self.y + (moveY or 0)
+    for _, tile in ipairs(Tilemap:getNearbyTiles(centerX, centerY) or {}) do
+        local isBox = tile.quadIndex == 14 or tile.quadIndex == 18
+        if tile.collider and isBox and tile.onshoot and isPlayerTileColliding(playerBox, tile) then
+            tile:onshoot(999, { forceBreak = true, source = "playerDash" })
+        end
+    end
+end
+
 local function getObjectCollisionBoxes(object)
     if not (object and object.isAlive ~= false and object.blocksPlayer) then
         return nil
@@ -980,9 +1004,11 @@ function Player:drawLife()
 
     local scale = 3
     local spacing = -16
-    local startX = 3
-    local startY = 46
+    local startX = 18
+    local startY = 28
     local shouldFlashWhite = self.damageTimer < 0.4
+    local heartAnimationElapsed = math.max(0, love.timer.getTime() - (self.heartAnimationStartTime or love.timer.getTime()))
+    local heartCycleTime = heartAnimationElapsed % HEART_BOUNCE_INTERVAL
 
     if shouldFlashWhite then
         love.graphics.setShader(heartWhiteShader)
@@ -1000,8 +1026,13 @@ function Player:drawLife()
         end
 
         local x = startX + (i - 1) * (heartFrameSize * scale + spacing)
+        local bounceProgress = (heartCycleTime - (i - 1) * HEART_BOUNCE_DELAY) / HEART_BOUNCE_DURATION
+        local bounceY = 0
+        if heartAnimationElapsed >= HEART_BOUNCE_INTERVAL and bounceProgress >= 0 and bounceProgress <= 1 then
+            bounceY = -math.sin(bounceProgress * math.pi) * HEART_BOUNCE_HEIGHT
+        end
         love.graphics.setColor(1, 1, 1, 1)
-        love.graphics.draw(heartImage, frame, x, startY, 0, scale, scale)
+        love.graphics.draw(heartImage, frame, x, math.floor(startY + bounceY + 0.5), 0, scale, scale)
     end
 
     if shouldFlashWhite then

@@ -388,7 +388,7 @@ function Zombie:getEnemySeparationScore(x, y)
     local enemies = Game and Game.getEnemiesNearPoint and Game:getEnemiesNearPoint(x, y, 120) or (Game and Game.enemies) or {}
 
     for _, enemy in ipairs(enemies) do
-        if enemy.isAlive and enemy ~= self and enemy.x and enemy.y then
+        if enemy.isAlive and not enemy.collisionDisabled and enemy ~= self and enemy.x and enemy.y then
             local dx = x - enemy.x
             local dy = y - enemy.y
             local distanceSq = dx * dx + dy * dy
@@ -712,7 +712,7 @@ function Zombie:update(dt)
                 local blockMassX, blockMassY = 0, 0
                 local fx, fy = previousX + moveX, previousY + moveY
                 for _, other in ipairs((Game and Game.nearbyEnemies) or {}) do
-                    if other ~= self and other.isAlive ~= false then
+            if other ~= self and other.isAlive ~= false and not other.collisionDisabled then
                         local threshold = (self.size + (other.size or self.size)) * 0.6
                         if math.abs(fx - other.x) < threshold and math.abs(fy - other.y) < threshold then
                             blockMassX = blockMassX + (self.x - other.x)
@@ -827,7 +827,7 @@ function Zombie:isColliding(moveX, moveY)
     end
 
     for _, other in ipairs((Game and Game.nearbyEnemies) or {}) do
-        if other ~= self and other.isAlive ~= false then
+        if other ~= self and other.isAlive ~= false and not other.collisionDisabled then
             local threshold = (self.size + (other.size or self.size)) * 0.6
             local currDx = math.abs(self.x - other.x)
             local currDy = math.abs(self.y - other.y)

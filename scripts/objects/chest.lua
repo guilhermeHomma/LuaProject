@@ -2,7 +2,8 @@ local Chest = {}
 Chest.__index = Chest
 
 local DamageStretch = require("scripts/effects/damageStretch")
-local Localization = require("scripts/managers/localization")
+local DropShine = require("scripts/drops/dropShine")
+local BoxBreakBurst = require("scripts/effects/boxBreakBurst")
 local DropTemplates = require("scripts/drops/dropTemplates")
 local Ball = require("scripts/particles/ballParticle")
 local TileSet = require("scripts.objects.tileset")
@@ -78,7 +79,7 @@ end
 local function configureChestDrop(drop, kind, key, chest, dropIndex)
     drop.persistRoomDrop = true
     drop.neverExpires = true
-    drop.requirePickupKey = true
+    drop.requirePickupKey = false
     drop.pickupDistance = 24
     drop.fromChest = true
     drop.roomDropKey = key
@@ -135,18 +136,32 @@ function Chest:new(x, y, chestType)
     chest.interactionDistance = 22
     chest.flashTimer = 0
     chest.flashDuration = 0.32
+    chest.hitFlashTimer = 0
+    chest.hitFlashDuration = 0.08
+    chest.life = chest.chestType == "wood" and 10 or nil
+    chest.isBreaking = false
+    chest.breakTimer = 0
+    chest.breakDuration = 0.1
     chest.beamTimer = 0
     chest.beamDuration = 1.05
     chest.beamElapsed = 0
     chest.particleTimer = 0
     chest.particleInterval = 0.025
     chest.cardParticleTimer = math.random() * 0.2
+    chest.idleStretchDelay = 7 + math.random() * 3
+    chest.idleStretchTimer = 0
+    chest.idleStretchDuration = 0.48
     DamageStretch:init(chest, 0.18, 0.12)
     return chest
 end
 
 function Chest:isPlayerNear()
-    return Player and distance(Player, self) <= self.interactionDistance
+    if not Player then
+        return false
+    end
+    local dx = Player.x - self.xWorld
+    local dy = Player.y - self.yWorld
+    return dx * dx + dy * dy <= self.interactionDistance * self.interactionDistance
 end
 
 function Chest:spawnDrop()
@@ -232,23 +247,106 @@ function Chest:open()
     markPersistedOpen(self)
     self:spawnCardParticle(34)
 
-    local playerDistance = distance(Player, self)
+    local dx = Player.x - self.xWorld
+    local dy = Player.y - self.yWorld
+    local playerDistance = math.sqrt(dx * dx + dy * dy)
     local volume = getDistanceVolume(playerDistance, 0.35, 220)
     playClonedSound(openSoundBase, volume, (1.05 + math.random() * 0.1) * GAME_PITCH)
 end
 
-function Chest:keypressed(key)
-    if key == "f" and self:isPlayerNear() then
-        self:open()
+function Chest:onshoot(damage, options)
+    if not self.isAlive or self.isBreaking then
+        return false
     end
+
+    local forceBreak = options and options.forceBreak == true
+    if forceBreak and self.chestType == "wood" then
+        if not self.dropSpawned then
+            self.dropSpawned = true
+            self:spawnDrop()
+        end
+    elseif not self.isOpen or self.isOpening then
+        self:open()
+        return false
+    end
+
+    if self.chestType ~= "wood" then
+        return false
+    end
+
+    self.hitFlashTimer = self.hitFlashDuration
+    DamageStretch:start(self)
+    self.life = forceBreak and 0 or ((self.life or 10) - (damage or 1))
+    if self.life > 0 then
+        return true
+    end
+
+    self.collider = false
+    self.isBreaking = true
+    self.breakTimer = 0
+
+    local FloorManager = require("scripts/managers/floorManager")
+    FloorManager:markCurrentRoomObjectBroken(self.x, self.y)
+    local currentTilemap = Tile.tilemap and Tile.tilemap.getTilemap and Tile.tilemap.getTilemap()
+    if currentTilemap and currentTilemap[self.y] then
+        currentTilemap[self.y][self.x] = 0
+    end
+    if Tile.tilemap and Tile.tilemap.updatePathfinderTile then
+        Tile.tilemap:updatePathfinderTile(self.x, self.y)
+    elseif Tile.tilemap and Tile.tilemap.loadfinders then
+        Tile.tilemap:loadfinders()
+    end
+
+    return true
+end
+
+function Chest:breakApart()
+    if not self.isAlive then
+        return
+    end
+
+    self.isAlive = false
+    self.isBreaking = false
+    BoxBreakBurst.spawn(self.xWorld, self.yWorld)
+
+    local dx = Player.x - self.xWorld
+    local dy = Player.y - self.yWorld
+    local playerDistance = math.sqrt(dx * dx + dy * dy)
+    local volume = getDistanceVolume(playerDistance, 0.3, 200)
+    playClonedSound(openSoundBase, volume, (0.9 + math.random() * 0.1) * GAME_PITCH)
 end
 
 function Chest:update(dt)
+    if not self.isAlive then
+        return
+    end
+
     addToDrawQueue(self.yWorld, self)
 
+    if self.isBreaking then
+        self.breakTimer = self.breakTimer + dt
+        if self.breakTimer >= self.breakDuration then
+            self:breakApart()
+        end
+        return
+    end
+
+    if not self.isOpen and not self.isOpening then
+        if self.idleStretchTimer > 0 then
+            self.idleStretchTimer = math.max(0, self.idleStretchTimer - dt)
+        else
+            self.idleStretchDelay = (self.idleStretchDelay or 0) - dt
+            if self.idleStretchDelay <= 0 then
+                self.idleStretchTimer = self.idleStretchDuration
+                self.idleStretchDelay = 7 + math.random() * 3
+            end
+        end
+    else
+        self.idleStretchTimer = 0
+    end
+
     if not self.isOpen and not self.isOpening and self:isPlayerNear() then
-        Game.drawtext = Localization:t("game.press_open")
-        Game.textAlphaTarget = 1
+        self:open()
     end
 
     if self.chestType == "card" and not self.isOpen then
@@ -262,6 +360,10 @@ function Chest:update(dt)
 
     if self.flashTimer > 0 then
         self.flashTimer = math.max(0, self.flashTimer - dt)
+    end
+
+    if self.hitFlashTimer > 0 then
+        self.hitFlashTimer = math.max(0, self.hitFlashTimer - dt)
     end
 
     if self.isOpening then
@@ -342,7 +444,12 @@ function Chest:drawBeam()
 end
 
 function Chest:draw()
+    if not self.isAlive then
+        return
+    end
+
     local scaleX, scaleY = DamageStretch:getScale(self)
+    local yOffset = 0
     local activeQuads = self.quads or quads
     local quad = (self.isOpen and not self.isOpening) and activeQuads.open or activeQuads.closed
 
@@ -352,16 +459,53 @@ function Chest:draw()
         scaleY = scaleY - pulse * 0.7
     end
 
+    if self.idleStretchTimer > 0 then
+        local stretchProgress = 1 - self.idleStretchTimer / self.idleStretchDuration
+        local stretch = math.sin(stretchProgress * math.pi)
+        scaleX = scaleX * (1 - stretch * 0.03)
+        scaleY = scaleY * (1 + stretch * 0.05)
+    end
+
+    if self.isBreaking then
+        local breakProgress = math.min(self.breakTimer / self.breakDuration, 1)
+        local squash = breakProgress < 0.45
+            and breakProgress / 0.45
+            or 1 - ((breakProgress - 0.45) / 0.55)
+        scaleX = 1 + squash * 0.05
+        scaleY = 1 - squash * 0.05
+        yOffset = squash
+    end
+
     self:drawBeam()
 
-    if self.flashTimer > 0 then
+    local useFlashShader = self.isBreaking or self.flashTimer > 0 or self.hitFlashTimer > 0
+    if useFlashShader then
         love.graphics.setShader(whiteShader)
-        love.graphics.setColor(1, 1, 1, self.flashTimer / self.flashDuration)
+        local flashAlpha = self.isBreaking and 0.7
+            or math.max(
+                self.flashTimer / self.flashDuration,
+                self.hitFlashTimer / self.hitFlashDuration
+            )
+        love.graphics.setColor(1, 1, 1, flashAlpha)
     else
         love.graphics.setColor(1, 1, 1, 1)
     end
 
-    love.graphics.draw(self.sprite or sprite, quad, self.xWorld, self.yWorld, 0, scaleX, scaleY, frameWidth / 2, frameHeight)
+    if not useFlashShader and not self.isOpen and not self.isOpening then
+        DropShine.draw(
+            self.sprite or sprite,
+            quad,
+            self.xWorld,
+            self.yWorld + yOffset,
+            0,
+            scaleX,
+            scaleY,
+            frameWidth / 2,
+            frameHeight
+        )
+    else
+        love.graphics.draw(self.sprite or sprite, quad, self.xWorld, self.yWorld + yOffset, 0, scaleX, scaleY, frameWidth / 2, frameHeight)
+    end
     love.graphics.setShader()
     love.graphics.setColor(1, 1, 1, 1)
 end

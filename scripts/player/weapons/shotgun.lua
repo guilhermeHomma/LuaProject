@@ -3,7 +3,7 @@ local Shared = require("scripts/player/weapons/shared")
 return Shared.createWeapon({
     id = 2,
     name = "shotgun",
-    price = 400,
+    price = 80,
     shotCooldown = 0.8,
     magCount = 15,
     magCapacity = 9,

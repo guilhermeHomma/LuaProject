@@ -261,7 +261,7 @@ function NoHeadBullet:hitTile()
 
     self.hitTileOnDeath = true
     if type(tile.onshoot) == "function" then
-        tile:onshoot(self.tileDamage)
+        tile:onshoot(self.tileDamage or self.damage, { source = "enemyShot" })
     end
 
     return true

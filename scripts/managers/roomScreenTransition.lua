@@ -3,6 +3,7 @@ local RoomScreenTransition = {}
 local SLIDE_DURATION = 0.4
 local FADE_MAX_ALPHA = 1
 local whooshSoundBase = love.audio.newSource("assets/sfx/effects/whoosh-room.mp3", "static")
+local activeWhooshSounds = {}
 
 local directionVectors = {
     left = { x = -1, y = 0 },
@@ -74,9 +75,10 @@ end
 
 local function playTransitionWhoosh()
     local sound = whooshSoundBase:clone()
-    setSourceVolume(sound, 0.7 * (SOUND_VOLUME or 1))
+    setSourceVolume(sound, 0.7)
     sound:setPitch((1 + math.random() * 0.3) * (GAME_PITCH or 1))
     sound:play()
+    activeWhooshSounds[#activeWhooshSounds + 1] = sound
 end
 
 function RoomScreenTransition:beginCapture(direction)
@@ -149,6 +151,12 @@ function RoomScreenTransition:getFadeAlpha()
 end
 
 function RoomScreenTransition:update(dt)
+    for index = #activeWhooshSounds, 1, -1 do
+        if not activeWhooshSounds[index]:isPlaying() then
+            table.remove(activeWhooshSounds, index)
+        end
+    end
+
     if not self.active then
         return
     end
@@ -167,13 +175,14 @@ function RoomScreenTransition:getPresentationCanvas(sourceCanvas)
 
     local compositeCanvas = ensureCompositeCanvas(self)
     local slideX, slideY, newX, newY = getSlideOffsets(self)
+    local previousCanvas = love.graphics.getCanvas()
 
     love.graphics.setCanvas(compositeCanvas)
     love.graphics.clear(0, 0, 0, 1)
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.draw(self.oldCanvas, -slideX, -slideY)
     love.graphics.draw(sourceCanvas, -newX, -newY)
-    love.graphics.setCanvas()
+    love.graphics.setCanvas(previousCanvas)
 
     return compositeCanvas
 end

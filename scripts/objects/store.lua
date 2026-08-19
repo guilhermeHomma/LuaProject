@@ -80,7 +80,7 @@ local function getAmmoProduct()
     return {
         id = shopConfig.ammoProductId or "full_bullets",
         name = "full bullets",
-        price = shopConfig.ammoPrice or 300,
+        price = shopConfig.ammoPrice or 60,
         kind = "ammo",
     }
 end
@@ -90,7 +90,7 @@ local function getCardProduct()
     return {
         id = shopConfig.cardProductId or "card_upgrade",
         name = "card",
-        price = shopConfig.cardPrice or 200,
+        price = shopConfig.cardPrice or 40,
         kind = "card",
     }
 end

@@ -536,7 +536,8 @@ local function applyPersistedRoomState()
 
     for y = 1, #tilemap do
         for x = 1, #tilemap[y] do
-            if tilemap[y][x] == 2 and state.brokenObjects[getTileKey(x, y)] then
+            if (tilemap[y][x] == 2 or tilemap[y][x] == TILE_CHEST)
+                and state.brokenObjects[getTileKey(x, y)] then
                 tilemap[y][x] = TILE_FLOOR
             end
         end

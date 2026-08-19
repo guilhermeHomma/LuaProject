@@ -58,8 +58,8 @@
     "primary_clean_split": { "name": "SPLIT", "description": "Missed primary shots split into more short base-damage shots." },
     "enemy_death_shard": { "name": "BURST", "description": "Enemies release short base-damage shots when they die." },
     "enemy_death_split": { "name": "BURST", "description": "Enemies release more short base-damage shots when they die." },
-    "coins_rare": { "name": "COINS", "amount": "+50", "description": "Gain 50 coins." },
-    "coins_epic": { "name": "COINS", "amount": "+200", "description": "Gain 200 coins." },
+    "coins_rare": { "name": "COINS", "amount": "+10", "description": "Gain 10 coins." },
+    "coins_epic": { "name": "COINS", "amount": "+40", "description": "Gain 40 coins." },
     "half_heart": { "name": "HEART", "amount": "HEAL 1", "description": "Restore one lost heart only." },
     "full_heal": { "name": "FULL HEAL", "amount": "RESTORE", "description": "Restore all lost hearts only." },
     "heart_container": { "name": "HEART SLOT", "amount": "+1 MAX", "description": "Gain one max heart and fully heal." }

@@ -5,15 +5,24 @@ local Fonts = require("scripts/ui/fonts")
 local floorTitleFont = Fonts:translated("floorTitle")
 local thanksFont = Fonts:translated("thanks")
 local madeByFont = Fonts:translated("madeBy")
-local riserSoundBase = love.audio.newSource("assets/sfx/effects/riser.mp3", "static")
-local impactSoundBase = love.audio.newSource("assets/sfx/effects/impact-hit.mp3", "static")
+local floorBackgroundShader = love.graphics.newShader("scripts/shaders/oldTvMenuBackground.glsl")
+local totemWaveShader = love.graphics.newShader("scripts/shaders/totemWave.glsl")
+local introTotemImage = love.graphics.newImage("assets/sprites/menu/intro-totem.png")
+local angelIntroSoundBases = {
+    love.audio.newSource("assets/sfx/effects/angel-intro.mp3", "static"),
+    love.audio.newSource("assets/sfx/effects/angel-intro2.mp3", "static"),
+}
 
-local FLOOR_RISER_DURATION = 2.3
-local FLOOR_TITLE_DURATION = 2.1
+local FLOOR_TITLE_DURATION = 3.6
 local FLOOR_MUSIC_FADE_DURATION = 0.65
-local FLOOR_START_BREATH_DURATION = 0.18
-local FLOOR_TITLE_GROW_DURATION = 0.12
-local FLOOR_TITLE_Y_OFFSET = -58
+local FLOOR_FADE_IN_DURATION = 0.6
+local FLOOR_FADE_OUT_DURATION = 0.8
+local INTRO_TOTEM_FRAME_COUNT = 6
+local INTRO_TOTEM_FRAME_WIDTH = introTotemImage:getWidth() / INTRO_TOTEM_FRAME_COUNT
+local INTRO_TOTEM_FRAME_HEIGHT = introTotemImage:getHeight()
+local INTRO_TOTEM_SCALE = 3
+local INTRO_TOTEM_CENTER_Y_OFFSET = -32
+local INTRO_TOTEM_TEXT_GAP = 10
 local THANKS_SCREEN_DURATION = 6.6
 local THANKS_FADE_IN_DURATION = 0.6
 local THANKS_FADE_OUT_DURATION = 0.8
@@ -21,6 +30,18 @@ local THANKS_FADE_OUT_DURATION = 0.8
 floorTitleFont:setFilter("nearest", "nearest")
 thanksFont:setFilter("nearest", "nearest")
 madeByFont:setFilter("nearest", "nearest")
+introTotemImage:setFilter("nearest", "nearest")
+
+local introTotemFrames = {}
+for frameIndex = 0, INTRO_TOTEM_FRAME_COUNT - 1 do
+    introTotemFrames[#introTotemFrames + 1] = love.graphics.newQuad(
+        frameIndex * INTRO_TOTEM_FRAME_WIDTH,
+        0,
+        INTRO_TOTEM_FRAME_WIDTH,
+        INTRO_TOTEM_FRAME_HEIGHT,
+        introTotemImage:getDimensions()
+    )
+end
 
 local function hexToColor(hex)
     hex = hex:gsub("#", "")
@@ -28,15 +49,6 @@ local function hexToColor(hex)
     local g = tonumber(hex:sub(3, 4), 16) or 255
     local b = tonumber(hex:sub(5, 6), 16) or 255
     return r / 255, g / 255, b / 255
-end
-
-local function easeOutExpo(value)
-    value = math.max(0, math.min(value, 1))
-    if value >= 1 then
-        return 1
-    end
-
-    return 1 - 2 ^ (-10 * value)
 end
 
 local function drawWavyText(text, y, font, options)
@@ -89,25 +101,19 @@ local function drawWavyText(text, y, font, options)
     love.graphics.setColor(1, 1, 1, 1)
 end
 
-local function playClonedSound(baseSource, volume, pitch)
-    local sound = baseSource:clone()
-    setSourceVolume(sound, (volume or 1) * (SOUND_VOLUME or 1))
-    sound:setPitch((pitch or 1) * (GAME_PITCH or 1))
-    sound:play()
-    return sound
-end
-
 function FloorIntroManager:startFloor(floorIndex, onComplete)
+    local angelIntroSoundBase = angelIntroSoundBases[math.random(#angelIntroSoundBases)]
+    local angelIntroSound = angelIntroSoundBase:clone()
+    setSourceVolume(angelIntroSound, 0.7 * (SOUND_VOLUME or 1))
+    local pitchVariation = 0.96 + math.random() * 0.08
+    angelIntroSound:setPitch(pitchVariation * (GAME_PITCH or 1))
+    angelIntroSound:play()
+
     self.floorIntro = {
         floorIndex = floorIndex or 1,
         timer = 0,
-        phase = "musicFade",
-        musicFadeDuration = FLOOR_MUSIC_FADE_DURATION,
-        riserDuration = FLOOR_RISER_DURATION,
-        titleDuration = FLOOR_TITLE_DURATION,
-        breathDuration = FLOOR_START_BREATH_DURATION,
-        impactPlayed = false,
-        riserPlayed = false,
+        duration = FLOOR_TITLE_DURATION,
+        musicFadeFinished = false,
         onComplete = onComplete,
     }
     self.thanksScreen = nil
@@ -141,28 +147,14 @@ function FloorIntroManager:updateFloor(dt)
     end
 
     intro.timer = intro.timer + dt
-    if intro.phase == "musicFade" and intro.timer >= intro.musicFadeDuration then
-        intro.phase = "riser"
-        intro.timer = 0
-        intro.riserPlayed = true
+    if not intro.musicFadeFinished and intro.timer >= FLOOR_MUSIC_FADE_DURATION then
+        intro.musicFadeFinished = true
         if Music and Music.finishFloorIntroFade then
             Music:finishFloorIntroFade()
         end
-        playClonedSound(riserSoundBase, 0.5, 1)
-    elseif intro.phase == "riser" and intro.timer >= intro.riserDuration then
-        intro.phase = "title"
-        intro.timer = 0
-        if not intro.impactPlayed then
-            intro.impactPlayed = true
-            playClonedSound(impactSoundBase, 0.58, 0.92)
-            if camera then
-                camera:shake(3.0, 0.72)
-            end
-        end
-    elseif intro.phase == "title" and intro.timer >= intro.titleDuration then
-        intro.phase = "breath"
-        intro.timer = 0
-    elseif intro.phase == "breath" and intro.timer >= intro.breathDuration then
+    end
+
+    if intro.timer >= intro.duration then
         local onComplete = intro.onComplete
         self.floorIntro = nil
         if onComplete then
@@ -211,39 +203,48 @@ function FloorIntroManager:drawFloor()
         return
     end
 
-    love.graphics.setColor(0, 0, 0, 1)
+    floorBackgroundShader:send("u_time", love.timer.getTime() * 0.3)
+    floorBackgroundShader:send("u_intensity", 0.18)
+    love.graphics.setShader(floorBackgroundShader)
+    love.graphics.setColor(hexToColor("090909"))
     love.graphics.rectangle("fill", 0, 0, baseWidth, baseHeight)
+    love.graphics.setShader()
 
-    local drawFloorTitle = intro.phase == "title"
-    local growProgress = 1
-    if intro.phase == "riser" then
-        local remaining = math.max(0, (intro.riserDuration or FLOOR_RISER_DURATION) - (intro.timer or 0))
-        if remaining <= FLOOR_TITLE_GROW_DURATION then
-            drawFloorTitle = true
-            growProgress = 1 - remaining / FLOOR_TITLE_GROW_DURATION
-        end
-    end
+    local fadeIn = math.min(intro.timer / FLOOR_FADE_IN_DURATION, 1)
+    local fadeOut = math.min((intro.duration - intro.timer) / FLOOR_FADE_OUT_DURATION, 1)
+    local titleAlpha = math.max(0, math.min(fadeIn, fadeOut))
+    local totemFrameIndex = math.max(1, math.min(math.floor(intro.floorIndex or 1), INTRO_TOTEM_FRAME_COUNT))
+    local totemDrawWidth = INTRO_TOTEM_FRAME_WIDTH * INTRO_TOTEM_SCALE
+    local totemDrawHeight = INTRO_TOTEM_FRAME_HEIGHT * INTRO_TOTEM_SCALE
+    local totemX = math.floor(baseWidth / 2 - totemDrawWidth / 2 + 0.5)
+    local totemY = math.floor(baseHeight / 2 + INTRO_TOTEM_CENTER_Y_OFFSET - totemDrawHeight / 2 + 0.5)
+    local frameMinX = (totemFrameIndex - 1) / INTRO_TOTEM_FRAME_COUNT
+    local frameMaxX = totemFrameIndex / INTRO_TOTEM_FRAME_COUNT
+    totemWaveShader:send("u_time", love.timer.getTime())
+    totemWaveShader:send("u_frameXBounds", {frameMinX, frameMaxX})
+    love.graphics.setShader(totemWaveShader)
+    love.graphics.setColor(1, 1, 1, titleAlpha)
+    love.graphics.draw(
+        introTotemImage,
+        introTotemFrames[totemFrameIndex],
+        totemX,
+        totemY,
+        0,
+        INTRO_TOTEM_SCALE,
+        INTRO_TOTEM_SCALE
+    )
+    love.graphics.setShader()
 
-    if drawFloorTitle then
-        local text = Localization:t("game.floor", { floor = tostring(intro.floorIndex or 1) })
-        local titleY = baseHeight / 2 + FLOOR_TITLE_Y_OFFSET
-        growProgress = intro.phase == "title" and 1 or math.min(growProgress, 1)
-        local rawScale = 0.46 + (1 - 0.46) * easeOutExpo(growProgress)
-        local scaleStep = growProgress < 1 and 0.16 or 0.01
-        local scale = math.floor(rawScale / scaleStep + 0.5) * scaleStep
-        local pixelGrid = growProgress < 1 and math.max(1, math.floor(8 - growProgress * 7 + 0.5)) or 1
-        local titleAlpha = intro.phase == "title" and 1 or (0.18 + 0.82 * easeOutExpo(growProgress))
-        local titleCenterY = titleY + floorTitleFont:getHeight() / 2
-        love.graphics.setFont(floorTitleFont)
-        drawWavyText(text, titleY, floorTitleFont, {
-            scale = scale,
-            pixelGrid = pixelGrid,
-            alpha = titleAlpha,
-            centerY = titleCenterY,
-            amplitudeScale = 1.22,
-            speedScale = 1.05,
-        })
-    end
+    local text = Localization:t("game.floor", { floor = tostring(intro.floorIndex or 1) })
+    local titleY = totemY + totemDrawHeight + INTRO_TOTEM_TEXT_GAP
+    love.graphics.setFont(floorTitleFont)
+    drawWavyText(text, titleY, floorTitleFont, {
+        alpha = titleAlpha,
+        color = "6b6764",
+        shadowAlpha = 0.4,
+        amplitudeScale = 1.45,
+        speedScale = 0.9,
+    })
 
     love.graphics.setColor(1, 1, 1, 1)
 end

@@ -202,14 +202,14 @@ CardDefinitions.cards = {
     {
         id = "coins_rare",
         name = "COINS",
-        amount = "+50",
+        amount = "+10",
         rarity = "common",
         visualType = "player",
-        description = "Gain 50 coins.",
+        description = "Gain 10 coins.",
         requiresSecondary = false,
         apply = function()
             if Game and Game.increasePlayerPoints then
-                Game:increasePlayerPoints(50)
+                Game:increasePlayerPoints(10)
                 return true
             end
 
@@ -219,14 +219,14 @@ CardDefinitions.cards = {
     {
         id = "coins_epic",
         name = "COINS",
-        amount = "+200",
+        amount = "+40",
         rarity = "epic",
         visualType = "player",
-        description = "Gain 200 coins.",
+        description = "Gain 40 coins.",
         requiresSecondary = false,
         apply = function()
             if Game and Game.increasePlayerPoints then
-                Game:increasePlayerPoints(200)
+                Game:increasePlayerPoints(40)
                 return true
             end
 

@@ -5,6 +5,7 @@ local whiteShader = love.graphics.newShader("scripts/shaders/whiteShader.glsl")
 local WalkParticle = require("scripts/particles/walkParticle")
 local ShellParticle = require("scripts/particles/shellParticle")
 local GunStarDraw = require("scripts/effects/gunStarDraw")
+local GameHudLayout = require("scripts/config/gameHudLayout")
 local errorSoundBase = love.audio.newSource("assets/sfx/error/error.mp3", "static")
 local bulletModules = {
     particle = require("scripts/player/bullets/particleBullet"),
@@ -1006,8 +1007,8 @@ function Gun:spawnMuzzleParticle(angle, offsetDistance)
 end
 
 function Gun:spawnHudShotParticle(slotIndex)
-    local bulletUIX = 12
-    local bulletUIY = 81 + slotIndex * 18
+    local bulletUIX = GameHudLayout.ammoX
+    local bulletUIY = GameHudLayout.ammoFirstY + (slotIndex - 1) * GameHudLayout.ammoSpacing
 
     self.uiShotParticles[#self.uiShotParticles + 1] = {
         x = bulletUIX,
@@ -1321,99 +1322,11 @@ function Gun:drawParticles()
 end
 
 function Gun:drawUI()
-    local size = 40
-    local startX = 13.5
-    local startY = 10.5
-    local line = 3
     local weaponConfig = self:getCurrentWeapon()
-    local slotGap = 48
-    local function drawSlotBox(slotIndex, hasWeapon)
-        local x = startX + (slotIndex - 1) * slotGap
-        love.graphics.setLineWidth(line)
-        love.graphics.setColor(hexToRGB("090909"))
-        love.graphics.rectangle("line", x + line, startY + line, size, size)
-        if self.selected_slot == slotIndex then
-            love.graphics.setColor(1, 1, 1, 1)
-        elseif hasWeapon then
-            love.graphics.setColor(0.55, 0.55, 0.55, 1)
-        else
-            love.graphics.setColor(0.28, 0.28, 0.28, 1)
-        end
-        love.graphics.rectangle("line", x, startY, size, size)
-        love.graphics.setLineWidth(1)
-    end
-
-    drawSlotBox(1, self.primary_weapon ~= nil)
-    drawSlotBox(2, self.secondary_weapon ~= nil)
-
     if not weaponConfig then return end
 
-    love.graphics.setFont(self.font)
-    for slotIndex, weapon in ipairs({self.primary_weapon, self.secondary_weapon}) do
-        if weapon then
-            local quad = love.graphics.newQuad(
-                (weapon.index - 1) * self.size,
-                16,
-                self.size,
-                self.size,
-                self.gunSheet:getDimensions()
-            )
-            love.graphics.setColor(slotIndex == self.selected_slot and 1 or 0.65, slotIndex == self.selected_slot and 1 or 0.65, slotIndex == self.selected_slot and 1 or 0.65, 1)
-            love.graphics.draw(self.gunSheet, quad, 20 + (slotIndex - 1) * slotGap, 40, 0, 3, 3, 0, self.size / 2)
-        end
-    end
-
-    love.graphics.setColor(1, 1, 1, 1)
-    local currentSlot = self:getSelectedWeaponSlot()
-    if not (currentSlot and currentSlot.infiniteAmmo) then
-        local text = self.currentMagCount .. "/" .. weaponConfig.magCount
-        local textX = 130
-        local textY = 27
-        local isLastMagazine = self.selected_slot == 2 and (self.currentMagCount or 0) <= 0
-        local feedbackProgress = 0
-        if self.selected_slot == 2 and (self.secondaryReloadFeedbackTimer or 0) > 0 then
-            feedbackProgress = self.secondaryReloadFeedbackTimer / (self.secondaryReloadFeedbackDuration or 0.42)
-        end
-        local ammoNegativeProgress = math.min((self.ammoNegativeFeedbackTimer or 0) / (self.ammoNegativeFeedbackDuration or 0.34), 1)
-        local ammoShakeX = ammoNegativeProgress > 0 and math.sin(ammoNegativeProgress * math.pi * 10) * (isLastMagazine and 2 or 0.8) or 0
-        textX = textX + ammoShakeX
-
-        love.graphics.setColor(0, 0, 0, 0.82)
-        love.graphics.print(text, textX + 2, textY + 2)
-        love.graphics.setColor(0, 0, 0, 0.45)
-        love.graphics.print(text, textX + 1, textY + 1)
-
-        if ammoNegativeProgress > 0 then
-            local scale = 1 + math.sin(ammoNegativeProgress * math.pi) * (isLastMagazine and 0.18 or 0.06)
-            love.graphics.push()
-            love.graphics.translate(textX, textY)
-            love.graphics.scale(scale, scale)
-            if isLastMagazine then
-                love.graphics.setColor(1, 0.24, 0.18, 1)
-            else
-                love.graphics.setColor(1, 0.82, 0.76, 1)
-            end
-            love.graphics.print(text, 0, 0)
-            love.graphics.pop()
-        elseif feedbackProgress > 0 then
-            local pulse = math.sin((1 - feedbackProgress) * math.pi)
-            local scale = 1 + pulse * 0.34
-            love.graphics.push()
-            love.graphics.translate(textX, textY)
-            love.graphics.scale(scale, scale)
-            love.graphics.setColor(1, 0.96, 0.72, 0.55 * feedbackProgress)
-            love.graphics.print(text, -1, -1)
-            love.graphics.setColor(1, 1, 1, 1)
-            love.graphics.print(text, 0, 0)
-            love.graphics.pop()
-        else
-            love.graphics.setColor(1, 1, 1, 1)
-            love.graphics.print(text, textX, textY)
-        end
-    end
-
-    local bulletUIX = 12
-    local bulletUIY = 81
+    local bulletUIX = GameHudLayout.ammoX
+    local bulletUIY = GameHudLayout.ammoFirstY - GameHudLayout.ammoSpacing
 
     local fullQuad = love.graphics.newQuad(0, 0, self.size, self.size, self.bulletSheet:getDimensions())
     local emptyQuad = love.graphics.newQuad(self.size, 0, self.size, self.size, self.bulletSheet:getDimensions())
@@ -1423,7 +1336,7 @@ function Gun:drawUI()
     for i = 1, weaponConfig.magCapacity do
         local bulletShakeX = ammoNegativeProgress > 0 and math.sin((ammoNegativeProgress * 12 + i) * math.pi) * (isLastMagazine and 1.2 or 0.4) or 0
         love.graphics.setColor(1, 1, 1, 1)
-        love.graphics.draw(self.bulletSheet, emptyQuad, bulletUIX + bulletShakeX, bulletUIY + i * 18, 0, 3, 3, 0, 0)
+        love.graphics.draw(self.bulletSheet, emptyQuad, bulletUIX + bulletShakeX, bulletUIY + i * GameHudLayout.ammoSpacing, 0, 3, 3, 0, 0)
 
         if i <= self.currentMagCapacity then
             if ammoNegativeProgress > 0 then
@@ -1433,7 +1346,7 @@ function Gun:drawUI()
                     love.graphics.setColor(1, 0.88, 0.82, 1)
                 end
             end
-            love.graphics.draw(self.bulletSheet, fullQuad, bulletUIX + bulletShakeX, bulletUIY + i * 18, 0, 3, 3, 0, 0)
+            love.graphics.draw(self.bulletSheet, fullQuad, bulletUIX + bulletShakeX, bulletUIY + i * GameHudLayout.ammoSpacing, 0, 3, 3, 0, 0)
         end
     end
 

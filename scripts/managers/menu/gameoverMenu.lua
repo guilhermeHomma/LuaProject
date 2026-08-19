@@ -12,6 +12,12 @@ function gameOverMenu:load()
     self.MenuTItle = Localization:t("menu.game_over")
     self.menuOptions = {"new_run", "main_menu"}
     self.lockOnSelect = true
+    self.entryInputDelay = 0
+end
+
+function gameOverMenu:beginEntryDelay(duration)
+    self.entryInputDelay = duration or 1
+    self:lockInteractions()
 end
 
 function gameOverMenu:getOptionLabel(index)
@@ -19,7 +25,13 @@ function gameOverMenu:getOptionLabel(index)
 end
 
 function gameOverMenu:update(dt)
-    if self:isInteractionLocked() and not TransitionManager.isTransiting then
+    if (self.entryInputDelay or 0) > 0 then
+        self.entryInputDelay = math.max(0, self.entryInputDelay - dt)
+    end
+
+    if self:isInteractionLocked()
+        and (self.entryInputDelay or 0) <= 0
+        and not TransitionManager.isTransiting then
         self:unlockInteractions()
     end
 

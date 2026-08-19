@@ -3,6 +3,7 @@ local RoomEncounterManager = {}
 local Tilemap = require("scripts/tilemap")
 local FloorManager = require("scripts/managers/floorManager")
 local Zombie = require("scripts/enemies/zombie")
+local Gumbit = require("scripts/enemies/gumbit")
 local BabyZombie = require("scripts/enemies/babyZombie")
 local BigZombie = require("scripts/enemies/bigZombie")
 local NoHead = require("scripts/enemies/noHead")
@@ -19,6 +20,7 @@ local ENEMY_SPAWN_SPACING_TILES = 3
 
 local EnemyFactories = {
     zombie = Zombie,
+    gumbit = Gumbit,
     babyZombie = BabyZombie,
     bigZombie = BigZombie,
     noHead = NoHead,

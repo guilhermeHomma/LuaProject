@@ -425,8 +425,9 @@ function BigZombie:isRushColliding(moveX, moveY)
             local hitY = checkCollision(selfBoxY, tileBox)
 
             if hitX or hitY then
-                if isBoxTile(tile) and tile.onshoot then
-                    tile:onshoot(999)
+                local isBreakableRushObject = isBoxTile(tile) or tile.chestType == "wood"
+                if isBreakableRushObject and tile.onshoot then
+                    tile:onshoot(999, { forceBreak = true, source = "bigZombieDash" })
                     if not self.rushBoxImpactFeedbackFrame then
                         self:spawnRushBoxImpactFeedback()
                         self.rushBoxImpactFeedbackFrame = true

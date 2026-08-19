@@ -21,7 +21,8 @@ function Drop:checkCatch()
         return
     end
 
-    if distance(self, Player) < 10 then
+    local inRange = self.fromChest and self:isPlayerInPickupRange() or distance(self, Player) < 10
+    if inRange then
         if not self.isAlive or self.isCollecting then
             return
         end

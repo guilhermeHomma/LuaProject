@@ -1,10 +1,29 @@
 PointsManager = {}
+local GameHudLayout = require("scripts/config/gameHudLayout")
+local coinImage = love.graphics.newImage("assets/sprites/objects/coin.png")
+local coinFrames = {}
+local COIN_FRAME_SIZE = 8
+local COIN_DRAW_SCALE = 3
+local COIN_SPIN_INTERVAL = 15
+local COIN_SPIN_FRAME_DURATION = 0.08
+local COIN_SPIN_LOOPS = 2
+
+coinImage:setFilter("nearest", "nearest")
+for frameIndex = 0, math.floor(coinImage:getWidth() / COIN_FRAME_SIZE) - 1 do
+    coinFrames[#coinFrames + 1] = love.graphics.newQuad(
+        frameIndex * COIN_FRAME_SIZE,
+        0,
+        COIN_FRAME_SIZE,
+        COIN_FRAME_SIZE,
+        coinImage:getDimensions()
+    )
+end
 
 
 function PointsManager:load()
     self.font = love.graphics.newFont("assets/fonts/ThaleahFat.ttf", 32)
     self.font:setFilter("nearest", "nearest")
-    self.points = (GAME_FLAGS and GAME_FLAGS.weaponTestLevel) and 2000 or 100
+    self.points = (GAME_FLAGS and GAME_FLAGS.weaponTestLevel) and 400 or 20
     self.displayPoints = self.points
     self.targetPoints = self.points
     self.animationStartPoints = self.points
@@ -15,6 +34,8 @@ function PointsManager:load()
     self.popDuration = 0.18
     self.negativeFeedbackTimer = 0
     self.negativeFeedbackDuration = 0.38
+    self.coinIdleTimer = 0
+    self.coinSpinTimer = nil
 
     self.animationColor = "c7c093"
     self.animationTimer = 10
@@ -36,6 +57,21 @@ function PointsManager:update(dt)
     self.animationTimer = self.animationTimer + dt
     self.popTimer = self.popTimer + dt
     self.negativeFeedbackTimer = math.max(0, (self.negativeFeedbackTimer or 0) - dt)
+
+    if self.coinSpinTimer then
+        self.coinSpinTimer = self.coinSpinTimer + dt
+        local spinDuration = #coinFrames * COIN_SPIN_LOOPS * COIN_SPIN_FRAME_DURATION
+        if self.coinSpinTimer >= spinDuration then
+            self.coinSpinTimer = nil
+            self.coinIdleTimer = 0
+        end
+    else
+        self.coinIdleTimer = (self.coinIdleTimer or 0) + dt
+        if self.coinIdleTimer >= COIN_SPIN_INTERVAL then
+            self.coinSpinTimer = 0
+            self.coinIdleTimer = 0
+        end
+    end
 
     if self.displayPoints ~= self.targetPoints then
         self.valueAnimationTimer = math.min(
@@ -75,6 +111,8 @@ function PointsManager:decreasePoints(points)
     self.valueAnimationTimer = 0
     self.animationMode = "loss"
     self.popTimer = 0
+    self.coinSpinTimer = 0
+    self.coinIdleTimer = 0
 end
 
 function PointsManager:increasePoints(points)
@@ -90,6 +128,8 @@ function PointsManager:increasePoints(points)
     self.valueAnimationTimer = 0
     self.animationMode = "gain"
     self.popTimer = 0
+    self.coinSpinTimer = 0
+    self.coinIdleTimer = 0
 end
 
 function PointsManager:getConfettiColor(index)
@@ -113,12 +153,14 @@ end
 function PointsManager:draw()
     if not Player.isAlive then return end
     local drawPoints = self.displayPoints or self.points
-    local text = drawPoints .. "C"
+    local text = tostring(drawPoints)
     local textWidth = self.font:getWidth(text)
-    local x = love.graphics.getWidth() / scale - textWidth - 15
-
-    x = 128
-    local y = 6
+    local x = GameHudLayout.currencyX
+    local y = GameHudLayout.currencyY
+    local coinFrameIndex = 1
+    if self.coinSpinTimer then
+        coinFrameIndex = (math.floor(self.coinSpinTimer / COIN_SPIN_FRAME_DURATION) % #coinFrames) + 1
+    end
     local popProgress = math.min((self.popTimer or 1) / (self.popDuration or 0.18), 1)
     local popWave = math.sin(popProgress * math.pi)
     local negativeProgress = math.min((self.negativeFeedbackTimer or 0) / (self.negativeFeedbackDuration or 0.38), 1)
@@ -133,6 +175,16 @@ function PointsManager:draw()
     local drawY = math.floor(y - originAdjustY + 0.5)
     
     love.graphics.setFont(self.font)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.draw(
+        coinImage,
+        coinFrames[coinFrameIndex],
+        GameHudLayout.currencyIconX,
+        y + 3,
+        0,
+        COIN_DRAW_SCALE,
+        COIN_DRAW_SCALE
+    )
     --love.graphics.setColor(0.274, 0.4, 0.45, 1)
     love.graphics.setColor(0.05, 0, 0.05, 1)
     love.graphics.print(text, drawX + 3, drawY + 3, 0, scaleX, scaleY)

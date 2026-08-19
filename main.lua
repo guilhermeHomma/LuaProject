@@ -38,6 +38,7 @@ local LogoIntro = require("scripts/managers/menu/logoIntro")
 local TransitionManager = require("scripts.managers.transitionManager")
 local RoomScreenTransition = require("scripts/managers/roomScreenTransition")
 local AudioDeviceSync = require("scripts/managers/audioDeviceSync")
+local GlobalPalette = require("scripts.render.palettePostProcess")
 
 canvas = nil
 local menuCanvas = nil
@@ -251,7 +252,7 @@ local function presentCanvas(sourceCanvas, useRoomTransition)
     presentationShader:send("u_crtCurvature", crtConfig.curvature or 0.055)
     presentationShader:send("u_crtVignette", crtConfig.vignette or 0.22)
     presentationShader:send("u_crtChromatic", crtConfig.chromatic or 0.55)
-    presentationShader:send("u_brightness", brightness)
+    presentationShader:send("u_brightness", GlobalPalette:isEnabled() and 5 or brightness)
     presentationShader:send("u_center", zeroVec2)
     presentationShader:send("u_radius", spotlightEnabled == 1 and Game.spot.radius * scale or 0)
     presentationShader:send("u_feather", spotlightEnabled == 1 and Game.spot.feather or 0)
@@ -266,7 +267,7 @@ local function presentCanvas(sourceCanvas, useRoomTransition)
     love.graphics.setShader()
 end
 
-local function drawFixedRoomLayer()
+local function drawFixedRoomLayer(outputCanvas)
     if not fixedLayerCanvas then
         return
     end
@@ -284,7 +285,7 @@ local function drawFixedRoomLayer()
         drawScaledState()
     end
 
-    love.graphics.setCanvas()
+    love.graphics.setCanvas(outputCanvas)
     presentCanvas(fixedLayerCanvas, false)
 end
 
@@ -414,6 +415,7 @@ end
 
 function playerDeath()
     Music:death()
+    GameoverMenu:beginEntryDelay(1)
     state=STATES.gameDead
 end
 
@@ -666,10 +668,12 @@ function love.draw()
     love.graphics.setCanvas()
     RoomScreenTransition:captureOldFrame(canvas)
 
+    GlobalPalette:beginFrame()
     presentCanvas()
     if keepRoomUiFixed then
-        drawFixedRoomLayer()
+        drawFixedRoomLayer(GlobalPalette:getCanvas())
     end
+    GlobalPalette:resumeFrame()
     if isGameplayState() and Game and Game.drawStartupFade then
         Game:drawStartupFade()
     end
@@ -681,4 +685,5 @@ function love.draw()
     drawFPS()
 
     TransitionManager:drawFullscreen()
+    GlobalPalette:present()
 end
