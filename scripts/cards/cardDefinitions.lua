@@ -96,18 +96,6 @@ CardDefinitions.cards = {
         end,
     },
     {
-        id = "secondary_fill",
-        name = "CHARGE",
-        amount = "FULL",
-        rarity = "common",
-        visualType = "weapon",
-        description = "Fill secondary weapon.",
-        requiresSecondary = true,
-        apply = function()
-            return Player and Player.gun and Player.gun:applyCardUpgrade("secondary_fill")
-        end,
-    },
-    {
         id = "primary_reload",
         name = "LOAD",
         amount = "-10%",
@@ -287,6 +275,85 @@ CardDefinitions.cards = {
     },
 }
 
+local function equipWeaponCard(weaponId)
+    return Player
+        and Player.gun
+        and Player.gun.replacePrimaryWeapon
+        and Player.gun:replacePrimaryWeapon(weaponId)
+        or false
+end
+
+CardDefinitions.weaponCards = {
+    {
+        id = "weapon_squaregun",
+        name = "SQUAREGUN",
+        amount = "NEW WEAPON",
+        rarity = "common",
+        visualType = "weapon",
+        cardType = "weapon",
+        weaponId = 4,
+        description = "Fires 2 projectiles; 10 damage each.",
+        apply = function() return equipWeaponCard(4) end,
+    },
+    {
+        id = "weapon_longshot",
+        name = "LONGSHOT",
+        amount = "NEW WEAPON",
+        rarity = "common",
+        visualType = "weapon",
+        cardType = "weapon",
+        weaponId = 5,
+        description = "Long-range weapon; 16 damage.",
+        apply = function() return equipWeaponCard(5) end,
+    },
+    {
+        id = "weapon_shotgun",
+        name = "SHOTGUN",
+        amount = "NEW WEAPON",
+        rarity = "rare",
+        visualType = "weapon",
+        cardType = "weapon",
+        weaponId = 2,
+        description = "Fires 3 projectiles; 15 damage each.",
+        apply = function() return equipWeaponCard(2) end,
+    },
+    {
+        id = "weapon_cakegun",
+        name = "CAKEGUN",
+        amount = "NEW WEAPON",
+        rarity = "rare",
+        visualType = "weapon",
+        cardType = "weapon",
+        weaponId = 6,
+        description = "Fires 2 projectiles; 12 damage each.",
+        apply = function() return equipWeaponCard(6) end,
+    },
+    {
+        id = "weapon_random",
+        name = "RANDOM WEAPON",
+        amount = "RANDOM",
+        rarity = "rare",
+        visualType = "weapon",
+        cardType = "weapon",
+        description = "Receive a random weapon.",
+        apply = function()
+            local weaponIds = {2, 3, 4, 5, 6}
+            return equipWeaponCard(weaponIds[math.random(#weaponIds)])
+        end,
+    },
+    {
+        id = "weapon_raygun",
+        name = "RAYGUN",
+        amount = "NEW WEAPON",
+        rarity = "epic",
+        visualType = "weapon",
+        cardType = "weapon",
+        weaponId = 3,
+        description = "Fast-firing weapon; 15 damage.",
+        apply = function() return equipWeaponCard(3) end,
+    },
+}
+
 function CardDefinitions:getRarity(card)
     return self.rarities[card.rarity] or self.rarities.common
 end
@@ -362,6 +429,36 @@ function CardDefinitions:getEligibleCardsByRarity(rarity)
         end
     end
     return result
+end
+
+function CardDefinitions:getRandomWeaponCard(excludedId)
+    local candidates = {}
+    local totalWeight = 0
+
+    for _, card in ipairs(self.weaponCards or {}) do
+        if card.id ~= excludedId then
+            local rarity = self:getRarity(card)
+            local weight = rarity.weight or 0
+            if weight > 0 then
+                candidates[#candidates + 1] = { card = card, weight = weight }
+                totalWeight = totalWeight + weight
+            end
+        end
+    end
+
+    if totalWeight <= 0 then
+        return nil
+    end
+
+    local roll = math.random() * totalWeight
+    for _, candidate in ipairs(candidates) do
+        roll = roll - candidate.weight
+        if roll <= 0 then
+            return candidate.card
+        end
+    end
+
+    return candidates[#candidates].card
 end
 
 function CardDefinitions:getRandomRarity()

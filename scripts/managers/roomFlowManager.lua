@@ -49,8 +49,17 @@ local function mapTemplatePointToWorld(point)
     return worldX, worldY - 8
 end
 
-local function getStartRoomPlayerSpawn()
+local function getStartRoomPlayerSpawn(centered)
     local currentRoom = FloorManager:getCurrentRoom()
+
+    if centered and currentRoom and currentRoom.width and currentRoom.height then
+        local centerX, centerY = mapTemplatePointToWorld({
+            x = currentRoom.width / 2,
+            y = currentRoom.height / 2,
+        })
+        return centerX - 8, centerY - 8
+    end
+
     local spawnPoint = currentRoom and currentRoom.spawnPoints and currentRoom.spawnPoints.player
 
     if spawnPoint then
@@ -606,8 +615,8 @@ function RoomFlowManager:checkRoomTransition(dt)
     end
 end
 
-function RoomFlowManager.getStartRoomPlayerSpawn()
-    return getStartRoomPlayerSpawn()
+function RoomFlowManager.getStartRoomPlayerSpawn(centered)
+    return getStartRoomPlayerSpawn(centered)
 end
 
 function RoomFlowManager.queuePlayerTransitionFrame(vector, moving)

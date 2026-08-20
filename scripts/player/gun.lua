@@ -703,6 +703,38 @@ function Gun:equipSecondaryWeapon(index)
     return true
 end
 
+function Gun:replacePrimaryWeapon(index)
+    local weaponConfig = self:getWeaponConfig(index)
+    if not weaponConfig then
+        return false
+    end
+
+    self:cancelReload()
+    self.primaryUpgradeState = {
+        damageBonus = 0,
+        rangeMultiplier = 1,
+        reloadMultiplier = 1,
+        ricochetCount = 0,
+        deathSpawnCount = 0,
+        enemyDeathSpawnCount = 0,
+    }
+    self.primary_weapon = createWeaponSlot(index, weaponConfig, true)
+    self.secondary_weapon = nil
+    self.selected_slot = 1
+    self.showGun = true
+    self.shootTimer = 0.2 - math.random() * 0.1
+    self.reloadSpinTimer = 0
+    self:syncCurrentWeaponState()
+    self:emitWeaponEvent("weapon_selected", { slot = 1, weapon = weaponConfig })
+    self:emitWeaponEvent("ammo_changed", {
+        slot = 1,
+        weapon = weaponConfig,
+        currentMagCapacity = self.currentMagCapacity,
+        currentMagCount = self.currentMagCount,
+    })
+    return true
+end
+
 function Gun:applyCardUpgrade(upgradeId)
     if upgradeId == "primary_damage" then
         self.primaryUpgradeState.damageBonus = (self.primaryUpgradeState.damageBonus or 0) + 2

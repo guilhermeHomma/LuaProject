@@ -13,16 +13,18 @@ local angelIntroSoundBases = {
     love.audio.newSource("assets/sfx/effects/angel-intro2.mp3", "static"),
 }
 
-local FLOOR_TITLE_DURATION = 3.6
+local FLOOR_TITLE_DURATION = 3
 local FLOOR_MUSIC_FADE_DURATION = 0.65
 local FLOOR_FADE_IN_DURATION = 0.6
 local FLOOR_FADE_OUT_DURATION = 0.8
+local FLOOR_OVERLAY_DURATION = 3
+local FLOOR_OVERLAY_FADE_IN_DURATION = 0.6
+local FLOOR_OVERLAY_FADE_OUT_DURATION = 0.8
 local INTRO_TOTEM_FRAME_COUNT = 6
 local INTRO_TOTEM_FRAME_WIDTH = introTotemImage:getWidth() / INTRO_TOTEM_FRAME_COUNT
 local INTRO_TOTEM_FRAME_HEIGHT = introTotemImage:getHeight()
 local INTRO_TOTEM_SCALE = 3
 local INTRO_TOTEM_CENTER_Y_OFFSET = -32
-local INTRO_TOTEM_TEXT_GAP = 10
 local THANKS_SCREEN_DURATION = 6.6
 local THANKS_FADE_IN_DURATION = 0.6
 local THANKS_FADE_OUT_DURATION = 0.8
@@ -104,7 +106,7 @@ end
 function FloorIntroManager:startFloor(floorIndex, onComplete)
     local angelIntroSoundBase = angelIntroSoundBases[math.random(#angelIntroSoundBases)]
     local angelIntroSound = angelIntroSoundBase:clone()
-    setSourceVolume(angelIntroSound, 0.7 * (SOUND_VOLUME or 1))
+    setSourceVolume(angelIntroSound, 0.3 * (SOUND_VOLUME or 1))
     local pitchVariation = 0.96 + math.random() * 0.08
     angelIntroSound:setPitch(pitchVariation * (GAME_PITCH or 1))
     angelIntroSound:play()
@@ -117,6 +119,29 @@ function FloorIntroManager:startFloor(floorIndex, onComplete)
         onComplete = onComplete,
     }
     self.thanksScreen = nil
+end
+
+function FloorIntroManager:startFloorOverlay(floorIndex)
+    self.floorOverlay = {
+        floorIndex = floorIndex or 1,
+        timer = 0,
+        duration = FLOOR_OVERLAY_DURATION,
+    }
+end
+
+function FloorIntroManager:updateFloorOverlay(dt)
+    local overlay = self.floorOverlay
+    if not overlay then
+        return false
+    end
+
+    overlay.timer = overlay.timer + dt
+    if overlay.timer >= overlay.duration then
+        self.floorOverlay = nil
+        return false
+    end
+
+    return true
 end
 
 function FloorIntroManager:startThanks(onComplete)
@@ -235,17 +260,29 @@ function FloorIntroManager:drawFloor()
     )
     love.graphics.setShader()
 
-    local text = Localization:t("game.floor", { floor = tostring(intro.floorIndex or 1) })
-    local titleY = totemY + totemDrawHeight + INTRO_TOTEM_TEXT_GAP
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
+function FloorIntroManager:drawFloorOverlay()
+    local overlay = self.floorOverlay
+    if not overlay then
+        return
+    end
+
+    local fadeIn = math.min(overlay.timer / FLOOR_OVERLAY_FADE_IN_DURATION, 1)
+    local fadeOut = math.min((overlay.duration - overlay.timer) / FLOOR_OVERLAY_FADE_OUT_DURATION, 1)
+    local alpha = math.max(0, math.min(fadeIn, fadeOut))
+    local text = Localization:t("game.floor", { floor = tostring(overlay.floorIndex or 1) })
+
     love.graphics.setFont(floorTitleFont)
-    drawWavyText(text, titleY, floorTitleFont, {
-        alpha = titleAlpha,
-        color = "6b6764",
-        shadowAlpha = 0.4,
+    drawWavyText(text, 0, floorTitleFont, {
+        centerY = baseHeight * 0.3,
+        alpha = alpha,
+        color = "fbfaf7",
+        shadowAlpha = 0.62,
         amplitudeScale = 1.45,
         speedScale = 0.9,
     })
-
     love.graphics.setColor(1, 1, 1, 1)
 end
 

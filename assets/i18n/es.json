@@ -62,7 +62,13 @@
     "coins_epic": { "name": "MONEDAS", "amount": "+40", "description": "Gana 40 monedas." },
     "half_heart": { "name": "CORAZÓN", "amount": "CURA 1", "description": "Restaura solo un corazón perdido." },
     "full_heal": { "name": "CURA TOTAL", "amount": "RESTAURA", "description": "Restaura solo todos los corazones perdidos." },
-    "heart_container": { "name": "ESPACIO DE CORAZÓN", "amount": "+1 MÁX", "description": "Gana un corazón máximo y se cura por completo." }
+    "heart_container": { "name": "ESPACIO DE CORAZÓN", "amount": "+1 MÁX", "description": "Gana un corazón máximo y se cura por completo." },
+    "weapon_squaregun": { "name": "SQUAREGUN", "amount": "ARMA NUEVA", "description": "Dispara 2 proyectiles; 10 de daño cada uno." },
+    "weapon_longshot": { "name": "LONGSHOT", "amount": "ARMA NUEVA", "description": "Arma de largo alcance; 16 de daño." },
+    "weapon_shotgun": { "name": "SHOTGUN", "amount": "ARMA NUEVA", "description": "Dispara 3 proyectiles; 15 de daño cada uno." },
+    "weapon_cakegun": { "name": "CAKEGUN", "amount": "ARMA NUEVA", "description": "Dispara 2 proyectiles; 12 de daño cada uno." },
+    "weapon_random": { "name": "ARMA ALEATORIA", "amount": "ALEATORIA", "description": "Recibirás un arma aleatoria." },
+    "weapon_raygun": { "name": "RAYGUN", "amount": "ARMA NUEVA", "description": "Arma de disparo rápido; 15 de daño." }
   },
   "hud": {
     "fps": "FPS"

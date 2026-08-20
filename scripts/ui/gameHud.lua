@@ -65,6 +65,7 @@ local function drawContent(game)
     drawMinimap(game)
 
     game:drawRoomFade()
+    game:drawFloorOverlay()
     game:drawFloorIntro()
     game:drawThanksScreen()
 end

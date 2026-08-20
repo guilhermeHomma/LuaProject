@@ -334,8 +334,106 @@ function CardChoice:load()
     self.hoveredCardIndex = nil
     self.drawAlpha = 1
     self.finishFeedbackPlayed = false
+    self.offeredWeaponCard = nil
     if Dialog then
         Dialog.breakMovements = false
+    end
+end
+
+function CardChoice:resetWeaponCardRun()
+    self.weaponCardRun = {
+        firstChoicePending = true,
+        bands = {
+            [1] = { evaluatedFloors = {} },
+            [2] = { evaluatedFloors = {} },
+        },
+    }
+end
+
+local function getWeaponCardBand(floorIndex)
+    if floorIndex >= 1 and floorIndex <= 3 then
+        return 1, 3
+    elseif floorIndex >= 4 and floorIndex <= 6 then
+        return 2, 6
+    end
+    return nil, nil
+end
+
+function CardChoice:getWeaponCardOffer()
+    self.weaponCardRun = self.weaponCardRun or {
+        firstChoicePending = true,
+        bands = {
+            [1] = { evaluatedFloors = {} },
+            [2] = { evaluatedFloors = {} },
+        },
+    }
+
+    local floorIndex = CURRENT_LEVEL and CURRENT_LEVEL.currentFloorIndex or 1
+    local bandIndex, lastFloor = getWeaponCardBand(floorIndex)
+    if not bandIndex then
+        return nil
+    end
+
+    local band = self.weaponCardRun.bands[bandIndex]
+    if band.claimed then
+        return nil
+    end
+
+    if self.weaponCardRun.firstChoicePending then
+        self.weaponCardRun.firstChoicePending = false
+        local card = CardDefinitions:getRandomWeaponCard()
+        band.lastOfferedCard = card
+        band.evaluatedFloors[floorIndex] = true
+        return card
+    end
+
+    if band.pendingCard then
+        local guaranteedOnLastFloor = floorIndex == lastFloor and not band.evaluatedFloors[floorIndex]
+        band.evaluatedFloors[floorIndex] = true
+        if not guaranteedOnLastFloor and math.random() >= 0.25 then
+            return nil
+        end
+
+        local card = band.pendingCard
+        if math.random() >= 0.75 then
+            card = CardDefinitions:getRandomWeaponCard(card.id) or card
+        end
+        band.lastOfferedCard = card
+        return card
+    end
+
+    if band.evaluatedFloors[floorIndex] then
+        return nil
+    end
+
+    band.evaluatedFloors[floorIndex] = true
+    if floorIndex < lastFloor and math.random() >= 0.5 then
+        return nil
+    end
+
+    local card = CardDefinitions:getRandomWeaponCard()
+    band.lastOfferedCard = card
+    return card
+end
+
+function CardChoice:resolveWeaponCardOffer(selectedCard)
+    local offered = self.offeredWeaponCard
+    if not offered then
+        return
+    end
+
+    local floorIndex = CURRENT_LEVEL and CURRENT_LEVEL.currentFloorIndex or 1
+    local bandIndex = getWeaponCardBand(floorIndex)
+    local band = bandIndex and self.weaponCardRun and self.weaponCardRun.bands[bandIndex]
+    if not band then
+        return
+    end
+
+    if selectedCard and selectedCard.id == offered.id then
+        band.claimed = true
+        band.pendingCard = nil
+    else
+        band.pendingCard = offered
     end
 end
 
@@ -390,6 +488,14 @@ function CardChoice:chooseCards(count, options)
 
         if picked then
             chosen[#chosen + 1] = picked
+        end
+    end
+
+    if options.allowWeaponCards == true then
+        local weaponCard = self:getWeaponCardOffer()
+        if weaponCard and #chosen > 0 then
+            chosen[math.random(#chosen)] = weaponCard
+            self.offeredWeaponCard = weaponCard
         end
     end
 
@@ -817,6 +923,7 @@ function CardChoice:choose(index)
     if card.def.apply then
         card.def.apply()
     end
+    self:resolveWeaponCardOffer(card.def)
 
     self.phase = "celebrate"
     self.timer = 0

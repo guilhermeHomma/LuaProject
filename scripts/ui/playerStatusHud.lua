@@ -51,8 +51,12 @@ local function getPrimaryWeaponStats(previewCard, highlightCard)
         return nil
     end
 
-    local base = slot.config
-    local current = gun:getEffectiveWeaponConfig(slot)
+    local previewWeapon = previewCard
+        and previewCard.cardType == "weapon"
+        and previewCard.weaponId
+        and gun:getWeaponConfig(previewCard.weaponId)
+    local base = previewWeapon or slot.config
+    local current = previewWeapon or gun:getEffectiveWeaponConfig(slot)
     local bullet = base.initialBullet or {}
     local baseRange = getWeaponRange(base, bullet)
     local currentRange = getWeaponRange(current, current.initialBullet or bullet) * (current.rangeMultiplier or 1)
@@ -63,11 +67,11 @@ local function getPrimaryWeaponStats(previewCard, highlightCard)
         gun = gun,
         slot = slot,
         damage = current.damage or base.damage or 0,
-        damageBonus = slot.damageBonus or 0,
+        damageBonus = previewWeapon and 0 or (slot.damageBonus or 0),
         reload = currentReload,
         reloadBonus = math.max(0, baseReload - currentReload),
         range = currentRange,
-        rangeBonus = math.max(0, currentRange - baseRange),
+        rangeBonus = previewWeapon and 0 or math.max(0, currentRange - baseRange),
         changed = {},
     }
 

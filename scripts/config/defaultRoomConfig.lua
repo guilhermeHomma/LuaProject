@@ -281,13 +281,10 @@ DefaultRoomConfig.floorConfig = {
 
 DefaultRoomConfig.shopConfig = {
     enabled = true,
-    ammoProductId = "full_bullets",
-    ammoChance = 0.40,
-    ammoPrice = 30,
     cardProductId = "card_upgrade",
-    cardPrice = 30,
-    cardRoomDoubleShopChance = 0.10,
-    cardChestSecondChance = 0.10,
+    cardPrice = 50,
+    cardRoomDoubleShopChance = 0.05,
+    cardChestSecondChance = 0.05,
     products = {
         { id = "squaregun", weight = 40 },
         { id = "longshot", weight = 25 },

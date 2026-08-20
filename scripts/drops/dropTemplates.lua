@@ -162,11 +162,7 @@ function DropTemplates.hasPlayerHalfHeart(player)
 end
 
 function DropTemplates.canDropBullets(player)
-    return player
-        and player.gun
-        and player.gun.secondary_weapon
-        and player.gun.canFillCurrentMagazine
-        and player.gun:canFillCurrentMagazine()
+    return false
 end
 
 function DropTemplates.canDrop(dropId, context)

@@ -3,6 +3,6 @@ return {
     currencyX = 50,
     currencyY = 78,
     ammoX = 26,
-    ammoFirstY = 119,
+    ammoFirstY = 121,
     ammoSpacing = 18,
 }

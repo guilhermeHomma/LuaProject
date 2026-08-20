@@ -333,7 +333,7 @@ function love.load()
             Game:load({
                 onFloorIntroComplete = function()
                     state = STATES.game
-                    Music:startGame()
+                    Game:startMusicWhenReady()
                 end,
             })
         end
@@ -365,7 +365,7 @@ function loadGame(levelId)
             Game:load({
                 onFloorIntroComplete = function()
                     state = STATES.game
-                    Music:startGame()
+                    Game:startMusicWhenReady()
                 end,
             })
         end

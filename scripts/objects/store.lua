@@ -264,10 +264,13 @@ function Store:performBuy()
             state.shopPurchases[self:getPurchaseKey()] = true
         end
         if Game and Game.startCardChoice then
-            Game:startCardChoice(self.xWorld, self.yWorld - 16, { allowRare = true })
+            Game:startCardChoice(self.xWorld, self.yWorld - 16, {
+                allowRare = true,
+                allowWeaponCards = true,
+            })
         end
     else
-        Player.gun:changeGun(self.product.index)
+        Player.gun:replacePrimaryWeapon(self.product.index)
         if Game.markWeaponPurchased then
             Game:markWeaponPurchased(self.product.name)
         end

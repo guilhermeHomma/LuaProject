@@ -109,11 +109,13 @@ function Game:load(options)
     math.randomseed(os.time())
     love.graphics.setDefaultFilter("nearest", "nearest")
     CardChoice:load()
+    CardChoice:resetWeaponCardRun()
 
     FloorManager:load(CURRENT_LEVEL)
     Tilemap:load()
 
-    local spawnX, spawnY = RoomFlowManager.getStartRoomPlayerSpawn()
+    local shouldStartPlayerFallIntro = options.startPlayerFallIntro ~= false and isFirstDefaultFloor()
+    local spawnX, spawnY = RoomFlowManager.getStartRoomPlayerSpawn(shouldStartPlayerFallIntro)
     Player:load(camera, spawnX, spawnY)
     camera = Camera:new(Player.x - 5, Player.y - 30, Player)
     camera:snapToCurrentMode()
@@ -148,7 +150,8 @@ function Game:load(options)
     self:resetRuntimeState()
     self:setupCurrentRoom()
     self:restoreCurrentRoomDrops()
-    self.pendingPlayerFallIntro = options.startPlayerFallIntro ~= false and isFirstDefaultFloor()
+    self.pendingPlayerFallIntro = shouldStartPlayerFallIntro
+    self.pendingMusicStart = false
     if options.startFloorIntro ~= false then
         self:startFloorIntro(CURRENT_LEVEL and CURRENT_LEVEL.currentFloorIndex or 1, options.onFloorIntroComplete)
     end
@@ -441,12 +444,25 @@ function Game:startFloorIntro(floorIndex, onComplete)
         Music:closeGame()
     end
     FloorIntroManager:startFloor(floorIndex, function()
+        FloorIntroManager:startFloorOverlay(floorIndex)
         Dialog.breakMovements = self.playerRoomEntryMove ~= nil
         RoomFlowManager.queuePlayerTransitionFrame({ x = 0, y = 0 }, false)
         if onComplete then
             onComplete()
         end
     end)
+end
+
+function Game:startMusicWhenReady()
+    if self.pendingPlayerFallIntro or PlayerAnimation.isFallIntroActive(Player) then
+        self.pendingMusicStart = true
+        return
+    end
+
+    self.pendingMusicStart = false
+    if Music and Music.startGame then
+        Music:startGame()
+    end
 end
 
 function Game:updateFloorIntro(dt)
@@ -886,6 +902,7 @@ function Game:getHitStopTimeScale(dt)
 end
 
 function Game:updateManagers(dt)
+    FloorIntroManager:updateFloorOverlay(dt)
     Tutorial:update(dt)
     WaveManager:update(dt)
     Clouds:update(dt)
@@ -899,6 +916,12 @@ function Game:updateManagers(dt)
     if PlayerAnimation.isFallIntroActive(Player) then
         Dialog.breakMovements = true
         local introStillActive = PlayerAnimation.updateFallIntro(Player, dt)
+        if self.pendingMusicStart and Player.fallIntro and Player.fallIntro.state ~= "falling" then
+            self.pendingMusicStart = false
+            if Music and Music.startGame then
+                Music:startGame()
+            end
+        end
         if not introStillActive then
             Dialog.breakMovements = false
         end
@@ -1129,6 +1152,10 @@ end
 
 function Game:drawFloorIntro()
     FloorIntroManager:drawFloor()
+end
+
+function Game:drawFloorOverlay()
+    FloorIntroManager:drawFloorOverlay()
 end
 
 function Game:drawThanksScreen()

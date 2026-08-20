@@ -62,7 +62,13 @@
     "coins_epic": { "name": "COINS", "amount": "+40", "description": "Gain 40 coins." },
     "half_heart": { "name": "HEART", "amount": "HEAL 1", "description": "Restore one lost heart only." },
     "full_heal": { "name": "FULL HEAL", "amount": "RESTORE", "description": "Restore all lost hearts only." },
-    "heart_container": { "name": "HEART SLOT", "amount": "+1 MAX", "description": "Gain one max heart and fully heal." }
+    "heart_container": { "name": "HEART SLOT", "amount": "+1 MAX", "description": "Gain one max heart and fully heal." },
+    "weapon_squaregun": { "name": "SQUAREGUN", "amount": "NEW WEAPON", "description": "Fires 2 projectiles; 10 damage each." },
+    "weapon_longshot": { "name": "LONGSHOT", "amount": "NEW WEAPON", "description": "Long-range weapon; 16 damage." },
+    "weapon_shotgun": { "name": "SHOTGUN", "amount": "NEW WEAPON", "description": "Fires 3 projectiles; 15 damage each." },
+    "weapon_cakegun": { "name": "CAKEGUN", "amount": "NEW WEAPON", "description": "Fires 2 projectiles; 12 damage each." },
+    "weapon_random": { "name": "RANDOM WEAPON", "amount": "RANDOM", "description": "Receive a random weapon." },
+    "weapon_raygun": { "name": "RAYGUN", "amount": "NEW WEAPON", "description": "Fast-firing weapon; 15 damage." }
   },
   "hud": {
     "fps": "FPS"

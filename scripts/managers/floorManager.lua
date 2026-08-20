@@ -1186,12 +1186,6 @@ local function chooseShopProduct(shopConfig, floorState)
     return candidates[#candidates] and candidates[#candidates].id or nil
 end
 
-local function playerHasSecondaryWeapon()
-    return Player
-        and Player.gun
-        and Player.gun.secondary_weapon ~= nil
-end
-
 function FloorManager:resolveCurrentRoomShopProducts()
     local room = self:getCurrentRoom()
     local state = room and room.state
@@ -1231,15 +1225,6 @@ function FloorManager:resolveCurrentRoomShopProducts()
         state.shopProducts[#state.shopProducts + 1] = productId
         state.shopProduct = productId
         self.floorState.usedShopProducts[productId] = true
-    end
-
-    local ammoProductId = shopConfig.ammoProductId or "full_bullets"
-    local ammoChance = shopConfig.ammoChance or 0
-    if playerHasSecondaryWeapon()
-        and not isProductAlreadyUsed(self.floorState, ammoProductId)
-        and math.random() < ammoChance then
-        state.shopProducts[#state.shopProducts + 1] = ammoProductId
-        self.floorState.usedShopProducts[ammoProductId] = true
     end
 
     return state.shopProducts

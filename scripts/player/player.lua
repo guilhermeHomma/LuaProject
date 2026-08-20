@@ -1004,7 +1004,7 @@ function Player:drawLife()
 
     local scale = 3
     local spacing = -16
-    local startX = 18
+    local startX = 16
     local startY = 28
     local shouldFlashWhite = self.damageTimer < 0.4
     local heartAnimationElapsed = math.max(0, love.timer.getTime() - (self.heartAnimationStartTime or love.timer.getTime()))
