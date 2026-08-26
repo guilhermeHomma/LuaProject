@@ -250,6 +250,7 @@ end
 
 function DefaultLevel:resetRuntimeState()
     self.currentFloorIndex = RoomConfig.currentFloorIndex or 1
+    self.lastHeartRoomFloor = nil
     self:applyFloorLevel(self.currentFloorIndex)
     self.cameraBounds = {}
     self.cameraAreas = {}

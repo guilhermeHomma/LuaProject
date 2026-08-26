@@ -4,5 +4,6 @@ return {
     require("scripts/player/weapons/raygun"),
     require("scripts/player/weapons/squaregun"),
     require("scripts/player/weapons/longshot"),
-    require("scripts/player/weapons/cakegun")
+    require("scripts/player/weapons/cakegun"),
+    require("scripts/player/weapons/pistolinha")
 }

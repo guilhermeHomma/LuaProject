@@ -188,6 +188,7 @@ local function createWeaponSlot(index, weaponConfig, infiniteAmmo)
 
     return {
         index = index,
+        spriteIndex = weaponConfig.spriteIndex or index,
         config = weaponConfig,
         infiniteAmmo = infiniteAmmo == true,
         currentMagCapacity = weaponConfig.magCapacity or 0,
@@ -195,6 +196,7 @@ local function createWeaponSlot(index, weaponConfig, infiniteAmmo)
         damageBonus = 0,
         rangeMultiplier = 1,
         reloadMultiplier = 1,
+        cooldownMultiplier = 1,
         ricochetCount = 0,
         deathSpawnCount = 0,
         enemyDeathSpawnCount = 0,
@@ -253,6 +255,7 @@ function Gun:load()
         damageBonus = 0,
         rangeMultiplier = 1,
         reloadMultiplier = 1,
+        cooldownMultiplier = 1,
         ricochetCount = 0,
         deathSpawnCount = 0,
         enemyDeathSpawnCount = 0,
@@ -261,6 +264,7 @@ function Gun:load()
         damageBonus = 0,
         rangeMultiplier = 1,
         reloadMultiplier = 1,
+        cooldownMultiplier = 1,
         ricochetCount = 0,
         deathSpawnCount = 0,
         enemyDeathSpawnCount = 0,
@@ -278,6 +282,11 @@ function Gun:load()
     self.uiShotParticles = {}
 
     self.shootTimer = 0
+    self.badReloadMultiplier = 1
+    self.badCooldownMultiplier = 1
+    self.badProjectileSpeedMultiplier = 1
+    self.badDamageMultiplier = 1
+    self.badDamagePenalty = 0
     self.showGunTime = 0.5
     self.showGun = false
     self.defaultReloadDuration = 1
@@ -326,6 +335,7 @@ function Gun:applyUpgradeStateToSlot(slot, state)
     slot.damageBonus = state.damageBonus or 0
     slot.rangeMultiplier = state.rangeMultiplier or 1
     slot.reloadMultiplier = state.reloadMultiplier or 1
+    slot.cooldownMultiplier = state.cooldownMultiplier or 1
     slot.ricochetCount = state.ricochetCount or 0
     slot.deathSpawnCount = state.deathSpawnCount or 0
     slot.enemyDeathSpawnCount = state.enemyDeathSpawnCount or 0
@@ -339,14 +349,42 @@ function Gun:getEffectiveWeaponConfig(slot)
 
     local config = copyTable(slot.config)
     config.baseDamage = slot.config.damage or config.damage or 0
-    config.damage = (config.damage or 0) + (slot.damageBonus or 0)
+    config.damage = math.max(1,
+        ((config.damage or 0) + (slot.damageBonus or 0) - (self.badDamagePenalty or 0))
+        * (self.badDamageMultiplier or 1)
+    )
+    config.bulletSpeed = (config.bulletSpeed or 0) * (self.badProjectileSpeedMultiplier or 1)
+    config.shotCooldown = (config.shotCooldown or 0)
+        * (slot.cooldownMultiplier or 1) * (self.badCooldownMultiplier or 1)
     config.rangeMultiplier = slot.rangeMultiplier or 1
-    config.reloadDuration = (config.reloadDuration or self.defaultReloadDuration) * (slot.reloadMultiplier or 1)
-    config.reloadSpinDuration = (config.reloadSpinDuration or self.defaultReloadSpinDuration) * (slot.reloadMultiplier or 1)
+    config.reloadDuration = (config.reloadDuration or self.defaultReloadDuration)
+        * (slot.reloadMultiplier or 1) * (self.badReloadMultiplier or 1)
+    config.reloadSpinDuration = (config.reloadSpinDuration or self.defaultReloadSpinDuration)
+        * (slot.reloadMultiplier or 1) * (self.badReloadMultiplier or 1)
     config.ricochetCount = slot.ricochetCount or 0
     config.deathSpawnCount = slot.deathSpawnCount or 0
     config.enemyDeathSpawnCount = slot.enemyDeathSpawnCount or 0
     return config
+end
+
+function Gun:applyBadCardPenalty(penaltyId)
+    if penaltyId == "reload_and_cadence" then
+        self.badReloadMultiplier = (self.badReloadMultiplier or 1) * 2
+        self.badCooldownMultiplier = (self.badCooldownMultiplier or 1) * 2
+    elseif penaltyId == "cadence_third" then
+        self.badCooldownMultiplier = (self.badCooldownMultiplier or 1) * 3
+    elseif penaltyId == "damage_minus_four" then
+        self.badDamagePenalty = (self.badDamagePenalty or 0) + 4
+    elseif penaltyId == "projectile_speed_half" then
+        self.badProjectileSpeedMultiplier = (self.badProjectileSpeedMultiplier or 1) * 0.5
+    elseif penaltyId == "damage_half" then
+        self.badDamageMultiplier = (self.badDamageMultiplier or 1) * 0.5
+    else
+        return false
+    end
+
+    self:syncCurrentWeaponState()
+    return true
 end
 
 function Gun:getWeaponConfig(index)
@@ -714,6 +752,7 @@ function Gun:replacePrimaryWeapon(index)
         damageBonus = 0,
         rangeMultiplier = 1,
         reloadMultiplier = 1,
+        cooldownMultiplier = 1,
         ricochetCount = 0,
         deathSpawnCount = 0,
         enemyDeathSpawnCount = 0,
@@ -753,6 +792,11 @@ function Gun:applyCardUpgrade(upgradeId)
         return true
     elseif upgradeId == "primary_reload" then
         self.primaryUpgradeState.reloadMultiplier = (self.primaryUpgradeState.reloadMultiplier or 1) * 0.9
+        self:applyUpgradeStateToSlot(self.primary_weapon, self.primaryUpgradeState)
+        self:syncCurrentWeaponState()
+        return true
+    elseif upgradeId == "primary_cadence" then
+        self.primaryUpgradeState.cooldownMultiplier = (self.primaryUpgradeState.cooldownMultiplier or 1) / 1.15
         self:applyUpgradeStateToSlot(self.primary_weapon, self.primaryUpgradeState)
         self:syncCurrentWeaponState()
         return true
@@ -1409,7 +1453,7 @@ function Gun:draw()
     self:drawParticles()
 
     local quad = love.graphics.newQuad(
-        (self.gunIndex - 1) * self.size,
+        ((self:getSelectedWeaponSlot().spriteIndex or self.gunIndex) - 1) * self.size,
         0,
         self.size,
         self.size,

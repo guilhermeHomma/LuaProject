@@ -29,7 +29,7 @@ local embeddedDictionaries = {
             are_you_sure = "are you sure?",
             return_menu = "return to main menu?",
             restart = "start a new run?",
-            quit = "quit game?",
+            quit = "are you sure you want to quit?",
         },
         settings = {
             sections = {
@@ -65,6 +65,7 @@ local embeddedDictionaries = {
             primary_range = { name = "RANGE", description = "Primary gun range." },
             secondary_fill = { name = "CHARGE", amount = "FULL", description = "Fill secondary weapon." },
             primary_reload = { name = "LOAD", description = "Primary gun loadspeed." },
+            primary_cadence = { name = "FIRE RATE", amount = "+15%", description = "Primary gun fires 15% faster." },
             primary_ricochet = { name = "BOUNCE", amount = "RICOCHET", description = "Primary shots bounce from walls and enemies." },
             primary_death_shard = { name = "SPARK", description = "Missed primary shots split into short base-damage shots." },
             primary_clean_split = { name = "SPLIT", description = "Missed primary shots split into more short base-damage shots." },

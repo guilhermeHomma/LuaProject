@@ -17,6 +17,7 @@ local cardBackImages = {
     common = loadCardImage("assets/sprites/ui/cards/common.png"),
     rare = loadCardImage("assets/sprites/ui/cards/rare.png"),
     epic = loadCardImage("assets/sprites/ui/cards/epic.png"),
+    evil = loadCardImage("assets/sprites/ui/cards/poop.png"),
 }
 local fallbackCardImage = cardBackImages.common or loadCardImage("assets/sprites/ui/cards/card.png")
 local diamondParticleImage = loadCardImage("assets/sprites/ui/particles/diamond.png")
@@ -395,8 +396,15 @@ function CardChoice:getWeaponCardOffer()
         end
 
         local card = band.pendingCard
-        if math.random() >= 0.75 then
+        local currentWeapon = Player and Player.gun and Player.gun.primary_weapon
+        local currentWeaponId = currentWeapon and currentWeapon.index
+        if card.weaponId == currentWeaponId then
+            card = CardDefinitions:getRandomWeaponCard(card.id)
+        elseif math.random() >= 0.75 then
             card = CardDefinitions:getRandomWeaponCard(card.id) or card
+        end
+        if not card then
+            return nil
         end
         band.lastOfferedCard = card
         return card
@@ -450,7 +458,17 @@ function CardChoice:chooseCards(count, options)
     local chosen = {}
     local fallback = self:getEligibleCards()
     local epicIndex = nil
+    local allBad = (options.allBadChance or 0) > 0 and math.random() < options.allBadChance
     shuffle(fallback)
+
+    if allBad then
+        local badPool = CardDefinitions:getEligibleBadCards()
+        shuffle(badPool)
+        for index = 1, math.min(count, #badPool) do
+            chosen[#chosen + 1] = badPool[index]
+        end
+        return chosen
+    end
 
     if options.allowRare ~= false and math.random(15) == 1 then
         epicIndex = math.random(count)
@@ -496,6 +514,20 @@ function CardChoice:chooseCards(count, options)
         if weaponCard and #chosen > 0 then
             chosen[math.random(#chosen)] = weaponCard
             self.offeredWeaponCard = weaponCard
+        end
+    end
+
+    if #chosen > 0 and (options.badCardChance or 0) > 0 and math.random() < options.badCardChance then
+        local badPool = CardDefinitions:getEligibleBadCards()
+        shuffle(badPool)
+        local replaceable = {}
+        for index, card in ipairs(chosen) do
+            if card.cardType ~= "weapon" then
+                replaceable[#replaceable + 1] = index
+            end
+        end
+        if #badPool > 0 and #replaceable > 0 then
+            chosen[replaceable[math.random(#replaceable)]] = badPool[1]
         end
     end
 
@@ -903,6 +935,9 @@ function CardChoice:update(dt)
         self.phase = "idle"
         self.previewCard = nil
         self.selectedCardDef = nil
+        if Game then
+            Game.cardPurchaseLocked = nil
+        end
         Dialog.breakMovements = false
     end
 end

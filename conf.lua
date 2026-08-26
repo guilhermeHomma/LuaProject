@@ -21,7 +21,7 @@ local function mergeDefaults(defaults, overrides)
 end
 
 local DEFAULT_GAME_FLAGS = {
-    skipIntro = false,
+    skipIntro = true,
     log = false,
     logFloorGeneration = false,
     weaponTestLevel = false,
@@ -56,7 +56,7 @@ local DEFAULT_GAME_FLAGS = {
 GAME_FLAGS = mergeDefaults(DEFAULT_GAME_FLAGS, GAME_FLAGS)
 GAME_FLAGS.logFloorGeneration = GAME_FLAGS.logFloorGeneration or GAME_FLAGS.log == true
 
-GAME_VERSION = "0.1.18a"
+GAME_VERSION = "0.1.20a"
 
 function love.conf(t)
     local Levels = require("scripts/config/levels")

@@ -1416,7 +1416,7 @@ function Player:drawXray()
         local slot = self.gun.getSelectedWeaponSlot and self.gun:getSelectedWeaponSlot()
         if slot and self.gun.gunSheet then
             local weaponQuad = love.graphics.newQuad(
-                (slot.index - 1) * self.gun.size,
+                ((slot.spriteIndex or slot.index) - 1) * self.gun.size,
                 0,
                 self.gun.size,
                 self.gun.size,

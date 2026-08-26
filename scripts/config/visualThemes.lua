@@ -106,6 +106,10 @@ function VisualThemes:chooseRoomTheme(room, themeConfig)
         return defaultThemeId
     end
 
+    if room.isCardRoom and themeConfig and themeConfig.cardRoomTheme then
+        return themeConfig.cardRoomTheme
+    end
+
     if themeConfig and themeConfig.specialRoomsUseDefault == true
         and (room.isShopRoom or room.isCardRoom) then
         return defaultThemeId

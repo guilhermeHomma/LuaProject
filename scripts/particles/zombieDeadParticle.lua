@@ -75,9 +75,9 @@ function ZombieParticle:drawShadow()
 end
 
 
-function ZombieParticle:death()
-    self.isAlive = false
-    local playerDistance = distance(Player, self)
+function ZombieParticle.spawnVanishBurst(x, y)
+    local source = {x = x, y = y}
+    local playerDistance = distance(Player, source)
 
     getDistanceVolume(playerDistance, 0.2, 200)
     playClonedSound(deathSound, 0.1, (1 + math.random() * 0.1) * GAME_PITCH)
@@ -90,11 +90,16 @@ function ZombieParticle:death()
         
         local lifetime = math.random(40, 50) / 100
         local size = math.random(8, 10) / 10
-        local particle = Ball:new(self.x, self.y, 1,dx, dy, lifetime, size, mortarBallOptions)
+        local particle = Ball:new(x, y, 1,dx, dy, lifetime, size, mortarBallOptions)
         table.insert(Game.particles, particle)
-        local particle = Ball:new(self.x, self.y, 1,-dx, -dy, lifetime, size, mortarBallOptions)
+        local particle = Ball:new(x, y, 1,-dx, -dy, lifetime, size, mortarBallOptions)
         table.insert(Game.particles, particle)
     end
+end
+
+function ZombieParticle:death()
+    self.isAlive = false
+    ZombieParticle.spawnVanishBurst(self.x, self.y)
 end
 
 function ZombieParticle:draw()

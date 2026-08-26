@@ -8,6 +8,7 @@ local MAX_GROUND_LIGHT_OCCLUDERS = 8
 
 local Ground = {}
 local DEFAULT_GROUND = "assets/sprites/florest/ground.png"
+local CARD_ROOM_GROUND = "assets/sprites/florest/store-ground.png"
 local emptyOccluderRects = {}
 local OCCLUDER_MOVE_THRESHOLD_SQ = 4
 local occluderFrameCache = { rects = nil, count = 0, camX = nil, camY = nil, camZoomX = nil, camZoomY = nil, lightKey = nil, version = 0 }
@@ -190,6 +191,10 @@ end
 
 function Ground:setTheme(theme)
     local imagePath = theme and theme.ground or DEFAULT_GROUND
+    local room = FloorManager:getCurrentRoom()
+    if room and room.isCardRoom then
+        imagePath = CARD_ROOM_GROUND
+    end
     if self.image and self.imagePath == imagePath then
         return
     end

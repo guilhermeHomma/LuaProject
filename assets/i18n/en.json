@@ -17,7 +17,7 @@
     "are_you_sure": "are you sure?",
     "return_menu": "return to main menu?",
     "restart": "start a new run?",
-    "quit": "quit game?"
+    "quit": "are you sure you want to quit?"
   },
   "settings": {
     "sections": {
@@ -44,7 +44,8 @@
       "common": "common",
       "rare": "rare",
       "epic": "epic",
-      "legendary": "legendary"
+      "legendary": "legendary",
+      "evil": "evil"
     },
     "speed": { "name": "SPEED", "description": "Move faster." },
     "speed_rare": { "name": "SPEED", "description": "Move much faster." },
@@ -53,6 +54,7 @@
     "primary_range": { "name": "RANGE", "description": "Primary gun range." },
     "secondary_fill": { "name": "CHARGE", "amount": "FULL", "description": "Fill secondary weapon." },
     "primary_reload": { "name": "LOAD", "description": "Primary gun loadspeed." },
+    "primary_cadence": { "name": "FIRE RATE", "amount": "+15%", "description": "Primary gun fires 15% faster." },
     "primary_ricochet": { "name": "BOUNCE", "amount": "RICOCHET", "description": "Primary shots bounce from walls and enemies." },
     "primary_death_shard": { "name": "SPARK", "description": "Missed primary shots split into short base-damage shots." },
     "primary_clean_split": { "name": "SPLIT", "description": "Missed primary shots split into more short base-damage shots." },
@@ -63,12 +65,24 @@
     "half_heart": { "name": "HEART", "amount": "HEAL 1", "description": "Restore one lost heart only." },
     "full_heal": { "name": "FULL HEAL", "amount": "RESTORE", "description": "Restore all lost hearts only." },
     "heart_container": { "name": "HEART SLOT", "amount": "+1 MAX", "description": "Gain one max heart and fully heal." },
-    "weapon_squaregun": { "name": "SQUAREGUN", "amount": "NEW WEAPON", "description": "Fires 2 projectiles; 10 damage each." },
-    "weapon_longshot": { "name": "LONGSHOT", "amount": "NEW WEAPON", "description": "Long-range weapon; 16 damage." },
-    "weapon_shotgun": { "name": "SHOTGUN", "amount": "NEW WEAPON", "description": "Fires 3 projectiles; 15 damage each." },
-    "weapon_cakegun": { "name": "CAKEGUN", "amount": "NEW WEAPON", "description": "Fires 2 projectiles; 12 damage each." },
-    "weapon_random": { "name": "RANDOM WEAPON", "amount": "RANDOM", "description": "Receive a random weapon." },
-    "weapon_raygun": { "name": "RAYGUN", "amount": "NEW WEAPON", "description": "Fast-firing weapon; 15 damage." }
+    "weapon_squaregun": { "name": "SQUAREGUN", "amount": "NEW WEAPON", "description": "Fires two projectiles that deal 10 damage each." },
+    "weapon_longshot": { "name": "LONGSHOT", "amount": "NEW WEAPON", "description": "Fires a long-range projectile that deals 16 damage." },
+    "weapon_shotgun": { "name": "SHOTGUN", "amount": "NEW WEAPON", "description": "Fires three projectiles that deal 15 damage each." },
+    "weapon_cakegun": { "name": "CAKEGUN", "amount": "NEW WEAPON", "description": "Fires two projectiles that deal 12 damage each." },
+    "weapon_random": { "name": "RANDOM WEAPON", "amount": "RANDOM", "description": "Replaces your current weapon with a random one." },
+    "weapon_raygun": { "name": "RAYGUN", "amount": "NEW WEAPON", "description": "Fires quickly and deals 15 damage per shot." },
+    "weapon_pistolinha": { "name": "PEASHOOTER", "amount": "NEW WEAPON", "description": "Fires three inaccurate projectiles that deal 3 damage each." },
+    "bad_speed_loss_15": { "name": "HEAVY LEGS", "amount": "-15% SPEED", "description": "Movement speed is reduced by 15%." },
+    "bad_speed_loss_30": { "name": "LEAD BOOTS", "amount": "-30% SPEED", "description": "Movement speed is reduced by 30%." },
+    "bad_reload_cadence": { "name": "RUST", "amount": "2X SLOWER", "description": "Reloading and firing take twice as long." },
+    "bad_one_max_heart": { "name": "GLASS HEART", "amount": "1 MAX HEART", "description": "Maximum health is reduced to one heart." },
+    "bad_two_max_hearts": { "name": "WEAK HEART", "amount": "2 MAX HEARTS", "description": "Maximum health is reduced to two hearts." },
+    "bad_cadence_third": { "name": "JAMMED TRIGGER", "amount": "1/3 FIRE RATE", "description": "Fire rate is reduced to one third." },
+    "bad_lose_heart": { "name": "BROKEN HEART", "amount": "-1 HEART", "description": "Lose one current heart." },
+    "bad_lose_coins": { "name": "BANKRUPT", "amount": "LOSE ALL", "description": "Lose all coins." },
+    "bad_damage_minus_four": { "name": "BLUNT SHOTS", "amount": "-4 DAMAGE", "description": "Projectiles lose 4 damage." },
+    "bad_projectile_speed_half": { "name": "SLOW SHOTS", "amount": "-50% SPEED", "description": "Projectile speed is reduced by half." },
+    "bad_damage_half": { "name": "HALF POWER", "amount": "-50% DAMAGE", "description": "Projectile damage is reduced by half." }
   },
   "hud": {
     "fps": "FPS"

@@ -290,7 +290,7 @@ function Store:drawGun()
 
     local image = sheetGun
     local quadGun = love.graphics.newQuad(
-        ((self.product.index or 1) - 1) * 16,
+        ((self.product.spriteIndex or self.product.index or 1) - 1) * 16,
         16,
         16, 16,
         sheetGun:getDimensions()

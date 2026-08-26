@@ -28,7 +28,8 @@ for x = 0, sheetWidth - 8, 8 do
     table.insert(quads, love.graphics.newQuad(x, 0, 8, 8, sheetWidth, sheetHeight))
 end
 
-function Life:new(x, y)
+function Life:new(x, y, options)
+    options = options or {}
     local life = Drop.new(self, x, y)
     setmetatable(life, {__index = self})
 
@@ -53,10 +54,41 @@ function Life:new(x, y)
     life.drawScaleY = 1.25
     life.collectDuration = 0.16
     life.height = life.hoverHeight + life.popHeight
+    life.purchasePrice = options.price
+    life.onPurchased = options.onPurchased
+    life.onCollected = options.onCollected
+    life.isHeartRoomDrop = options.isHeartRoomDrop == true
+    life.priceRevealTimer = 0
     if not self.disableSpawnCollisionPush then
         life:pushAwayFromSpawnCollisions()
     end
     return life
+end
+
+function Life:checkCatch()
+    if not self.purchasePrice then
+        return Drop.checkCatch(self)
+    end
+
+    if not (self.isAlive and not self.isCollecting and self:isPlayerInPickupRange()) then
+        self.insufficientOverlap = false
+        return
+    end
+
+    if not (Game and Game.getPlayerPoints and Game:getPlayerPoints() >= self.purchasePrice) then
+        if not self.insufficientOverlap and PointsManager and PointsManager.triggerNegativeFeedback then
+            PointsManager:triggerNegativeFeedback()
+        end
+        self.insufficientOverlap = true
+        return
+    end
+
+    self.insufficientOverlap = false
+    Game:decreasePlayerPoints(self.purchasePrice)
+    if self.onPurchased then
+        self.onPurchased(self)
+    end
+    self:startCollectAnimation()
 end
 
 function Life:pushAwayFromSpawnCollisions(force)
@@ -184,7 +216,7 @@ function Life:update(dt)
 
     local playerDistance = distance(self, Player)
 
-    if not self.requirePickupKey and playerDistance < maxAttractDistance then
+    if not self.requirePickupKey and not self.disableAttraction and playerDistance < maxAttractDistance then
         local dirX = Player.x - self.x
         local dirY = Player.y - self.y
         local len = math.sqrt(dirX * dirX + dirY * dirY)
@@ -262,6 +294,7 @@ end
 
 function Life:animation(dt)
     self.animationTimer = self.animationTimer + dt
+    self.priceRevealTimer = (self.priceRevealTimer or 0) + dt
 
     if self.animationTimer > 0.1 then
         self.animationTimer = 0
@@ -290,7 +323,45 @@ function Life:onCatch()
             decimals = 1,
         })
     end
+    if self.onCollected then
+        self.onCollected(self)
+    end
 
+end
+
+function Life:drawHudPrice()
+    if not self.purchasePrice or not self.isAlive or self.isCollecting
+        or not camera or not PointsManager or not PointsManager.font then
+        return
+    end
+
+    local zoomX = camera.zoomX or 1
+    local zoomY = camera.zoomY or 1
+    local snappedCameraX = math.floor(((camera.x or 0) + (camera.shakeOffsetX or 0)) * zoomX + 0.5) / zoomX
+    local snappedCameraY = math.floor(((camera.y or 0) + (camera.shakeOffsetY or 0)) * zoomY + 0.5) / zoomY
+    local screenX = (self.x * (WORLD_SCALE_X or 1) - snappedCameraX) * zoomX
+    local labelWorldY = self.y - (self.height or self.baseHeight or 0) + 0.5
+    local screenY = (labelWorldY * (YSCALE or WORLD_SCALE_Y or 1) - snappedCameraY) * zoomY
+    local priceText = tostring(self.purchasePrice) .. "$"
+    local font = PointsManager.font
+    local textX = math.floor(screenX - font:getWidth(priceText) / 2 + 0.5)
+    local textY = math.floor(screenY + 0.5)
+    local canAfford = Game and Game.getPlayerPoints and Game:getPlayerPoints() >= self.purchasePrice
+    local alpha = math.min(math.max(((self.priceRevealTimer or 0) - 0.5) / 0.2, 0), 1)
+    if alpha <= 0 then
+        return
+    end
+
+    love.graphics.setFont(font)
+    if canAfford then
+        love.graphics.setColor(0.05, 0, 0.05, alpha)
+        love.graphics.print(priceText, textX + 2, textY + 2)
+        love.graphics.setColor(1, 1, 1, alpha)
+    else
+        love.graphics.setColor(0.045, 0.035, 0.028, 0.60 * alpha)
+    end
+    love.graphics.print(priceText, textX, textY)
+    love.graphics.setColor(1, 1, 1, 1)
 end
 
 function Life:catchParticles()

@@ -158,6 +158,7 @@ function Game:load(options)
 end
 
 function Game:resetRuntimeState()
+    self.cardPurchaseLocked = nil
     self.sPSoundPlayed = false
     self.sPSoundPlayedOutro = false
     self.enemies = {}
@@ -391,26 +392,77 @@ end
 
 function Game:restoreCurrentRoomDrops()
     local state = FloorManager:getCurrentRoomState()
-    if not (state and state.drops) then
-        return
-    end
-
     local Coin = require("scripts/drops/coin")
     local Life = require("scripts/drops/life")
     local Bullets = require("scripts/drops/bullets")
+    local CardDrop = require("scripts/drops/card")
 
-    for key, entry in pairs(state.drops) do
+    for key, entry in pairs((state and state.drops) or {}) do
         if not entry.collected then
             local drop
             if entry.kind == "life" then
                 drop = Life:new(entry.x, entry.y)
             elseif entry.kind == "bullets" then
                 drop = Bullets:new(entry.x, entry.y)
+            elseif entry.kind == "card" then
+                drop = CardDrop:new(entry.x, entry.y, {
+                    price = entry.purchasePrice or 5,
+                    tint = entry.cardTint,
+                    allowWeaponCards = entry.allowWeaponCards == true,
+                })
             else
                 drop = Coin:new(entry.x, entry.y)
             end
-            table.insert(self.objects, configurePersistedRoomDrop(drop, key, entry))
+            drop.persistRoomDrop = true
+            drop.neverExpires = true
+            drop.roomDropKey = key
+            drop.dropKind = entry.kind
+            drop.pickupX = entry.pickupX
+            drop.pickupY = entry.pickupY
+            drop.drawBaseY = entry.drawBaseY
+            drop.drawPriorityOffset = entry.drawPriorityOffset
+            drop.drawSortOrder = entry.drawSortOrder
+            if entry.kind == "card" then
+                drop.requirePickupKey = false
+                drop.disableAttraction = true
+                drop.fromChest = true
+                drop.pickupDistance = 8
+            end
+            table.insert(self.objects, drop)
         end
+    end
+
+    self:centerCurrentRoomCardDrops()
+end
+
+function Game:centerCurrentRoomCardDrops()
+    local cards = {}
+    for _, object in ipairs(self.objects or {}) do
+        if object.isCardDrop and object.isAlive and not object.isCollecting then
+            cards[#cards + 1] = object
+        end
+    end
+    if #cards == 0 then
+        return
+    end
+
+    local map = Tilemap:getTilemap()
+    local mapWidth = map and #(map[1] or {}) or 32
+    local mapHeight = map and #map or 32
+    local centerX, centerY = Tilemap:mapToWorld((mapWidth + 1) / 2, (mapHeight + 1) / 2)
+
+    table.sort(cards, function(a, b)
+        return tostring(a.roomDropKey or a.purchasePrice or "") < tostring(b.roomDropKey or b.purchasePrice or "")
+    end)
+    for index, card in ipairs(cards) do
+        local offsetX = (index - (#cards + 1) / 2) * 32
+        card.x = centerX + offsetX
+        card.y = centerY
+        card.pickupX = card.x
+        card.pickupY = card.y
+        card.vx = 0
+        card.vy = 0
+        card:updatePersistentPosition()
     end
 end
 

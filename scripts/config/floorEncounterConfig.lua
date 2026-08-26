@@ -84,7 +84,7 @@ FloorEncounterConfig.floors = {
         },
     }),
     [3] = createFloorEncounter({
-        difficulty = 3,
+        difficulty = 2,
         spawnEntryAvoidDistanceTiles = 6,
         totalWaves = {min = 3, max = 4},
         simultaneousWaves = {min = 2, max = 2},
@@ -95,7 +95,7 @@ FloorEncounterConfig.floors = {
         },
     }),
     [4] = createFloorEncounter({
-        difficulty = 4,
+        difficulty = 3,
         spawnEntryAvoidDistanceTiles = 6,
         totalWaves = {min = 3, max = 4},
         simultaneousWaves = {min = 2, max = 3},
@@ -106,7 +106,7 @@ FloorEncounterConfig.floors = {
         },
     }),
     [5] = createFloorEncounter({
-        difficulty = 5,
+        difficulty = 4,
         spawnEntryAvoidDistanceTiles = 7,
         totalWaves = {min = 3, max = 5},
         simultaneousWaves = {min = 2, max = 3},
@@ -117,7 +117,7 @@ FloorEncounterConfig.floors = {
         },
     }),
     [6] = createFloorEncounter({
-        difficulty = 6,
+        difficulty = 5,
         spawnEntryAvoidDistanceTiles = 7,
         totalWaves = {min = 4, max = 5},
         simultaneousWaves = {min = 2, max = 3},

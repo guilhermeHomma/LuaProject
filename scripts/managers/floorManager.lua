@@ -71,6 +71,10 @@ local function createRoom(roomConfig, level)
         tilemapConfig = copyTable(roomConfig.tilemapConfig or RoomSelector.chooseTemplateTilemapConfig(template) or level.tilemapConfig),
         isShopRoom = roomConfig.isShopRoom == true or templateId == "store_32x32",
         isCardRoom = roomConfig.isCardRoom == true or templateId == "cards_32x32",
+        isChestRoom = roomConfig.isChestRoom == true or templateId == "chest_32x32",
+        isHeartRoom = roomConfig.isHeartRoom == true or templateId == "heart_32x32",
+        heartRoomVariant = roomConfig.heartRoomVariant,
+        heartDropCount = roomConfig.heartDropCount,
         isEndRoom = roomConfig.isEndRoom == true or templateId == "end_32x32",
         state = roomConfig.state or {
             visited = false,
@@ -613,11 +617,19 @@ local function createCardRooms(generateConfig, generatedRooms, roomIds, occupied
                 candidates[#candidates + 1] = {
                     room = room,
                     score = getSpreadScore(room),
+                    distanceFromStart = getRoomDistanceFromStart(room),
+                    tieBreaker = math.random(),
                 }
             end
         end
 
         table.sort(candidates, function(a, b)
+            if created == 0 then
+                if a.distanceFromStart == b.distanceFromStart then
+                    return a.tieBreaker < b.tieBreaker
+                end
+                return a.distanceFromStart < b.distanceFromStart
+            end
             return a.score > b.score
         end)
 
@@ -658,6 +670,30 @@ local function isLargeGeneratedRoom(room)
         and ((room.gridWidth or 1) > 1 or (room.gridHeight or 1) > 1)
 end
 
+local function getLargeGeneratedRoomCount(rooms)
+    local count = 0
+    for _, room in ipairs(rooms or {}) do
+        if room and room.templateId == "large_48x48" then
+            count = count + 1
+        end
+    end
+    return count
+end
+
+local function applyLargeRoomLimit(generateConfig, generatedRooms)
+    local limit = generateConfig and generateConfig.largeRoomLimit
+    if not limit or getLargeGeneratedRoomCount(generatedRooms) < limit then
+        return generateConfig
+    end
+
+    local limitedConfig = copyTable(generateConfig)
+    limitedConfig.templateWeights = limitedConfig.templateWeights or {}
+    limitedConfig.endTemplateWeights = limitedConfig.endTemplateWeights or {}
+    limitedConfig.templateWeights.large_48x48 = 0
+    limitedConfig.endTemplateWeights.large_48x48 = 0
+    return limitedConfig
+end
+
 local function getOnlyConnectionDirection(room)
     local result = nil
     local count = 0
@@ -685,28 +721,28 @@ local function getEdgeCellForExit(room, exitDirection, entryDirection)
         if exitDirection == "east" then
             local betterEdge = cell.x > selected.x
             local betterSlot = cell.x == selected.x
-                and ((entrySlotId == "bottom" and cell.y > selected.y) or (entrySlotId ~= "bottom" and cell.y < selected.y))
+                and ((entrySlotId == "top" and cell.y > selected.y) or (entrySlotId ~= "top" and cell.y < selected.y))
             if betterEdge or betterSlot then
                 selected = cell
             end
         elseif exitDirection == "west" then
             local betterEdge = cell.x < selected.x
             local betterSlot = cell.x == selected.x
-                and ((entrySlotId == "bottom" and cell.y > selected.y) or (entrySlotId ~= "bottom" and cell.y < selected.y))
+                and ((entrySlotId == "top" and cell.y > selected.y) or (entrySlotId ~= "top" and cell.y < selected.y))
             if betterEdge or betterSlot then
                 selected = cell
             end
         elseif exitDirection == "south" then
             local betterEdge = cell.y > selected.y
             local betterSlot = cell.y == selected.y
-                and ((entrySlotId == "right" and cell.x > selected.x) or (entrySlotId ~= "right" and cell.x < selected.x))
+                and ((entrySlotId == "left" and cell.x > selected.x) or (entrySlotId ~= "left" and cell.x < selected.x))
             if betterEdge or betterSlot then
                 selected = cell
             end
         elseif exitDirection == "north" then
             local betterEdge = cell.y < selected.y
             local betterSlot = cell.y == selected.y
-                and ((entrySlotId == "right" and cell.x > selected.x) or (entrySlotId ~= "right" and cell.x < selected.x))
+                and ((entrySlotId == "left" and cell.x > selected.x) or (entrySlotId ~= "left" and cell.x < selected.x))
             if betterEdge or betterSlot then
                 selected = cell
             end
@@ -743,7 +779,7 @@ local function addOppositeExitFromLargeRoom(room, generateConfig, generatedRooms
 
     local placement = RoomSelector.chooseTemplatePlacement(
         {[directionConfig.opposite] = true},
-        generateConfig,
+        applyLargeRoomLimit(generateConfig, generatedRooms),
         x,
         y,
         occupiedCells
@@ -788,6 +824,103 @@ local function addOppositeExitsForLargeRooms(generateConfig, generatedRooms, roo
     end
 end
 
+local function getElongatedRoomConnectionCell(room, direction)
+    local cells = getOccupiedCells(room)
+    local selected = cells[1]
+    local slotId = room.doorSlotIds and room.doorSlotIds[direction]
+
+    for _, cell in ipairs(cells) do
+        if direction == "west" then
+            if cell.x < selected.x or (cell.x == selected.x and slotId == "bottom" and cell.y > selected.y) then
+                selected = cell
+            end
+        elseif direction == "east" then
+            if cell.x > selected.x or (cell.x == selected.x and slotId == "bottom" and cell.y > selected.y) then
+                selected = cell
+            end
+        elseif direction == "north" then
+            if cell.y < selected.y or (cell.y == selected.y and slotId == "right" and cell.x > selected.x) then
+                selected = cell
+            end
+        elseif direction == "south" then
+            if cell.y > selected.y or (cell.y == selected.y and slotId == "right" and cell.x > selected.x) then
+                selected = cell
+            end
+        end
+    end
+
+    return selected
+end
+
+local function addExitFromElongatedRoomCell(room, cell, generatedRooms, roomIds, occupiedCells)
+    for _, direction in ipairs(shuffledDirectionsList()) do
+        local directionConfig = directions[direction]
+        local x = cell.x + directionConfig.dx
+        local y = cell.y + directionConfig.dy
+        local targetRoom = occupiedCells[getRoomId(x, y)]
+
+        if not room.neighbors[direction] and targetRoom ~= room then
+            if targetRoom and canAddConnectionToRoom(targetRoom)
+                and tryConnectRooms(room, targetRoom, direction, cell, {x = x, y = y}) then
+                return true
+            elseif not targetRoom then
+                local placement = RoomSelector.chooseTemplatePlacement(
+                    {[directionConfig.opposite] = true},
+                    {templateIds = {"basic_32x32"}},
+                    x,
+                    y,
+                    occupiedCells
+                )
+                if placement then
+                    local newRoom = createGeneratedRoom(x, y, placement)
+                    newRoom.distanceFromStart = getRoomDistanceFromStart(room) + 1
+                    newRoom.doors[directionConfig.opposite] = true
+                    newRoom.doorSlotIds[directionConfig.opposite] = getDoorSlotIdForCell(newRoom, {x = x, y = y}, directionConfig.opposite)
+                    newRoom.neighbors[directionConfig.opposite] = room.id
+
+                    room.doors[direction] = true
+                    room.doorSlotIds[direction] = getDoorSlotIdForCell(room, cell, direction)
+                    if isRoomStillCompatible(room) then
+                        room.neighbors[direction] = newRoom.id
+                        appendGeneratedRoom(generatedRooms, roomIds, occupiedCells, newRoom)
+                        return true
+                    end
+                    room.doors[direction] = nil
+                    room.doorSlotIds[direction] = nil
+                end
+            end
+        end
+    end
+    return false
+end
+
+local function ensureElongatedRoomsUseBothCells(generatedRooms, roomIds, occupiedCells)
+    local snapshot = {}
+    for _, room in ipairs(generatedRooms or {}) do
+        if room.templateId == "wide_48x32" or room.templateId == "tall_32x48" then
+            snapshot[#snapshot + 1] = room
+        end
+    end
+
+    for _, room in ipairs(snapshot) do
+        local connectedCells = {}
+        for direction, neighborId in pairs(room.neighbors or {}) do
+            if neighborId then
+                local cell = getElongatedRoomConnectionCell(room, direction)
+                connectedCells[getRoomId(cell.x, cell.y)] = true
+            end
+        end
+
+        for _, cell in ipairs(getOccupiedCells(room)) do
+            if not connectedCells[getRoomId(cell.x, cell.y)] then
+                if addExitFromElongatedRoomCell(room, cell, generatedRooms, roomIds, occupiedCells) then
+                    connectedCells[getRoomId(cell.x, cell.y)] = true
+                end
+            end
+        end
+    end
+end
+
 appendGeneratedRoom = function(generatedRooms, roomIds, occupiedCells, roomConfig)
     generatedRooms[#generatedRooms + 1] = roomConfig
     roomIds[roomConfig.id] = roomConfig
@@ -798,7 +931,126 @@ isRoomStillCompatible = function(room)
     return RoomTemplates:supportsDoors(room.templateId, room.doors)
 end
 
+local function convertRandomSmallRoomToChestRoom(generateConfig, generatedRooms)
+    local chance = generateConfig and generateConfig.chestRoomChance or 0
+    if chance <= 0 or math.random() >= chance then
+        return nil
+    end
+
+    local candidates = {}
+    for _, room in ipairs(generatedRooms or {}) do
+        if (room.distanceFromStart or 0) > 0
+            and (room.gridWidth or 1) == 1
+            and (room.gridHeight or 1) == 1
+            and not room.isShopRoom
+            and not room.isCardRoom
+            and not room.isEndRoom
+            and not room.isChestRoom then
+            candidates[#candidates + 1] = room
+        end
+    end
+
+    if #candidates == 0 then
+        return nil
+    end
+
+    local template = RoomTemplates:get("chest_32x32")
+    local room = candidates[math.random(1, #candidates)]
+    room.templateId = template.id
+    room.width = template.width
+    room.height = template.height
+    room.gridWidth = template.gridWidth
+    room.gridHeight = template.gridHeight
+    room.shape = template.shape
+    room.tilemapConfig = RoomSelector.chooseTemplateTilemapConfig(template)
+    room.doorSlots = copyTable(template.doorSlots)
+    room.spawnPoints = copyTable(template.spawnPoints)
+    room.isChestRoom = true
+    return room
+end
+
+local function chooseFreeHeartCount()
+    local roll = math.random()
+    if roll < 0.10 then
+        return 3
+    elseif roll < 0.65 then
+        return 2
+    end
+    return 1
+end
+
+local function convertRandomSmallRoomToHeartRoom(generateConfig, generatedRooms)
+    local level = FloorManager.level
+    local floorIndex = level and level.currentFloorIndex or 1
+    if floorIndex < 2 or not (generateConfig and generateConfig.heartRoomTemplateId) then
+        return nil
+    end
+
+    local cooldown = generateConfig.heartRoomCooldownFloors or 2
+    local lastFloor = level and level.lastHeartRoomFloor
+    if lastFloor and floorIndex - lastFloor <= cooldown then
+        return nil
+    end
+
+    local lateFloor = generateConfig.heartRoomChanceFromFloor or 4
+    local chance = floorIndex >= lateFloor
+        and (generateConfig.heartRoomLateChance or 0.40)
+        or (generateConfig.heartRoomChance or 0.10)
+    if math.random() >= chance then
+        return nil
+    end
+
+    local candidates = {}
+    for _, room in ipairs(generatedRooms or {}) do
+        if (room.distanceFromStart or 0) > 0
+            and getRoomConnectionCount(room) == 1
+            and (room.gridWidth or 1) == 1
+            and (room.gridHeight or 1) == 1
+            and not room.isShopRoom
+            and not room.isCardRoom
+            and not room.isChestRoom
+            and not room.isEndRoom
+            and not room.isHeartRoom then
+            candidates[#candidates + 1] = room
+        end
+    end
+    if #candidates == 0 then
+        return nil
+    end
+
+    local template = RoomTemplates:get(generateConfig.heartRoomTemplateId)
+    local room = candidates[math.random(1, #candidates)]
+    room.templateId = template.id
+    room.width = template.width
+    room.height = template.height
+    room.gridWidth = template.gridWidth
+    room.gridHeight = template.gridHeight
+    room.shape = template.shape
+    room.tilemapConfig = RoomSelector.chooseTemplateTilemapConfig(template)
+    room.doorSlots = copyTable(template.doorSlots)
+    room.spawnPoints = copyTable(template.spawnPoints)
+    room.isHeartRoom = true
+    room.pathEnd = true
+
+    if math.random() < (generateConfig.heartRoomFreeVariantChance or 0.50) then
+        room.heartRoomVariant = "free"
+        room.heartDropCount = chooseFreeHeartCount()
+    else
+        room.heartRoomVariant = "paid"
+        room.heartDropCount = 1
+    end
+
+    if level then
+        level.lastHeartRoomFloor = floorIndex
+    end
+    return room
+end
+
 local function createGraphRooms(generateConfig)
+    generateConfig = copyTable(generateConfig)
+    local secondLargeRoomChance = math.max(0, math.min(generateConfig.secondLargeRoomChance or 0.05, 1))
+    generateConfig.largeRoomLimit = math.random() < secondLargeRoomChance and 2 or 1
+
     local battleRoomCount = generateConfig.battleRoomCount
     local roomCount = battleRoomCount and (math.floor(battleRoomCount) + 1) or (generateConfig.roomCount or 8)
     local extraConnectionChance = generateConfig.extraConnectionChance or 0
@@ -844,6 +1096,7 @@ local function createGraphRooms(generateConfig)
                     placementConfig = copyTable(generateConfig)
                     placementConfig.useEndTemplateWeights = true
                 end
+                placementConfig = applyLargeRoomLimit(placementConfig, generatedRooms)
                 local placement = RoomSelector.chooseTemplatePlacement(newRoomDoors, placementConfig, x, y, occupiedCells)
 
                 if placement then
@@ -879,6 +1132,7 @@ local function createGraphRooms(generateConfig)
     end
 
     addOppositeExitsForLargeRooms(generateConfig, generatedRooms, roomIds, occupiedCells)
+    ensureElongatedRoomsUseBothCells(generatedRooms, roomIds, occupiedCells)
 
     if hasMandatoryShop then
         local targetShopCount = shopRoomCount or 1
@@ -897,9 +1151,13 @@ local function createGraphRooms(generateConfig)
         assert(cardRoomsCreated >= cardRoomsRequested, "Could not place requested card rooms")
     end
 
+    convertRandomSmallRoomToChestRoom(generateConfig, generatedRooms)
+    convertRandomSmallRoomToHeartRoom(generateConfig, generatedRooms)
+
     for _, room in ipairs(generatedRooms) do
         local canAddExtraConnections = not room.isShopRoom
             and not room.isCardRoom
+            and not room.isHeartRoom
             and not room.isEndRoom
             and not (room.pathEnd and getRoomConnectionCount(room) <= 1)
 

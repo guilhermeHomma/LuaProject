@@ -1,4 +1,5 @@
 local Zombie = require("scripts/enemies/zombie")
+local ZombieDeadParticle = require("scripts/particles/zombieDeadParticle")
 
 local Fly = setmetatable({}, {__index = Zombie})
 Fly.__index = Fly
@@ -73,14 +74,9 @@ function Fly:new(x, y)
     }
     enemy.deadDropParticleMin = 1
     enemy.deadDropParticleMax = 2
-    enemy.deathBodyParticleEnabled = true
-    enemy.deathBodyParticleOptions = {
-        hitFrame = FLY_DEAD_FRAME,
-        deadFrame = FLY_DEAD_FRAME,
-        drawYOffset = 0,
-        scaleY = 1,
-        drawShadowEnabled = false,
-    }
+    -- The fly already shows its full death animation before Zombie.death runs.
+    -- Spawning another body particle here makes that death appear to happen twice.
+    enemy.deathBodyParticleEnabled = false
     enemy.mouthVariant = "none"
     enemy.spawnIntroDuration = 0.16
     enemy.spawnIntroTimer = enemy.spawnIntroDuration
@@ -89,6 +85,31 @@ function Fly:new(x, y)
     enemy.flyDirX, enemy.flyDirY = randomDiagonalDirection()
     enemy.state = Zombie.states.walk
     return enemy
+end
+
+function Fly.isSpawnPositionClear(x, y)
+    local probe = setmetatable({
+        x = x,
+        y = y,
+        size = FLY_COLLISION_RADIUS,
+        collisionDisabled = true,
+    }, Fly)
+    local clearance = 4
+    local checks = {
+        {clearance, 0},
+        {-clearance, 0},
+        {0, clearance},
+        {0, -clearance},
+    }
+
+    for _, offset in ipairs(checks) do
+        local collidedX, collidedY = Zombie.isColliding(probe, offset[1], offset[2])
+        if collidedX or collidedY then
+            return false
+        end
+    end
+
+    return true
 end
 
 function Fly:getSpriteKey()
@@ -159,6 +180,7 @@ function Fly:updateDying(dt)
 
     if self.flyDeathTimer >= FLY_DEATH_HIT_TIME + FLY_DEATH_DEAD_TIME then
         self.flyDying = false
+        ZombieDeadParticle.spawnVanishBurst(self.x, self.y)
         Zombie.death(self)
     end
 

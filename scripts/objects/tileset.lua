@@ -61,7 +61,7 @@ function TileSet:createTileSet(imagePath)
     for x = 0, 2 do
         self.tileSet[44 + x] = love.graphics.newQuad(208 + x * self.tileSize, 0, self.tileSize, self.tileSize, self.sheetWidth, self.sheetHeight)
         self.tileSet[47 + x] = love.graphics.newQuad(208 + x * self.tileSize, 32, self.tileSize, self.tileSize, self.sheetWidth, self.sheetHeight)
-        self.tileSet[50 + x] = love.graphics.newQuad(208 + x * self.tileSize, 48, self.tileSize, self.tileSize, self.sheetWidth, self.sheetHeight)
+        self.tileSet[50 + x] = love.graphics.newQuad(208 + x * self.tileSize, 48, self.tileSize, self.tileSize * 2, self.sheetWidth, self.sheetHeight)
     end
 
     self.tileSet[53] = love.graphics.newQuad(256, 0, self.tileSize, self.tileSize, self.sheetWidth, self.sheetHeight) --quina interna parede pedra

@@ -80,7 +80,8 @@ local function configureChestDrop(drop, kind, key, chest, dropIndex)
     drop.persistRoomDrop = true
     drop.neverExpires = true
     drop.requirePickupKey = false
-    drop.pickupDistance = 24
+    drop.disableAttraction = kind == "card"
+    drop.pickupDistance = kind == "card" and 8 or 24
     drop.fromChest = true
     drop.roomDropKey = key
     drop.dropKind = kind
@@ -111,6 +112,9 @@ local function rememberChestDrop(key, kind, x, y, chest, chestDrop)
         drawBaseY = chest.yWorld,
         drawPriorityOffset = chestDrop and chestDrop.drawPriorityOffset or nil,
         drawSortOrder = chestDrop and chestDrop.drawSortOrder or nil,
+        purchasePrice = chestDrop and chestDrop.purchasePrice or nil,
+        cardTint = chestDrop and chestDrop.cardTint or nil,
+        allowWeaponCards = chestDrop and chestDrop.allowWeaponCards or false,
         collected = false,
     }
 end
@@ -198,6 +202,9 @@ function Chest:spawnDrop()
         rememberChestDrop(key, kind, spawnX, spawnY, self, drop)
         return drop
     end)
+    if Game and Game.centerCurrentRoomCardDrops then
+        Game:centerCurrentRoomCardDrops()
+    end
 end
 
 function Chest:spawnBeamParticle()

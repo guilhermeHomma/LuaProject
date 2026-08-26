@@ -43,6 +43,14 @@ local function drawMinimap(game)
     })
 end
 
+local function drawCardDropPrices(game)
+    for _, object in ipairs(game.objects or {}) do
+        if object.drawHudPrice then
+            object:drawHudPrice()
+        end
+    end
+end
+
 local function drawContent(game)
     drawLowHealthVignette()
 
@@ -56,6 +64,7 @@ local function drawContent(game)
     love.graphics.setColor(1, 1, 1, 1)
 
     PointsManager:draw()
+    drawCardDropPrices(game)
     Player:drawLife()
     if Player and Player.isAlive then
         Player.gun:drawUI()

@@ -14,6 +14,10 @@ local centerTilePriorityOffset = {
     [35] = true,
     [48] = true,
 }
+local specialCornerSideTile = {
+    [53] = 49,
+    [54] = 47,
+}
 local function getBoxParticleDropKey(tile)
     local FloorManager = require("scripts/managers/floorManager")
     local room = FloorManager:getCurrentRoom()
@@ -284,6 +288,11 @@ function Tile:draw()
         or self.quadIndex == 44 or self.quadIndex == 45 or self.quadIndex == 46 then
         love.graphics.draw(tilesetImage, self.quad, self.xWorld, self.yWorld - 16, 0, 1, 1, tileSize/2, tileSize)
         love.graphics.draw(tilesetImage, self.quad2, self.xWorld, self.yWorld, 0, 1, 1, tileSize/2, tileSize)
+    elseif self.quadIndex == 50 or self.quadIndex == 51 or self.quadIndex == 52 then
+        love.graphics.draw(tilesetImage, self.quad, self.xWorld, self.yWorld, 0, 1, 1, tileSize/2, tileSize * 2)
+    elseif specialCornerSideTile[self.quadIndex] then
+        love.graphics.draw(tilesetImage, tileSet[specialCornerSideTile[self.quadIndex]], self.xWorld, self.yWorld, 0, 1, 1, tileSize/2, tileSize)
+        love.graphics.draw(tilesetImage, self.quad, self.xWorld, self.yWorld - tileSize, 0, 1, 1, tileSize/2, tileSize)
     else
        love.graphics.draw(tilesetImage, self.quad, self.xWorld, self.yWorld, 0, 1, 1, tileSize/2, tileSize)
     end
@@ -335,6 +344,16 @@ function Tile:getXrayOccluderBox()
         }
     end
 
+    if self.quadIndex == 50 or self.quadIndex == 51 or self.quadIndex == 52
+        or specialCornerSideTile[self.quadIndex] then
+        return {
+            x = self.xWorld - tileSize / 2,
+            y = self.yWorld - tileSize * 2,
+            width = tileSize,
+            height = tileSize * 2,
+        }
+    end
+
     return {
         x = self.xWorld - tileSize / 2,
         y = self.yWorld - tileSize,
@@ -353,6 +372,12 @@ function Tile:drawXrayOccluder()
 
     if self.quadIndex == 14 or self.quadIndex == 18 then
         love.graphics.draw(tilesetImage, self.quad, self.xWorld, self.yWorld, 0, 1, 1, tileSize / 2, tileSize * 2)
+    elseif self.quadIndex == 50 or self.quadIndex == 51 or self.quadIndex == 52 then
+        love.graphics.draw(tilesetImage, self.quad, self.xWorld, self.yWorld, 0, 1, 1, tileSize / 2, tileSize * 2)
+    elseif specialCornerSideTile[self.quadIndex] then
+        local tileSet = TileSet:getTileSet()
+        love.graphics.draw(tilesetImage, tileSet[specialCornerSideTile[self.quadIndex]], self.xWorld, self.yWorld, 0, 1, 1, tileSize / 2, tileSize)
+        love.graphics.draw(tilesetImage, self.quad, self.xWorld, self.yWorld - tileSize, 0, 1, 1, tileSize / 2, tileSize)
     elseif self.quadIndex == 1 or self.quadIndex == 2 or self.quadIndex == 3
         or self.quadIndex == 31 or self.quadIndex == 32 or self.quadIndex == 33
         or self.quadIndex == 44 or self.quadIndex == 45 or self.quadIndex == 46 then

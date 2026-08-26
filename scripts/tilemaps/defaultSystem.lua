@@ -548,6 +548,32 @@ local function applyRoomShopState()
     local room = FloorManager:getCurrentRoom()
     local state = FloorManager:getCurrentRoomState()
 
+    if room and room.isCardRoom then
+        local centerX = (#(tilemap[1] or {}) + 1) / 2
+        local centerY = (#tilemap + 1) / 2
+        local selectedMarker = nil
+        local selectedDistance = math.huge
+        for y = 1, #tilemap do
+            for x = 1, #tilemap[y] do
+                if tilemap[y][x] == TILE_STORE then
+                    local markerDistance = math.abs(x - centerX) + math.abs(y - centerY)
+                    if markerDistance < selectedDistance then
+                        selectedMarker = {x = x, y = y}
+                        selectedDistance = markerDistance
+                    end
+                    tilemap[y][x] = TILE_FLOOR
+                end
+            end
+        end
+        if state and selectedMarker then
+            state.cardDropMapPosition = state.cardDropMapPosition or selectedMarker
+            state.shopProducts = {}
+            state.shopTileProducts = {}
+            state.shopResolved = true
+        end
+        return
+    end
+
     if isWeaponTestLevel() and isStartRoom(room) then
         local testStores = {
             {x = 12, y = 13, product = "shotgun"},
@@ -899,33 +925,7 @@ end
 local function chooseChestType(x, y)
     local room = FloorManager:getCurrentRoom()
     if room and room.isCardRoom then
-        local state = FloorManager:getCurrentRoomState()
-        if not state then
-            return "card"
-        end
-
-        state.cardChestTiles = state.cardChestTiles or {}
-        if not state.cardChestResolved then
-            state.cardChestResolved = true
-            local chestMarkers = {}
-            for markerY = 1, #tilemap do
-                for markerX = 1, #tilemap[markerY] do
-                    if tilemap[markerY][markerX] == TILE_CHEST_MARKER then
-                        chestMarkers[#chestMarkers + 1] = {x = markerX, y = markerY}
-                    end
-                end
-            end
-
-            local shopConfig = CURRENT_LEVEL and CURRENT_LEVEL.shopConfig or {}
-            local chestCount = math.random() < (shopConfig.cardChestSecondChance or 0.10) and 2 or 1
-            for _ = 1, math.min(chestCount, #chestMarkers) do
-                local selectedIndex = math.random(1, #chestMarkers)
-                local selected = table.remove(chestMarkers, selectedIndex)
-                state.cardChestTiles[getTileKey(selected.x, selected.y)] = true
-            end
-        end
-
-        return state.cardChestTiles[getTileKey(x, y)] and "card" or nil
+        return nil
     end
 
     if not shouldKeepOptionalObject("chest", x, y) then
@@ -2138,10 +2138,8 @@ end
 local function isSpecialStoneWallRoom(room)
     return room and (room.isShopRoom
         or room.isCardRoom
-        or room.isEndRoom
         or room.templateId == "store_32x32"
-        or room.templateId == "cards_32x32"
-        or room.templateId == "end_32x32")
+        or room.templateId == "cards_32x32")
 end
 
 function DefaultTilemap:createTile(x, y, tile, collider)
@@ -2215,9 +2213,12 @@ function DefaultTilemap:createTile(x, y, tile, collider)
 
     if tile > 0 and tile ~= TILE_DOOR_BACK then
         local index = 5
+        local currentRoom = FloorManager:getCurrentRoom()
         if tile == 1 then
             index = autoTile(x, y, tilemap)
-            if isSpecialStoneWallRoom(FloorManager:getCurrentRoom()) and shouldUseSpecialWallTile(x, y) then
+            local useSpecialWall = isSpecialStoneWallRoom(currentRoom)
+                and (currentRoom.isCardRoom or shouldUseSpecialWallTile(x, y))
+            if useSpecialWall then
                 index = specialWallByBaseIndex[index] or index
             end
         elseif tile == 2 then
@@ -2228,7 +2229,7 @@ function DefaultTilemap:createTile(x, y, tile, collider)
             index = wallVariantByBaseIndex[index] or index
         end
 
-        if index == 5 and math.random(10) == 1 then
+        if index == 5 and not (currentRoom and currentRoom.isCardRoom) and math.random(10) == 1 then
             index = 15
         end
 
@@ -2385,7 +2386,17 @@ function DefaultTilemap:load()
     local trees = {}
     local specialMoonbeamTargets = {}
     local walkablePositions = {}
-    local floorPathEntries = buildFloorPathState()
+    local currentRoom = FloorManager:getCurrentRoom()
+    local isCardRoom = currentRoom and currentRoom.isCardRoom == true
+    local roomState = FloorManager:getCurrentRoomState()
+    if isCardRoom and roomState then
+        roomState.floorPathTiles = {}
+        roomState.floorPathVersion = 5
+        roomState.grassTiles = {}
+        roomState.bigGrassTiles = {}
+    end
+
+    local floorPathEntries = isCardRoom and {} or buildFloorPathState()
     local floorPathLookup = buildEntryLookup(floorPathEntries)
     local elevatorBaseLookup = buildEndRoomElevatorBaseLookup(FloorManager:getCurrentRoom())
     local grassBlockLookup = {}
@@ -2402,7 +2413,6 @@ function DefaultTilemap:load()
         return not grassBlockLookup[getTileKey(checkX, checkY)] and canCreateDecorativeBigGrassAt(checkX, checkY, occupied)
     end
     wallVariantLookup = buildWallVariantState()
-    local roomState = FloorManager:getCurrentRoomState()
     local generatingGrassState = roomState and roomState.grassTiles == nil
     local grassState = roomState and roomState.grassTiles or {}
     local bigGrassState = roomState and roomState.bigGrassTiles or {}

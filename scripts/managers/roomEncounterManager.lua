@@ -13,6 +13,8 @@ local Scarecrow = require("scripts/enemies/scarecrow")
 local Elevator = require("scripts/objects/elevator")
 local SpiderWeb = require("scripts/particles/spiderWeb")
 local Localization = require("scripts/managers/localization")
+local CardDrop = require("scripts/drops/card")
+local Life = require("scripts/drops/life")
 
 local TILE_WORLD_SIZE = 16
 local SPAWN_SAFE_DISTANCE_TILES = 5
@@ -142,7 +144,7 @@ local function updateRoomMusicContext(room)
     if Music and Music.setShopOrChestRoomActive then
         local roomState = room and room.state
         local isShopOrChestRoom = room
-            and (room.isShopRoom == true or room.isCardRoom == true)
+            and (room.isShopRoom == true or room.isCardRoom == true or room.isChestRoom == true)
             and roomState
             and roomState.shopOrCardMusicActiveForEntry == true
         Music:setShopOrChestRoomActive(isShopOrChestRoom == true)
@@ -465,6 +467,33 @@ local function getEncounterSpawnAvoidPoints(config, waveIndex, spawnedPositions,
     return avoidPoints
 end
 
+local function getEnemySpawnPosition(enemyId, reference, minDistance, avoidPoints)
+    local attempts = enemyId == "fly" and 12 or 1
+    local rejected = {}
+
+    for _ = 1, attempts do
+        local combinedAvoidPoints = {}
+        for _, point in ipairs(avoidPoints or {}) do
+            combinedAvoidPoints[#combinedAvoidPoints + 1] = point
+        end
+        for _, point in ipairs(rejected) do
+            combinedAvoidPoints[#combinedAvoidPoints + 1] = point
+        end
+
+        local x, y = Tilemap:getRandomReachableSpawnPosition(reference, minDistance, combinedAvoidPoints)
+        if not x then
+            return nil, nil
+        end
+        if enemyId ~= "fly" or Fly.isSpawnPositionClear(x, y) then
+            return x, y
+        end
+
+        rejected[#rejected + 1] = {x = x, y = y, radius = TILE_WORLD_SIZE}
+    end
+
+    return nil, nil
+end
+
 local function getEncounterEnemyCount(config, waveConfig)
     local countConfig = waveConfig.count or config.count or {}
     local currentRoom = FloorManager:getCurrentRoom()
@@ -714,6 +743,122 @@ end
 
 RoomEncounterManager.spawnEndRoomHollow = RoomEncounterManager.spawnEndRoomElevator
 
+function RoomEncounterManager:spawnCardRoomDrop(room)
+    local state = room and room.state
+    if not state then
+        return
+    end
+
+    local map = Tilemap:getTilemap()
+    local mapX = (map and #(map[1] or {}) + 1 or (room.width or 32) + 1) / 2
+    local mapY = (map and #map + 1 or (room.height or 32) + 1) / 2
+    local worldX, worldY = Tilemap:mapToWorld(mapX, mapY)
+
+    local function addStationaryCardDrop(options)
+        local drop = CardDrop:new(worldX, worldY, options)
+        drop.vx = 0
+        drop.vy = 0
+        drop.popHeight = 0
+        drop.popVelocity = 0
+        drop.spawnStretchTimer = 0
+        drop.height = drop.hoverHeight
+        self.objects[#self.objects + 1] = drop
+        return drop
+    end
+
+    if not state.cardDropPurchased then
+        local expensiveDrop = addStationaryCardDrop({
+            price = 40,
+            allowWeaponCards = true,
+            useRainbowShader = true,
+            tint = state.cardDropTint,
+            onPurchased = function(purchasedDrop)
+                state.cardDropPurchased = true
+                state.cardDropTint = purchasedDrop.cardTint
+            end,
+        })
+        state.cardDropTint = expensiveDrop.cardTint
+    end
+
+    if not state.cheapCardDropCount then
+        local shopConfig = CURRENT_LEVEL and CURRENT_LEVEL.shopConfig or {}
+        state.cheapCardDropCount = math.random() < (shopConfig.cardChestSecondChance or 0.05) and 2 or 1
+    end
+    state.cheapCardDropsPurchased = state.cheapCardDropsPurchased or {}
+    state.cheapCardDropTints = state.cheapCardDropTints or {}
+
+    for index = 1, state.cheapCardDropCount do
+        if not state.cheapCardDropsPurchased[index] then
+            local cheapDrop = addStationaryCardDrop({
+                price = 5,
+                allowWeaponCards = false,
+                useRainbowShader = false,
+                tint = state.cheapCardDropTints[index],
+                onPurchased = function(purchasedDrop)
+                    state.cheapCardDropsPurchased[index] = true
+                    state.cheapCardDropTints[index] = purchasedDrop.cardTint
+                end,
+            })
+            state.cheapCardDropTints[index] = cheapDrop.cardTint
+        end
+    end
+end
+
+function RoomEncounterManager:spawnHeartRoomDrops(room)
+    local state = room and room.state
+    if not state then
+        return
+    end
+
+    local map = Tilemap:getTilemap()
+    local mapX = (map and #(map[1] or {}) + 1 or (room.width or 32) + 1) / 2
+    local mapY = (map and #map + 1 or (room.height or 32) + 1) / 2
+    local centerX, centerY = Tilemap:mapToWorld(mapX, mapY)
+    local variant = room.heartRoomVariant or "paid"
+    local count = variant == "free" and (room.heartDropCount or 1) or 1
+    state.freeHeartsCollected = state.freeHeartsCollected or {}
+
+    local function addHeart(index, options)
+        local offsetX = (index - (count + 1) / 2) * 32
+        local life = Life:new(centerX + offsetX, centerY, options)
+        life.vx = 0
+        life.vy = 0
+        life.popHeight = 0
+        life.popVelocity = 0
+        life.spawnStretchTimer = 0
+        life.height = life.hoverHeight
+        life.neverExpires = true
+        life.disableAttraction = true
+        life.pickupDistance = 8
+        self.objects[#self.objects + 1] = life
+    end
+
+    if variant == "paid" then
+        if not state.paidHeartPurchased then
+            addHeart(1, {
+                price = 100,
+                isHeartRoomDrop = true,
+                onPurchased = function()
+                    state.paidHeartPurchased = true
+                end,
+            })
+        end
+        return
+    end
+
+    for index = 1, count do
+        if not state.freeHeartsCollected[index] then
+            local heartIndex = index
+            addHeart(heartIndex, {
+                isHeartRoomDrop = true,
+                onCollected = function()
+                    state.freeHeartsCollected[heartIndex] = true
+                end,
+            })
+        end
+    end
+end
+
 function RoomEncounterManager:setupCurrentRoom(options)
     options = options or {}
     self.enemies = {}
@@ -763,6 +908,9 @@ function RoomEncounterManager:setupCurrentRoom(options)
         state.skipEncounter = true
         state.encounterSpawned = false
         state.encounterCompleted = true
+        if currentRoom.isCardRoom then
+            self:spawnCardRoomDrop(currentRoom)
+        end
         return
     end
 
@@ -776,6 +924,34 @@ function RoomEncounterManager:setupCurrentRoom(options)
         self.enemies = {}
         self.nearbyEnemies = {}
         self:spawnEndRoomElevator(currentRoom)
+        return
+    end
+
+    if currentRoom.isChestRoom or currentRoom.templateId == "chest_32x32" then
+        setBattleMusicActive(false)
+        state.shopOrCardMusicActiveForEntry = state.shopOrCardMusicEntered ~= true
+        state.shopOrCardMusicEntered = true
+        updateRoomMusicContext(currentRoom)
+        state.cleared = true
+        state.skipEncounter = true
+        state.encounterSpawned = false
+        state.encounterCompleted = true
+        state.activeEncounterWaves = {}
+        self.enemies = {}
+        self.nearbyEnemies = {}
+        return
+    end
+
+    if currentRoom.isHeartRoom or currentRoom.templateId == "heart_32x32" then
+        setBattleMusicActive(false)
+        state.cleared = true
+        state.skipEncounter = true
+        state.encounterSpawned = false
+        state.encounterCompleted = true
+        state.activeEncounterWaves = {}
+        self.enemies = {}
+        self.nearbyEnemies = {}
+        self:spawnHeartRoomDrops(currentRoom)
         return
     end
 
@@ -822,7 +998,9 @@ end
 
 function RoomEncounterManager:spawnCurrentRoomWave(currentRoom, encounterConfig)
     local state = currentRoom and currentRoom.state
-    if not state or currentRoom.isShopRoom or currentRoom.isCardRoom or currentRoom.isEndRoom then
+    if not state or currentRoom.isShopRoom or currentRoom.isCardRoom or currentRoom.isEndRoom
+        or currentRoom.isChestRoom or currentRoom.templateId == "chest_32x32"
+        or currentRoom.isHeartRoom or currentRoom.templateId == "heart_32x32" then
         return
     end
     if currentRoom.templateId == "start_32x32" or isStartRoom(currentRoom) then
@@ -861,7 +1039,7 @@ function RoomEncounterManager:spawnCurrentRoomWave(currentRoom, encounterConfig)
         local enemyId = fixedWave and fixedWave.enemies[spawnIndex] or chooseEnemyType(encounterConfig, waveConfig, spawnedCounts)
         local factory = EnemyFactories[enemyId] or EnemyFactories.zombie
         local spawnAvoidPoints = getEncounterSpawnAvoidPoints(encounterConfig, waveIndex, spawnedPositions, self.enemies)
-        local x, y = Tilemap:getRandomReachableSpawnPosition(Player, spawnMinDistance, spawnAvoidPoints)
+        local x, y = getEnemySpawnPosition(enemyId, Player, spawnMinDistance, spawnAvoidPoints)
 
         if x and y then
             local enemy = factory:new(x, y)
@@ -924,7 +1102,7 @@ function RoomEncounterManager:spawnAdditionalEncounterWave(currentRoom, encounte
         local enemyId = additionalEnemyId
         local factory = EnemyFactories[enemyId] or EnemyFactories.zombie
         local spawnAvoidPoints = getEncounterSpawnAvoidPoints(encounterConfig, 2, spawnedPositions, self.enemies)
-        local x, y = Tilemap:getRandomReachableSpawnPosition(Player, spawnMinDistance, spawnAvoidPoints)
+        local x, y = getEnemySpawnPosition(enemyId, Player, spawnMinDistance, spawnAvoidPoints)
 
         if x and y then
             local enemy = factory:new(x, y)
@@ -983,7 +1161,9 @@ function RoomEncounterManager:updateBattleMusicForCurrentRoom()
         and not (currentRoom.templateId == "start_32x32" or isStartRoom(currentRoom))
         and not currentRoom.isShopRoom
         and not currentRoom.isCardRoom
-        and not currentRoom.isEndRoom then
+        and not currentRoom.isEndRoom
+        and not currentRoom.isChestRoom
+        and not currentRoom.isHeartRoom then
         battleActive = #self.enemies > 0
             or getActiveEncounterWaveCount(roomState) > 0
             or (roomState.encounterSpawnedWaves or 0) < (roomState.encounterTotalWaves or 0)
@@ -997,7 +1177,8 @@ function RoomEncounterManager:spawnEncounterWavesUntilFull(currentRoom, encounte
     if not state then
         return
     end
-    if currentRoom.templateId == "start_32x32" or isStartRoom(currentRoom) or currentRoom.isEndRoom then
+    if currentRoom.templateId == "start_32x32" or isStartRoom(currentRoom)
+        or currentRoom.isEndRoom or currentRoom.isChestRoom or currentRoom.isHeartRoom then
         return
     end
 
@@ -1085,6 +1266,8 @@ function RoomEncounterManager.attach(game)
     game.spawnStartRoomScarecrow = RoomEncounterManager.spawnStartRoomScarecrow
     game.spawnEndRoomElevator = RoomEncounterManager.spawnEndRoomElevator
     game.spawnEndRoomHollow = RoomEncounterManager.spawnEndRoomElevator
+    game.spawnCardRoomDrop = RoomEncounterManager.spawnCardRoomDrop
+    game.spawnHeartRoomDrops = RoomEncounterManager.spawnHeartRoomDrops
     game.setupCurrentRoom = RoomEncounterManager.setupCurrentRoom
     game.spawnInitialSpiderWebsForRoom = RoomEncounterManager.spawnInitialSpiderWebsForRoom
     game.spawnCurrentRoomWave = RoomEncounterManager.spawnCurrentRoomWave

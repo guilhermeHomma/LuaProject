@@ -22,6 +22,11 @@ CardDefinitions.rarities = {
         weight = 0,
         color = {0.40, 0.20, 0.02, 1},
     },
+    evil = {
+        label = "evil",
+        weight = 0,
+        color = {0.20, 0.08, 0.06, 1},
+    },
 }
 
 CardDefinitions.cards = {
@@ -105,6 +110,18 @@ CardDefinitions.cards = {
         requiresSecondary = false,
         apply = function()
             return Player and Player.gun and Player.gun:applyCardUpgrade("primary_reload")
+        end,
+    },
+    {
+        id = "primary_cadence",
+        name = "FIRE RATE",
+        amount = "+15%",
+        rarity = "rare",
+        visualType = "weapon",
+        description = "Primary gun fires 15% faster.",
+        requiresSecondary = false,
+        apply = function()
+            return Player and Player.gun and Player.gun:applyCardUpgrade("primary_cadence")
         end,
     },
     {
@@ -292,7 +309,7 @@ CardDefinitions.weaponCards = {
         visualType = "weapon",
         cardType = "weapon",
         weaponId = 4,
-        description = "Fires 2 projectiles; 10 damage each.",
+        description = "Fires two projectiles that deal 10 damage each.",
         apply = function() return equipWeaponCard(4) end,
     },
     {
@@ -303,7 +320,7 @@ CardDefinitions.weaponCards = {
         visualType = "weapon",
         cardType = "weapon",
         weaponId = 5,
-        description = "Long-range weapon; 16 damage.",
+        description = "Fires a long-range projectile that deals 16 damage.",
         apply = function() return equipWeaponCard(5) end,
     },
     {
@@ -314,7 +331,7 @@ CardDefinitions.weaponCards = {
         visualType = "weapon",
         cardType = "weapon",
         weaponId = 2,
-        description = "Fires 3 projectiles; 15 damage each.",
+        description = "Fires three projectiles that deal 15 damage each.",
         apply = function() return equipWeaponCard(2) end,
     },
     {
@@ -325,7 +342,7 @@ CardDefinitions.weaponCards = {
         visualType = "weapon",
         cardType = "weapon",
         weaponId = 6,
-        description = "Fires 2 projectiles; 12 damage each.",
+        description = "Fires two projectiles that deal 12 damage each.",
         apply = function() return equipWeaponCard(6) end,
     },
     {
@@ -335,9 +352,16 @@ CardDefinitions.weaponCards = {
         rarity = "rare",
         visualType = "weapon",
         cardType = "weapon",
-        description = "Receive a random weapon.",
+        description = "Replaces your current weapon with a random one.",
         apply = function()
-            local weaponIds = {2, 3, 4, 5, 6}
+            local currentWeapon = Player and Player.gun and Player.gun.primary_weapon
+            local currentWeaponId = currentWeapon and currentWeapon.index
+            local weaponIds = {}
+            for _, weaponId in ipairs({2, 3, 4, 5, 6, 7}) do
+                if weaponId ~= currentWeaponId then
+                    weaponIds[#weaponIds + 1] = weaponId
+                end
+            end
             return equipWeaponCard(weaponIds[math.random(#weaponIds)])
         end,
     },
@@ -349,8 +373,117 @@ CardDefinitions.weaponCards = {
         visualType = "weapon",
         cardType = "weapon",
         weaponId = 3,
-        description = "Fast-firing weapon; 15 damage.",
+        description = "Fires quickly and deals 15 damage per shot.",
         apply = function() return equipWeaponCard(3) end,
+    },
+    {
+        id = "weapon_pistolinha",
+        name = "PISTOLINHA",
+        amount = "NEW WEAPON",
+        rarity = "common",
+        visualType = "weapon",
+        cardType = "weapon",
+        weaponId = 7,
+        description = "Fires three inaccurate projectiles that deal 3 damage each.",
+        apply = function() return equipWeaponCard(7) end,
+    },
+}
+
+local function applyGunPenalty(penaltyId)
+    return Player and Player.gun and Player.gun.applyBadCardPenalty
+        and Player.gun:applyBadCardPenalty(penaltyId) or false
+end
+
+local function primaryDamageAboveTen()
+    local gun = Player and Player.gun
+    local config = gun and gun:getEffectiveWeaponConfig(gun.primary_weapon)
+    return config and (config.damage or 0) > 10 or false
+end
+
+CardDefinitions.badCards = {
+    {
+        id = "bad_speed_loss_15", name = "HEAVY LEGS", amount = "-15% SPEED", rarity = "evil",
+        visualType = "player", cardType = "bad", description = "Movement speed is reduced by 15%.",
+        apply = function()
+            if not Player then return false end
+            Player.speed = Player.speed * 0.85
+            return true
+        end,
+    },
+    {
+        id = "bad_speed_loss_30", name = "LEAD BOOTS", amount = "-30% SPEED", rarity = "evil",
+        visualType = "player", cardType = "bad", description = "Movement speed is reduced by 30%.",
+        apply = function()
+            if not Player then return false end
+            Player.speed = Player.speed * 0.70
+            return true
+        end,
+    },
+    {
+        id = "bad_reload_cadence", name = "RUST", amount = "2X SLOWER", rarity = "evil",
+        visualType = "weapon", cardType = "bad", description = "Reloading and firing take twice as long.",
+        apply = function() return applyGunPenalty("reload_and_cadence") end,
+    },
+    {
+        id = "bad_one_max_heart", name = "GLASS HEART", amount = "1 MAX HEART", rarity = "evil",
+        visualType = "life", cardType = "bad", description = "Maximum health is reduced to one heart.",
+        apply = function()
+            if not Player then return false end
+            Player.totalLife = 2
+            Player.life = math.min(Player.life or 2, 2)
+            return true
+        end,
+    },
+    {
+        id = "bad_two_max_hearts", name = "WEAK HEART", amount = "2 MAX HEARTS", rarity = "evil",
+        visualType = "life", cardType = "bad", description = "Maximum health is reduced to two hearts.",
+        apply = function()
+            if not Player then return false end
+            Player.totalLife = math.min(Player.totalLife or 4, 4)
+            Player.life = math.min(Player.life or Player.totalLife, Player.totalLife)
+            return true
+        end,
+    },
+    {
+        id = "bad_cadence_third", name = "JAMMED TRIGGER", amount = "1/3 FIRE RATE", rarity = "evil",
+        visualType = "weapon", cardType = "bad", description = "Fire rate is reduced to one third.",
+        apply = function() return applyGunPenalty("cadence_third") end,
+    },
+    {
+        id = "bad_lose_heart", name = "BROKEN HEART", amount = "-1 HEART", rarity = "evil",
+        visualType = "life", cardType = "bad", description = "Lose one current heart.",
+        isAvailable = function() return Player and (Player.life or 0) > 2 end,
+        apply = function()
+            if not Player or (Player.life or 0) <= 2 then return false end
+            Player.life = Player.life - 2
+            return true
+        end,
+    },
+    {
+        id = "bad_lose_coins", name = "BANKRUPT", amount = "LOSE ALL", rarity = "evil",
+        visualType = "player", cardType = "bad", description = "Lose all coins.",
+        apply = function()
+            if not Game or not Game.getPlayerPoints or not Game.decreasePlayerPoints then return false end
+            Game:decreasePlayerPoints(Game:getPlayerPoints())
+            return true
+        end,
+    },
+    {
+        id = "bad_damage_minus_four", name = "BLUNT SHOTS", amount = "-4 DAMAGE", rarity = "evil",
+        visualType = "weapon", cardType = "bad", description = "Projectiles lose 4 damage.",
+        isAvailable = primaryDamageAboveTen,
+        apply = function() return applyGunPenalty("damage_minus_four") end,
+    },
+    {
+        id = "bad_projectile_speed_half", name = "SLOW SHOTS", amount = "-50% SPEED", rarity = "evil",
+        visualType = "weapon", cardType = "bad", description = "Projectile speed is reduced by half.",
+        apply = function() return applyGunPenalty("projectile_speed_half") end,
+    },
+    {
+        id = "bad_damage_half", name = "HALF POWER", amount = "-50% DAMAGE", rarity = "evil",
+        visualType = "weapon", cardType = "bad", description = "Projectile damage is reduced by half.",
+        isAvailable = primaryDamageAboveTen,
+        apply = function() return applyGunPenalty("damage_half") end,
     },
 }
 
@@ -431,12 +564,24 @@ function CardDefinitions:getEligibleCardsByRarity(rarity)
     return result
 end
 
+function CardDefinitions:getEligibleBadCards()
+    local result = {}
+    for _, card in ipairs(self.badCards or {}) do
+        if self:isCardEligible(card, false) then
+            result[#result + 1] = card
+        end
+    end
+    return result
+end
+
 function CardDefinitions:getRandomWeaponCard(excludedId)
     local candidates = {}
     local totalWeight = 0
 
+    local currentWeapon = Player and Player.gun and Player.gun.primary_weapon
+    local currentWeaponId = currentWeapon and currentWeapon.index
     for _, card in ipairs(self.weaponCards or {}) do
-        if card.id ~= excludedId then
+        if card.id ~= excludedId and card.weaponId ~= currentWeaponId then
             local rarity = self:getRarity(card)
             local weight = rarity.weight or 0
             if weight > 0 then

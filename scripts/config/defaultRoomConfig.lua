@@ -74,6 +74,7 @@ local function createFloorLevel(options)
         visualThemes = {
             default = options.theme,
             startRoomUseDefault = options.startRoomUseDefault,
+            cardRoomTheme = options.cardRoomTheme,
             areas = {},
         },
         grassConfig = options.grassConfig,
@@ -115,7 +116,7 @@ DefaultRoomConfig.floorLevels = {
     }),
     createFloorLevel({
         id = 3,
-        difficulty = 3,
+        difficulty = 2,
         roomCount = {min = 11, max = 15},
         cardRoomCount = {min = 2, max = 3},
         theme = "florest",
@@ -130,10 +131,11 @@ DefaultRoomConfig.floorLevels = {
     }),
     createFloorLevel({
         id = 4,
-        difficulty = 4,
+        difficulty = 3,
         roomCount = {min = 10, max = 14},
         cardRoomCount = {min = 2, max = 3},
         theme = "cave",
+        cardRoomTheme = "florest",
         startRoomUseDefault = false,
         grassConfig = {
             nonWalkableChance = 0,
@@ -145,10 +147,11 @@ DefaultRoomConfig.floorLevels = {
     }),
     createFloorLevel({
         id = 5,
-        difficulty = 5,
+        difficulty = 4,
         roomCount = {min = 11, max = 15},
         cardRoomCount = {min = 2, max = 3},
         theme = "cave",
+        cardRoomTheme = "florest",
         startRoomUseDefault = false,
         grassConfig = {
             nonWalkableChance = 0,
@@ -160,10 +163,11 @@ DefaultRoomConfig.floorLevels = {
     }),
     createFloorLevel({
         id = 6,
-        difficulty = 6,
+        difficulty = 5,
         roomCount = {min = 12, max = 16},
         cardRoomCount = {min = 2, max = 3},
         theme = "cave",
+        cardRoomTheme = "florest",
         startRoomUseDefault = false,
         grassConfig = {
             nonWalkableChance = 0,
@@ -180,6 +184,9 @@ DefaultRoomConfig.roomEncounterConfig = {
         basic_32x32 = {
             emptyChance = 0.02,
             countMultiplier = 0.7,
+        },
+        chest_32x32 = {
+            emptyChance = 1,
         },
         wide_48x32 = {
             countMultiplier = 0.85,
@@ -208,6 +215,10 @@ DefaultRoomConfig.grassConfig = {
 }
 
 DefaultRoomConfig.objectSpawnChancesByTemplate = {
+    chest_32x32 = {
+        box = 1,
+        chest = 1,
+    },
     basic_32x32 = {
         chest = 0.50,
     },
@@ -267,10 +278,18 @@ DefaultRoomConfig.floorConfig = {
         roomCount = 8,
         startTemplateId = "start_32x32",
         cardRoomTemplateId = "cards_32x32",
+        heartRoomTemplateId = "heart_32x32",
+        heartRoomChance = 0.10,
+        heartRoomChanceFromFloor = 4,
+        heartRoomLateChance = 0.40,
+        heartRoomCooldownFloors = 2,
+        heartRoomFreeVariantChance = 0.50,
         endRoomTemplateId = "end_32x32",
         cardRoomChance = 1.0,
         cardRoomCount = {min = 2, max = 3},
+        chestRoomChance = 0.02,
         largeRoomOppositeExit = true,
+        secondLargeRoomChance = 0.05,
         templateIds = DefaultRoomConfig.roomTemplateSets.florest.templateIds,
         templateWeights = DefaultRoomConfig.roomTemplateSets.florest.templateWeights,
         endRoomChance = 0.35,
@@ -282,7 +301,7 @@ DefaultRoomConfig.floorConfig = {
 DefaultRoomConfig.shopConfig = {
     enabled = true,
     cardProductId = "card_upgrade",
-    cardPrice = 50,
+    cardPrice = 40,
     cardRoomDoubleShopChance = 0.05,
     cardChestSecondChance = 0.05,
     products = {

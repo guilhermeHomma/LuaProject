@@ -17,7 +17,7 @@
     "are_you_sure": "¿estás seguro?",
     "return_menu": "¿volver al menú principal?",
     "restart": "¿iniciar una nueva partida?",
-    "quit": "¿salir del juego?"
+    "quit": "¿seguro que quieres salir?"
   },
   "settings": {
     "sections": {
@@ -44,7 +44,8 @@
       "common": "común",
       "rare": "rara",
       "epic": "épica",
-      "legendary": "legendaria"
+      "legendary": "legendaria",
+      "evil": "maligna"
     },
     "speed": { "name": "VELOCIDAD", "description": "Muévete más rápido." },
     "speed_rare": { "name": "VELOCIDAD", "description": "Muévete mucho más rápido." },
@@ -53,6 +54,7 @@
     "primary_range": { "name": "ALCANCE", "description": "Alcance del arma primaria." },
     "secondary_fill": { "name": "CARGA", "amount": "LLENA", "description": "Llena el arma secundaria." },
     "primary_reload": { "name": "RECARGA", "description": "Velocidad de recarga del arma primaria." },
+    "primary_cadence": { "name": "CADENCIA", "amount": "+15%", "description": "El arma primaria dispara un 15% más rápido." },
     "primary_ricochet": { "name": "REBOTE", "amount": "RICOCHET", "description": "Los disparos primarios rebotan en paredes y enemigos." },
     "primary_death_shard": { "name": "CHISPA", "description": "Los disparos primarios fallidos se dividen en disparos cortos de daño base." },
     "primary_clean_split": { "name": "DIVIDIR", "description": "Los disparos primarios fallidos se dividen en más disparos cortos de daño base." },
@@ -63,12 +65,24 @@
     "half_heart": { "name": "CORAZÓN", "amount": "CURA 1", "description": "Restaura solo un corazón perdido." },
     "full_heal": { "name": "CURA TOTAL", "amount": "RESTAURA", "description": "Restaura solo todos los corazones perdidos." },
     "heart_container": { "name": "ESPACIO DE CORAZÓN", "amount": "+1 MÁX", "description": "Gana un corazón máximo y se cura por completo." },
-    "weapon_squaregun": { "name": "SQUAREGUN", "amount": "ARMA NUEVA", "description": "Dispara 2 proyectiles; 10 de daño cada uno." },
-    "weapon_longshot": { "name": "LONGSHOT", "amount": "ARMA NUEVA", "description": "Arma de largo alcance; 16 de daño." },
-    "weapon_shotgun": { "name": "SHOTGUN", "amount": "ARMA NUEVA", "description": "Dispara 3 proyectiles; 15 de daño cada uno." },
-    "weapon_cakegun": { "name": "CAKEGUN", "amount": "ARMA NUEVA", "description": "Dispara 2 proyectiles; 12 de daño cada uno." },
-    "weapon_random": { "name": "ARMA ALEATORIA", "amount": "ALEATORIA", "description": "Recibirás un arma aleatoria." },
-    "weapon_raygun": { "name": "RAYGUN", "amount": "ARMA NUEVA", "description": "Arma de disparo rápido; 15 de daño." }
+    "weapon_squaregun": { "name": "SQUAREGUN", "amount": "ARMA NUEVA", "description": "Dispara dos proyectiles que causan 10 de daño cada uno." },
+    "weapon_longshot": { "name": "LONGSHOT", "amount": "ARMA NUEVA", "description": "Dispara un proyectil de largo alcance que causa 16 de daño." },
+    "weapon_shotgun": { "name": "SHOTGUN", "amount": "ARMA NUEVA", "description": "Dispara tres proyectiles que causan 15 de daño cada uno." },
+    "weapon_cakegun": { "name": "CAKEGUN", "amount": "ARMA NUEVA", "description": "Dispara dos proyectiles que causan 12 de daño cada uno." },
+    "weapon_random": { "name": "ARMA ALEATORIA", "amount": "ALEATORIA", "description": "Reemplaza tu arma actual por otra elegida al azar." },
+    "weapon_raygun": { "name": "RAYGUN", "amount": "ARMA NUEVA", "description": "Dispara rápidamente y causa 15 de daño por tiro." },
+    "weapon_pistolinha": { "name": "PISTOLITA", "amount": "ARMA NUEVA", "description": "Dispara tres proyectiles imprecisos que causan 3 de daño cada uno." },
+    "bad_speed_loss_15": { "name": "PIERNAS PESADAS", "amount": "-15% VELOCIDAD", "description": "La velocidad de movimiento se reduce un 15%." },
+    "bad_speed_loss_30": { "name": "BOTAS DE PLOMO", "amount": "-30% VELOCIDAD", "description": "La velocidad de movimiento se reduce un 30%." },
+    "bad_reload_cadence": { "name": "ÓXIDO", "amount": "2X MÁS LENTO", "description": "Recargar y disparar tarda el doble." },
+    "bad_one_max_heart": { "name": "CORAZÓN DE CRISTAL", "amount": "1 CORAZÓN MÁX", "description": "La vida máxima se reduce a un corazón." },
+    "bad_two_max_hearts": { "name": "CORAZÓN DÉBIL", "amount": "2 CORAZONES MÁX", "description": "La vida máxima se reduce a dos corazones." },
+    "bad_cadence_third": { "name": "GATILLO ATASCADO", "amount": "1/3 DE CADENCIA", "description": "La cadencia de tiro se reduce a un tercio." },
+    "bad_lose_heart": { "name": "CORAZÓN ROTO", "amount": "-1 CORAZÓN", "description": "Pierdes un corazón de vida actual." },
+    "bad_lose_coins": { "name": "BANCARROTA", "amount": "PIERDE TODO", "description": "Pierdes todas las monedas." },
+    "bad_damage_minus_four": { "name": "TIROS ROMOS", "amount": "-4 DE DAÑO", "description": "Los proyectiles pierden 4 de daño." },
+    "bad_projectile_speed_half": { "name": "TIROS LENTOS", "amount": "-50% VELOCIDAD", "description": "La velocidad de los proyectiles se reduce a la mitad." },
+    "bad_damage_half": { "name": "MEDIA POTENCIA", "amount": "-50% DE DAÑO", "description": "El daño de los proyectiles se reduce a la mitad." }
   },
   "hud": {
     "fps": "FPS"
