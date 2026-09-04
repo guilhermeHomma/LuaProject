@@ -11,6 +11,7 @@ NoHead.enemyTypeId = "noHead"
 
 local shotSoundBase = love.audio.newSource("assets/sfx/gun/pistol/shot.mp3", "static")
 local reloadTickSoundBase = love.audio.newSource("assets/sfx/gun/pistol/load.mp3", "static")
+local readyWarningSoundBase = love.audio.newSource("assets/sfx/menu/menu-selected.mp3", "static")
 local handsSheet = love.graphics.newImage("assets/sprites/enemy/nohead/nohead-hands.png")
 local handSprite = love.graphics.newImage("assets/sprites/enemy/nohead/hand.png")
 local gunSheet = love.graphics.newImage("assets/sprites/player/guns.png")
@@ -165,7 +166,17 @@ function NoHead:new(x, y)
     enemy.aimLocked = false
     enemy.aimWindupTimer = 0
     enemy.reloadTickDelays = {0.12, 0.1, 0.07, 0.07}
-    enemy.postTickShotDelay = 0.2
+    enemy.readyWarningPreDelay = 0.2
+    enemy.readyWarningPingDelay = 0.14
+    enemy.readyWarningPostDelay = 0.2
+    enemy.postTickShotDelay = enemy.readyWarningPreDelay
+        + enemy.readyWarningPingDelay
+        + enemy.readyWarningPostDelay
+    enemy.readyWarningFlashDuration = 0.09
+    enemy.readyWarningStarted = false
+    enemy.readyWarningElapsed = 0
+    enemy.readyWarningPingCount = 0
+    enemy.readyWarningFlashTimer = 0
     enemy.aimWindupDuration = 0.56
     enemy.reloadTickIndex = 1
     enemy.reloadTickElapsed = 0
@@ -212,16 +223,31 @@ function NoHead:getSpriteKey()
 end
 
 function NoHead:drawMouth()
+    if (self.readyWarningFlashTimer or 0) > 0 then
+        love.graphics.setShader(gunWhiteShader)
+        Zombie.drawMouth(self)
+        love.graphics.setShader()
+        return
+    end
+
     Zombie.drawMouth(self)
 end
 
 function NoHead:disableShootingAfterDamage()
+    if self.readyWarningStarted then
+        return
+    end
+
     local minTimer = self.shootDisabledMin or 1.6
     local maxTimer = self.shootDisabledMax or 2.0
     self.shootDisabledTimer = minTimer + math.random() * (maxTimer - minTimer)
     self.aimWindupTimer = 0
     self.gunVisibleTimer = 0
     self.aimLocked = false
+    self.readyWarningStarted = false
+    self.readyWarningElapsed = 0
+    self.readyWarningPingCount = 0
+    self.readyWarningFlashTimer = 0
     self.lockedAimAngle = nil
     self.lockedAimTargetX = nil
     self.lockedAimTargetY = nil
@@ -296,7 +322,7 @@ function NoHead:drawGun()
     local handY = drawY + math.sin(drawAngle) * 3.4
     local gunChargeAlpha = self:getGunChargeAlpha()
 
-    if (self.shotFlashTimer or 0) > 0 then
+    if (self.shotFlashTimer or 0) > 0 or (self.readyWarningFlashTimer or 0) > 0 then
         love.graphics.setShader(gunWhiteShader)
     end
 
@@ -327,7 +353,9 @@ function NoHead:drawGun()
             gunFrameSize / 2
         )
 
-        if gunChargeAlpha > 0 and (self.shotFlashTimer or 0) <= 0 then
+        if gunChargeAlpha > 0
+            and (self.shotFlashTimer or 0) <= 0
+            and (self.readyWarningFlashTimer or 0) <= 0 then
             gunChargeShader:send("alpha", gunChargeAlpha)
             love.graphics.setShader(gunChargeShader)
             love.graphics.draw(
@@ -348,7 +376,7 @@ function NoHead:drawGun()
     love.graphics.setColor(1, 1, 1, 1)
 end
 
-function NoHead:shootAtPlayer()
+function NoHead:shootAtPlayer(forceShot)
     local shotX, shotY = self:getShotPosition()
     local angle = self.lockedAimAngle or self.aimAngle or math.atan2((Player.y - 10) - shotY, Player.x - shotX)
     local spawnX = shotX + math.cos(angle) * 8
@@ -356,7 +384,7 @@ function NoHead:shootAtPlayer()
     local bullet = NoHeadBullet:new(spawnX, spawnY, angle, self.bulletSpeed, 1, 10)
 
     local immediateTile = bullet:collidingTile()
-    if immediateTile and not isBreakableTile(immediateTile) then
+    if not forceShot and immediateTile and not isBreakableTile(immediateTile) then
         return false
     end
 
@@ -389,6 +417,39 @@ function NoHead:playReloadTick()
     playClonedSound(reloadTickSoundBase, volume, pitch)
 end
 
+function NoHead:playReadyWarningPing()
+    local playerDistance = distance(Player, self)
+    local volume = getDistanceVolume(playerDistance, 0.38, 260)
+    local pitch = (1.12 + (self.readyWarningPingCount or 0) * 0.08) * GAME_PITCH
+    playClonedSound(readyWarningSoundBase, volume, pitch)
+
+    self.readyWarningPingCount = (self.readyWarningPingCount or 0) + 1
+    self.readyWarningFlashTimer = self.readyWarningFlashDuration or 0.09
+    self.whiteFlashTimer = math.max(self.whiteFlashTimer or 0, self.readyWarningFlashTimer)
+end
+
+function NoHead:updateReadyWarning(dt)
+    local warningLeadTime = (self.readyWarningPingDelay or 0.14)
+        + (self.readyWarningPostDelay or 0.2)
+    if (self.aimWindupTimer or 0) > warningLeadTime then
+        return
+    end
+
+    if not self.readyWarningStarted then
+        self.readyWarningStarted = true
+        self.readyWarningElapsed = 0
+        self.readyWarningPingCount = 0
+        self:playReadyWarningPing()
+    else
+        self.readyWarningElapsed = (self.readyWarningElapsed or 0) + dt
+    end
+
+    if self.readyWarningPingCount == 1
+        and self.readyWarningElapsed >= (self.readyWarningPingDelay or 0.14) then
+        self:playReadyWarningPing()
+    end
+end
+
 function NoHead:startAiming()
     self.aimWindupDuration = self:getAimWindupDuration()
     self.aimWindupTimer = self.aimWindupDuration
@@ -399,6 +460,10 @@ function NoHead:startAiming()
     self.lockedAimTargetY = nil
     self.reloadTickIndex = 1
     self.reloadTickElapsed = 0
+    self.readyWarningStarted = false
+    self.readyWarningElapsed = 0
+    self.readyWarningPingCount = 0
+    self.readyWarningFlashTimer = 0
     self.state = Zombie.states.idle
     self.animationTimer = 0
 end
@@ -706,6 +771,7 @@ function NoHead:update(dt)
     self.glitchTimer = math.max(0, self.glitchTimer - dt)
     self.whiteFlashTimer = math.max(0, self.whiteFlashTimer - dt)
     self.shotFlashTimer = math.max(0, (self.shotFlashTimer or 0) - dt)
+    self.readyWarningFlashTimer = math.max(0, (self.readyWarningFlashTimer or 0) - dt)
     self.gunVisibleTimer = math.max(0, (self.gunVisibleTimer or 0) - dt)
     self.shootDisabledTimer = math.max(0, (self.shootDisabledTimer or 0) - dt)
     self.shootTimer = self.shootTimer + dt
@@ -767,6 +833,7 @@ function NoHead:update(dt)
         self:updateFacing((self.aimLocked and self.lockedAimTargetX) or Player.x, dt)
         self:animate(1, 2, dt)
         self:updateReloadTicks(dt)
+        self:updateReadyWarning(dt)
 
         if self.aimWindupTimer == 0 then
             self.shootTimer = 0
@@ -776,9 +843,13 @@ function NoHead:update(dt)
                 local dy = self.lockedAimTargetY - self.y
                 targetDistance = math.sqrt(dx * dx + dy * dy)
             end
+            local shotCommitted = self.readyWarningStarted == true
             local targetInShotRange = Player.isAlive and targetDistance <= self.shootCancelDistance
-            if targetInShotRange then
-                if self:hasLineOfSightToPlayer() and self:shootAtPlayer() then
+            if shotCommitted then
+                self:shootAtPlayer(true)
+                self:startPostShotRecoil()
+            elseif targetInShotRange then
+                if self:hasLineOfSightToPlayer() and self:shootAtPlayer(false) then
                     self:startPostShotRecoil()
                 else
                     self.gunVisibleTimer = 0

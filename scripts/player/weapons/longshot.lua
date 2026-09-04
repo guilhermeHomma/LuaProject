@@ -4,7 +4,7 @@ return Shared.createWeapon({
     id = 5,
     name = "longshot",
     price = 42,
-    shotCooldown = 0.64,
+    shotCooldown = 0.6,
     magCount = 12,
     magCapacity = 5,
     reloadDuration = 1.05,

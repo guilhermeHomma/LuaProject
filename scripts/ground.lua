@@ -335,7 +335,7 @@ function Ground:draw(player)
                 self.lastSentOccluderVersion = occluderVer
             end
             self.playerLightCenters = lightCenters
-            love.graphics.setShader(self.lightShader)
+            --love.graphics.setShader(self.lightShader)
         end
         self.groundLightSources = groundLightSources
         self.lightCenters = centers

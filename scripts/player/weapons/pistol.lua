@@ -7,7 +7,7 @@ return Shared.createWeapon({
     shotCooldown = 0.5,
     magCount = 12,
     magCapacity = 6,
-    reloadDuration = 0.8,
+    reloadDuration = 0.9,
     reloadSpinDuration = 0.25,
     damage = 10,
     bulletSpeed = 300,

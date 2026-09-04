@@ -4,7 +4,7 @@ return Shared.createWeapon({
     id = 6,
     name = "cakegun",
     price = 60,
-    shotCooldown = 0.7,
+    shotCooldown = 0.6,
     magCount = 10,
     magCapacity = 10,
     reloadDuration = 0.9,

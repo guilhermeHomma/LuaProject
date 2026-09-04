@@ -70,7 +70,7 @@ CardDefinitions.cards = {
         amount = "+2",
         rarity = "common",
         visualType = "weapon",
-        description = "Primary gun damage.",
+        description = "Increases the damage of your current weapon.",
         requiresSecondary = false,
         apply = function()
             return Player and Player.gun and Player.gun:applyCardUpgrade("primary_damage")
@@ -82,7 +82,7 @@ CardDefinitions.cards = {
         amount = "+4",
         rarity = "epic",
         visualType = "weapon",
-        description = "Primary gun damage.",
+        description = "Increases the damage of your current weapon.",
         requiresSecondary = false,
         apply = function()
             return Player and Player.gun and Player.gun:applyCardUpgrade("primary_damage_epic")
@@ -94,7 +94,7 @@ CardDefinitions.cards = {
         amount = "+10%",
         rarity = "common",
         visualType = "weapon",
-        description = "Primary gun range.",
+        description = "Increases the range of your current weapon.",
         requiresSecondary = false,
         apply = function()
             return Player and Player.gun and Player.gun:applyCardUpgrade("primary_range")
@@ -106,7 +106,7 @@ CardDefinitions.cards = {
         amount = "-10%",
         rarity = "common",
         visualType = "weapon",
-        description = "Primary gun loadspeed.",
+        description = "Increases the reload speed of your current weapon.",
         requiresSecondary = false,
         apply = function()
             return Player and Player.gun and Player.gun:applyCardUpgrade("primary_reload")
@@ -118,7 +118,7 @@ CardDefinitions.cards = {
         amount = "+15%",
         rarity = "rare",
         visualType = "weapon",
-        description = "Primary gun fires 15% faster.",
+        description = "Your current weapon fires 15% faster.",
         requiresSecondary = false,
         apply = function()
             return Player and Player.gun and Player.gun:applyCardUpgrade("primary_cadence")
@@ -130,7 +130,7 @@ CardDefinitions.cards = {
         amount = "RICOCHET",
         rarity = "rare",
         visualType = "weapon",
-        description = "Primary shots bounce from walls and enemies.",
+        description = "Shots from your current weapon bounce off walls and enemies.",
         requiresSecondary = false,
         getStacks = function()
             return Player and Player.gun and Player.gun.primaryUpgradeState and (Player.gun.primaryUpgradeState.ricochetCount or 0) or 0
@@ -146,7 +146,7 @@ CardDefinitions.cards = {
         amount = "+2",
         rarity = "rare",
         visualType = "weapon",
-        description = "Missed primary shots split into short base-damage shots.",
+        description = "Missed shots from your current weapon split into short base-damage shots.",
         requiresSecondary = false,
         getStacks = function()
             return Player and Player.gun and Player.gun.primaryUpgradeState and (Player.gun.primaryUpgradeState.deathSpawnCount or 0) or 0
@@ -162,7 +162,7 @@ CardDefinitions.cards = {
         amount = "+4",
         rarity = "epic",
         visualType = "weapon",
-        description = "Missed primary shots split into more short base-damage shots.",
+        description = "Missed shots from your current weapon split into more short base-damage shots.",
         requiresSecondary = false,
         getStacks = function()
             return Player and Player.gun and Player.gun.primaryUpgradeState and (Player.gun.primaryUpgradeState.deathSpawnCount or 0) or 0

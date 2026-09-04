@@ -943,6 +943,10 @@ function RoomEncounterManager:setupCurrentRoom(options)
     end
 
     if currentRoom.isHeartRoom or currentRoom.templateId == "heart_32x32" then
+        if not state.heartRoomCooldownRegistered and CURRENT_LEVEL then
+            CURRENT_LEVEL.lastHeartRoomFloor = CURRENT_LEVEL.currentFloorIndex or 1
+            state.heartRoomCooldownRegistered = true
+        end
         setBattleMusicActive(false)
         state.cleared = true
         state.skipEncounter = true

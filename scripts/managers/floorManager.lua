@@ -1040,9 +1040,6 @@ local function convertRandomSmallRoomToHeartRoom(generateConfig, generatedRooms)
         room.heartDropCount = 1
     end
 
-    if level then
-        level.lastHeartRoomFloor = floorIndex
-    end
     return room
 end
 

@@ -39,6 +39,9 @@ local DAMAGE_HITSTOP_DURATION = 0.2
 local DAMAGE_HITSTOP_RECOVERY = 0.28
 local DAMAGE_AUDIO_DISTORTION_DURATION = 0.7
 local DAMAGE_AUDIO_VOLUME_DUCK_DURATION = 0.7
+local DAMAGE_INVULNERABILITY_DURATION = 1.2 * 1.4
+local DAMAGE_BLINK_PERIOD = 0.16
+local DAMAGE_BLINK_INVISIBLE_DURATION = 0.018
 
 heartImage:setFilter("nearest", "nearest")
 
@@ -109,6 +112,7 @@ function Player:load(camera, spawnX, spawnY)
     self.pendingDamageOwTimer = 0
     self.pendingDamageOwPitch = 1
     self.damageBlinkDelay = 0.1
+    self.roomEntryInvulnerabilityTimer = 0
     self.damageVignettePulse = 0
     self.reloadBarFlashDuration = 0.18
     self.reloadBarFlashTimer = 0
@@ -307,6 +311,7 @@ function Player:update(dt)
     end
 
     self.damageTimer = self.damageTimer + dt
+    self.roomEntryInvulnerabilityTimer = math.max(0, (self.roomEntryInvulnerabilityTimer or 0) - dt)
     self.glitchTimer = math.max(0, self.glitchTimer - dt)
     self.whiteFlashTimer = math.max(0, self.whiteFlashTimer - dt)
     CardPickupEffects.update(self, dt)
@@ -507,7 +512,7 @@ end
 
 function Player:takeDamage(amount, damageDx, damageDy, hitX, hitY)
     if self:isDashing() then return false end
-    if self.damageTimer < 1.2 then return false end
+    if self:isInvulnerable() then return false end
 
     self:restartDashCooldown()
     if Game and Game.startHitStop then
@@ -561,7 +566,7 @@ end
 
 function Player:checkDamage()
     if self:isDashing() then return end
-    if self.damageTimer < 1.2 then return end 
+    if self:isInvulnerable() then return end
 
     for _, enemy in ipairs(Game.enemies) do
         local dx = enemy.x - self.x
@@ -597,6 +602,18 @@ end
 
 function Player:startCardPickupFlash()
     CardPickupEffects.start(self)
+end
+
+function Player:isInvulnerable()
+    return self.damageTimer < DAMAGE_INVULNERABILITY_DURATION
+        or (self.roomEntryInvulnerabilityTimer or 0) > 0
+end
+
+function Player:grantRoomEntryInvulnerability(duration)
+    self.roomEntryInvulnerabilityTimer = math.max(
+        self.roomEntryInvulnerabilityTimer or 0,
+        duration or 0
+    )
 end
 
 function Player:getCollisionBox()
@@ -1284,8 +1301,10 @@ function Player:draw()
         self.dash:drawAfterimages(self)
     end
 
-    if self.damageTimer > (self.damageBlinkDelay or 0) and self.damageTimer < 1 then
-        if math.floor(self.damageTimer * 15) % 2 == 0 then
+    if self.damageTimer > (self.damageBlinkDelay or 0)
+        and self.damageTimer < DAMAGE_INVULNERABILITY_DURATION then
+        local blinkTime = self.damageTimer - (self.damageBlinkDelay or 0)
+        if blinkTime % DAMAGE_BLINK_PERIOD < DAMAGE_BLINK_INVISIBLE_DURATION then
             return
         end
     end

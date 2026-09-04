@@ -78,7 +78,6 @@ local function createFloorLevel(options)
             areas = {},
         },
         grassConfig = options.grassConfig,
-        enemyDropMultiplier = options.enemyDropMultiplier or 1,
         shopProducts = DefaultRoomConfig.shopProductSets[options.shopProductSet] or options.shopProducts,
     }
 end
@@ -96,7 +95,6 @@ DefaultRoomConfig.floorLevels = {
             bigGrassChance = 0.05,
             nonWalkableBigGrassChance = 0.15,
         },
-        enemyDropMultiplier = 1,
         shopProductSet = "florestEarly",
     }),
     createFloorLevel({
@@ -111,7 +109,6 @@ DefaultRoomConfig.floorLevels = {
             bigGrassChance = 0.05,
             nonWalkableBigGrassChance = 0.12,
         },
-        enemyDropMultiplier = 1.1,
         shopProductSet = "florestEarly",
     }),
     createFloorLevel({
@@ -126,7 +123,6 @@ DefaultRoomConfig.floorLevels = {
             bigGrassChance = 0.05,
             nonWalkableBigGrassChance = 0.10,
         },
-        enemyDropMultiplier = 1.2,
         shopProductSet = "florestLate",
     }),
     createFloorLevel({
@@ -142,7 +138,6 @@ DefaultRoomConfig.floorLevels = {
             bigGrassChance = 0.05,
             nonWalkableBigGrassChance = 0,
         },
-        enemyDropMultiplier = 1.3,
         shopProductSet = "cave",
     }),
     createFloorLevel({
@@ -158,7 +153,6 @@ DefaultRoomConfig.floorLevels = {
             bigGrassChance = 0.04,
             nonWalkableBigGrassChance = 0,
         },
-        enemyDropMultiplier = 1.4,
         shopProductSet = "cave",
     }),
     createFloorLevel({
@@ -174,7 +168,6 @@ DefaultRoomConfig.floorLevels = {
             bigGrassChance = 0.03,
             nonWalkableBigGrassChance = 0,
         },
-        enemyDropMultiplier = 1.5,
         shopProductSet = "cave",
     }),
 }

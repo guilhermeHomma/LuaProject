@@ -142,12 +142,8 @@ local function getEnemyDropMultiplier()
     end
 
     local floorIndex = level.currentFloorIndex or 1
-    local floorLevel = level.floorLevels and level.floorLevels[floorIndex] or nil
     local floorConfigs = level.enemyDropConfigByFloor and level.enemyDropConfigByFloor[floorIndex] or nil
     local multiplier = level.enemyDropMultiplier or 1
-    if floorLevel and floorLevel.enemyDropMultiplier then
-        multiplier = multiplier * floorLevel.enemyDropMultiplier
-    end
     if floorConfigs and floorConfigs.multiplier then
         multiplier = multiplier * floorConfigs.multiplier
     end

@@ -5,7 +5,7 @@ return Shared.createWeapon({
     name = "pistolinha",
     spriteIndex = 1,
     price = 0,
-    shotCooldown = 0.5,
+    shotCooldown = 0.4,
     magCount = 9,
     magCapacity = 9,
     reloadDuration = 0.8,

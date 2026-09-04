@@ -325,6 +325,9 @@ function RoomFlowManager:updateEntryMove(dt)
             end
             Player.sideChangeTimer = 0
             self.playerRoomEntryMove = nil
+            if self.enemies and #self.enemies > 0 and Player.grantRoomEntryInvulnerability then
+                Player:grantRoomEntryInvulnerability(0.6)
+            end
             if not self.playerRoomExitTransition then
                 Dialog.breakMovements = false
             end
