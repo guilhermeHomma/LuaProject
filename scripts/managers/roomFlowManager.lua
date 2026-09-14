@@ -135,15 +135,13 @@ local function getWorldDirectionVector(direction)
 end
 
 local function primePlayerWalkAnimation(vector)
-    if not (Player and Player.animations and Player.animations.walk) then
+    if not (Player and Player.aliceAnimations and Player.aliceAnimations.walk) then
         return
     end
 
     Player.currentAnimation = "walk"
     Player.currentFrame = 2
     Player.animationTimer = ENTRY_ANIMATION_LEAD_TIME
-    Player.idleHandFrame = Player.currentFrame
-    Player.idleHandTimer = 0
     Player.footStepTimer = 0
     Player.moveX = vector.x
     Player.moveY = vector.y

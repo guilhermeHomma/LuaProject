@@ -8,6 +8,7 @@ local Moonbeam = require("scripts/objects/moonbeam")
 local AmbientDust = require("scripts/objects/ambientDust")
 local VisualThemes = require("scripts/config/visualThemes")
 local PathCache = require("scripts/tilemaps/pathCache")
+local AsyncPathfinder = require("scripts/tilemaps/asyncPathfinder")
 local Grid = require("jumperj.grid")
 local Pathfinder = require("jumperj.pathfinder")
 
@@ -536,7 +537,9 @@ local function applyPersistedRoomState()
 
     for y = 1, #tilemap do
         for x = 1, #tilemap[y] do
-            if (tilemap[y][x] == 2 or tilemap[y][x] == TILE_CHEST)
+            if (tilemap[y][x] == 2
+                    or tilemap[y][x] == TILE_CHEST
+                    or tilemap[y][x] == TILE_CHEST_MARKER)
                 and state.brokenObjects[getTileKey(x, y)] then
                 tilemap[y][x] = TILE_FLOOR
             end
@@ -1086,7 +1089,7 @@ local function canRenderGrassEntry(entry, blockedTiles)
     return true
 end
 
-local function appendGrassState(entries, x, y, worldX, worldY, tile)
+local function appendGrassState(entries, x, y, tile)
     entries[#entries + 1] = {
         x = x,
         y = y,
@@ -1095,39 +1098,16 @@ local function appendGrassState(entries, x, y, worldX, worldY, tile)
         tile = tile,
         index = randomGrassIndex(tile),
     }
-    if tile ~= 1 and math.random() > 0.3 then
-        entries[#entries + 1] = {
-            x = x,
-            y = y,
-            offsetX = 1,
-            offsetY = 2,
-            tile = tile,
-            index = randomGrassIndex(tile),
-        }
-    end
 end
 
 local function randomBigGrassBlades()
-    local blades = {}
-    local bladeCount = math.random(1, 3)
-    local ySlots = {0}
-    if bladeCount == 2 then
-        ySlots = {-2, 2}
-    elseif bladeCount == 3 then
-        ySlots = {-4, 0, 4}
-    end
-
-    for i = 1, bladeCount do
-        local direction = math.random() > 0.5 and 1 or -1
-        blades[i] = {
-            x = direction * math.random(0, 2),
-            y = ySlots[i],
-            flipH = math.random() > 0.5,
-            directionOffset = (math.random() - 0.5) * 0.25,
-        }
-    end
-
-    return blades
+    local direction = math.random() > 0.5 and 1 or -1
+    return {{
+        x = direction * math.random(0, 2),
+        y = 0,
+        flipH = math.random() > 0.5,
+        directionOffset = (math.random() - 0.5) * 0.25,
+    }}
 end
 
 local function appendBigGrassState(entries, x, y, options)
@@ -2041,6 +2021,7 @@ function DefaultTilemap:getPathBetweenWorldPoints(startX, startY, endX, endY, op
         return nil, false
     end
     options = options or {}
+    AsyncPathfinder:poll(self)
 
     local startMapX, startMapY = self:worldToMap(startX, startY)
     local endMapX, endMapY = self:worldToMap(endX, endY)
@@ -2057,6 +2038,10 @@ function DefaultTilemap:getPathBetweenWorldPoints(startX, startY, endX, endY, op
         return cachedPath, true
     end
     if options.cacheOnly then
+        return nil, false
+    end
+
+    if not options.forceSync and AsyncPathfinder:request(startMapX, startMapY, endMapX, endMapY) then
         return nil, false
     end
 
@@ -2110,6 +2095,7 @@ function DefaultTilemap:loadfinders()
         self.finderAstar:setMode("ORTHOGONAL")
         self.finder:setHeuristicWeight(1.35)
         self.finderAstar:setHeuristicWeight(1.35)
+        AsyncPathfinder:setMap(self.pathfinderMap)
         return
     end
 
@@ -2121,6 +2107,7 @@ function DefaultTilemap:loadfinders()
         end
     end
     self:clearPathCache()
+    AsyncPathfinder:setMap(self.pathfinderMap)
 end
 
 function DefaultTilemap:updatePathfinderTile(x, y)
@@ -2133,6 +2120,7 @@ function DefaultTilemap:updatePathfinderTile(x, y)
     end
 
     self.pathfinderMap[y][x] = isWalkableTile(tilemap[y] and tilemap[y][x]) and 0 or 1
+    AsyncPathfinder:setMap(self.pathfinderMap)
 end
 
 local function isSpecialStoneWallRoom(room)
@@ -2382,7 +2370,7 @@ function DefaultTilemap:load()
     self.spawnPositions = {}
     self.moonbeams = {}
     self.ambientDust = nil
-    local bigGrassOccupied = {}
+    local grassOccupied = {}
     local trees = {}
     local specialMoonbeamTargets = {}
     local walkablePositions = {}
@@ -2463,16 +2451,17 @@ function DefaultTilemap:load()
             if generatingGrassState then
                 local blocksGrass = grassBlockLookup[getTileKey(x, y)] == true
 
-                if not blocksGrass and shouldCreateBigGrass(tile, collider, x, y, bigGrassOccupied) then
-                    appendBigGrassCluster(bigGrassState, x, y, bigGrassOccupied, canCreateBigGrassWithoutFloorPath, {yOffset = 0, ySortOffset = 2, interactive = true}, 2, 4)
+                if not blocksGrass and shouldCreateBigGrass(tile, collider, x, y, grassOccupied) then
+                    appendBigGrassCluster(bigGrassState, x, y, grassOccupied, canCreateBigGrassWithoutFloorPath, {yOffset = 0, ySortOffset = 2, interactive = true}, 2, 4)
                 end
 
-                if not blocksGrass and shouldCreateDecorativeBigGrass(tile, collider, x, y, bigGrassOccupied) then
-                    appendBigGrassCluster(bigGrassState, x, y, bigGrassOccupied, canCreateDecorativeBigGrassWithoutFloorPath, {yOffset = 16, ySortOffset = 10, interactive = false})
+                if not blocksGrass and shouldCreateDecorativeBigGrass(tile, collider, x, y, grassOccupied) then
+                    appendBigGrassCluster(bigGrassState, x, y, grassOccupied, canCreateDecorativeBigGrassWithoutFloorPath, {yOffset = 16, ySortOffset = 10, interactive = false})
                 end
 
-                if not blocksGrass and not bigGrassOccupied[getTileKey(x, y)] and shouldCreateGrass(tile, collider, x, y) then
-                    appendGrassState(grassState, x, y, worldX, worldY, tile)
+                if not blocksGrass and not grassOccupied[getTileKey(x, y)] and shouldCreateGrass(tile, collider, x, y) then
+                    appendGrassState(grassState, x, y, tile)
+                    grassOccupied[getTileKey(x, y)] = true
                 end
             end
 
@@ -2503,8 +2492,19 @@ function DefaultTilemap:load()
         end
     end
 
+    local renderedGrassTiles = {}
+    for _, entry in ipairs(bigGrassState) do
+        local key = getTileKey(entry.x, entry.y)
+        if not renderedGrassTiles[key] and canRenderGrassEntry(entry, grassBlockLookup) then
+            local worldX, worldY = self:mapToWorld(entry.x, entry.y)
+            self.bigGrass[#self.bigGrass + 1] = BigGrass:new(worldX, worldY, entry.options)
+            renderedGrassTiles[key] = true
+        end
+    end
+
     for _, entry in ipairs(grassState) do
-        if canRenderGrassEntry(entry, grassBlockLookup) then
+        local key = getTileKey(entry.x, entry.y)
+        if not renderedGrassTiles[key] and canRenderGrassEntry(entry, grassBlockLookup) then
             local worldX, worldY = self:mapToWorld(entry.x, entry.y)
             self.grass[#self.grass + 1] = Grass:new(
                 worldX + (entry.offsetX or 0),
@@ -2512,13 +2512,7 @@ function DefaultTilemap:load()
                 entry.tile,
                 {index = entry.index}
             )
-        end
-    end
-
-    for _, entry in ipairs(bigGrassState) do
-        if canRenderGrassEntry(entry, grassBlockLookup) then
-            local worldX, worldY = self:mapToWorld(entry.x, entry.y)
-            self.bigGrass[#self.bigGrass + 1] = BigGrass:new(worldX, worldY, entry.options)
+            renderedGrassTiles[key] = true
         end
     end
 

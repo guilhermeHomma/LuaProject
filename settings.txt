@@ -1,0 +1,12 @@
+v=2
+w=1600
+h=900
+fs=0
+vs=0
+crt=1
+shake=1
+fps=1
+lang=pt
+brightness=0
+master=0.5
+music=0.7

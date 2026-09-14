@@ -65,8 +65,9 @@ function BigGrass:new(x, y, options)
     grass.blades = {}
 
     if options.blades then
-        for i, blade in ipairs(options.blades) do
-            grass.blades[i] = {
+        local blade = options.blades[1]
+        if blade then
+            grass.blades[1] = {
                 x = blade.x or 0,
                 y = blade.y or 0,
                 flipH = blade.flipH == true,
@@ -76,22 +77,12 @@ function BigGrass:new(x, y, options)
         return grass
     end
 
-    local bladeCount = math.random(1, 3)
-    local ySlots = {0}
-    if bladeCount == 2 then
-        ySlots = {-2, 2}
-    elseif bladeCount == 3 then
-        ySlots = {-4, 0, 4}
-    end
-
-    for i = 1, bladeCount do
-        grass.blades[i] = {
-            x = randomSideOffset(),
-            y = ySlots[i],
-            flipH = math.random() > 0.5,
-            directionOffset = (math.random() - 0.5) * 0.25
-        }
-    end
+    grass.blades[1] = {
+        x = randomSideOffset(),
+        y = 0,
+        flipH = math.random() > 0.5,
+        directionOffset = (math.random() - 0.5) * 0.25
+    }
 
     return grass
 end

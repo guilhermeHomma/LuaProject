@@ -42,6 +42,8 @@ function TileSet:createTileSet(imagePath)
     self.tileSet[15] = love.graphics.newQuad(64, 32, self.tileSize, self.tileSize, self.sheetWidth, self.sheetHeight) --variacao grama
 
     self.tileSet[18] = love.graphics.newQuad(48, 64, self.tileSize, self.tileSize*2, self.sheetWidth, self.sheetHeight) --varia caixa
+    self.tileSet[57] = love.graphics.newQuad(16, 96, self.tileSize, self.tileSize*2, self.sheetWidth, self.sheetHeight) --varia caixa
+    self.tileSet[58] = love.graphics.newQuad(48, 96, self.tileSize, self.tileSize*2, self.sheetWidth, self.sheetHeight) --varia caixa
     self.tileSet[19] = love.graphics.newQuad(144, 0, self.tileSize, self.tileSize, self.sheetWidth, self.sheetHeight) --caminho chao
     self.tileSet[20] = love.graphics.newQuad(160, 0, self.tileSize, self.tileSize, self.sheetWidth, self.sheetHeight) --caminho chao
     self.tileSet[21] = love.graphics.newQuad(144, 16, self.tileSize, self.tileSize, self.sheetWidth, self.sheetHeight) --caminho chao

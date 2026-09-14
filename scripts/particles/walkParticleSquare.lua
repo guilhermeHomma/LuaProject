@@ -15,6 +15,7 @@ function WalkPSquare:new(x, y, lifetime)
 
     particle.speedDown = math.random(5, 10)
     particle.alpha = 0.4
+    particle.parallelKind = "walkSquare"
     return particle
 end
 

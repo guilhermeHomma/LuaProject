@@ -74,7 +74,7 @@ vec4 applyCrtLook(Image tex, vec2 sourceCoord, vec2 localCoord, vec4 color) {
     sampled.rgb *= scanDarken;
 
     float luma = dot(sampled.rgb, vec3(0.299, 0.587, 0.114));
-    float saturation = 1.0 + 0.16 * u_crtIntensity;
+    float saturation = 1.0 + 0.18 * u_crtIntensity;
     float contrast = 1.0 + 0.11 * u_crtIntensity;
     sampled.rgb = mix(vec3(luma), sampled.rgb, saturation);
     sampled.rgb = (sampled.rgb - vec3(0.5)) * contrast + vec3(0.5);
@@ -90,13 +90,13 @@ vec4 applyCrtLook(Image tex, vec2 sourceCoord, vec2 localCoord, vec4 color) {
 }
 
 vec3 applyBrightness(vec3 rgb) {
-    float value = clamp(u_brightness, 0.0, 10.0);
-    if (value < 5.0) {
-        return mix(rgb * 0.58, rgb, value / 5.0);
+    float value = clamp(u_brightness, -4.0, 4.0);
+    if (value < 0.0) {
+        return mix(rgb * 0.79, rgb, (value + 4.0) / 4.0);
     }
 
-    float amount = (value - 5.0) / 5.0;
-    vec3 lifted = vec3(1.0) - (vec3(1.0) - rgb) * 0.78;
+    float amount = value / 4.0;
+    vec3 lifted = vec3(1.0) - (vec3(1.0) - rgb) * 0.89;
     return mix(rgb, lifted, amount);
 }
 

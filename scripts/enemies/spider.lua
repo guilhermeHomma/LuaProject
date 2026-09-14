@@ -37,6 +37,10 @@ Spider.__index = Spider
 Spider.enemyTypeId = "spider"
 local SPIDER_COLLISION_RADIUS = 6 * 2.5
 local WEB_DROP_CHANCE = 0.05
+local IDLE_FIRST, IDLE_LAST = 1, 5
+local RUN_FIRST, RUN_LAST = 6, 11
+local DEATH_FIRST, DEATH_LAST = 12, 15
+local DEATH_FRAME_DURATION = 0.1
 
 local function distanceSqToPoint(x1, y1, x2, y2)
     local dx = x1 - x2
@@ -59,7 +63,7 @@ local function playSpiderFootstep(playerDistance)
 end
 
 function Spider:new(x, y)
-    local enemy = Zombie.new(self, x, y, math.random(80, 92))
+    local enemy = Zombie.new(self, x, y, math.random(64, 74))
     enemy.totalLife = 38
     enemy.life = enemy.totalLife
     enemy.size = SPIDER_COLLISION_RADIUS
@@ -73,6 +77,13 @@ function Spider:new(x, y)
     enemy.randomPathIdleTimer = 0.6
     enemy.randomPathPauseTimer = math.random() * 0.35
     enemy.animationSpeed = 0.1
+    enemy.idleStartFrame, enemy.idleEndFrame = IDLE_FIRST, IDLE_LAST
+    enemy.runStartFrame, enemy.runEndFrame = RUN_FIRST, RUN_LAST
+    enemy.deathBodyParticleOptions = {
+        hitFrame = DEATH_LAST,
+        deadFrame = DEATH_LAST,
+        drawYOffset = 0,
+    }
     enemy.noise = spiderSoundBase:clone()
     enemy.soundInterval = 3.8 + math.random() * 2.4
     enemy.damageImpactHeightRatio = 0.62
@@ -172,7 +183,7 @@ function Spider:pickRandomPathTarget()
     local path = nil
     local requested = true
     if EnemyDirector and EnemyDirector.requestPath then
-        path, requested = EnemyDirector:requestPath(self.x, self.y, targetX, targetY)
+        path, requested = EnemyDirector:requestPath(self.x, self.y, targetX, targetY, self)
     else
         path = Tilemap:getPathBetweenWorldPoints(self.x, self.y, targetX, targetY)
     end
@@ -211,7 +222,7 @@ function Spider:updateDying(dt)
     end
 
     self.spiderDeathTimer = (self.spiderDeathTimer or 0) + dt
-    self:animate(7, 8, dt)
+    self.currentFrame = math.min(DEATH_FIRST + math.floor(self.spiderDeathTimer / DEATH_FRAME_DURATION), DEATH_LAST)
     addToDrawQueue(self.y + 3 + self.drawPriority, self)
 
     if self.spiderDeathTimer >= (self.spiderDeathDuration or 0.28) then
@@ -229,10 +240,10 @@ function Spider:startDying()
 
     self.spiderDying = true
     self.spiderDeathTimer = 0
-    self.spiderDeathDuration = 0.28
+    self.spiderDeathDuration = (DEATH_LAST - DEATH_FIRST + 1) * DEATH_FRAME_DURATION
     self.canDamagePlayer = false
     self.state = Zombie.states.idle
-    self.currentFrame = 7
+    self.currentFrame = DEATH_FIRST
     self.animationTimer = 0
 end
 
@@ -256,7 +267,7 @@ function Spider:update(dt)
     if self.spawnIntroTimer and self.spawnIntroTimer > 0 then
         self.spawnIntroTimer = math.max(0, self.spawnIntroTimer - dt)
         self.state = Zombie.states.idle
-        self:animate(1, 2, dt)
+        self:animate(IDLE_FIRST, IDLE_LAST, dt)
         return
     end
 
@@ -267,7 +278,7 @@ function Spider:update(dt)
     if self.life <= 0 then
         if self.state == Zombie.states.damage then
             self.stateTimer = self.stateTimer + dt
-            self:animate(1, 2, dt)
+            self:animate(IDLE_FIRST, IDLE_LAST, dt)
             if self.stateTimer >= self.damageTimer then
                 self:startDying()
             end
@@ -279,7 +290,7 @@ function Spider:update(dt)
 
     if self.state == Zombie.states.damage then
         self.stateTimer = self.stateTimer + dt
-        self:animate(1, 2, dt)
+        self:animate(IDLE_FIRST, IDLE_LAST, dt)
 
         local moveX = self.kbdx * dt * 0.05
         local moveY = self.kbdy * dt * 0.05
@@ -297,7 +308,7 @@ function Spider:update(dt)
     if (self.randomPathPauseTimer or 0) > 0 then
         self.randomPathPauseTimer = math.max(0, self.randomPathPauseTimer - dt)
         self.state = Zombie.states.idle
-        self:animate(1, 2, dt)
+        self:animate(IDLE_FIRST, IDLE_LAST, dt)
         return
     end
 
@@ -330,7 +341,7 @@ function Spider:update(dt)
             velocityY = velocityY / length
         end
         self.state = Zombie.states.walk
-        if self.isVisuallyWalking then self:animate(3, 6, dt) else self:animate(1, 2, dt) end
+        if self.isVisuallyWalking then self:animate(RUN_FIRST, RUN_LAST, dt) else self:animate(IDLE_FIRST, IDLE_LAST, dt) end
 
         local moveX = velocityX * self.speed * dt
         local moveY = velocityY * self.speed * dt
@@ -382,7 +393,7 @@ function Spider:update(dt)
     velocityX = velocityX / length
     velocityY = velocityY / length
     self.state = Zombie.states.walk
-    self:animate(3, 6, dt)
+    self:animate(RUN_FIRST, RUN_LAST, dt)
 
     self.flipTimer = self.flipTimer + dt
     if self.flipTimer > 0.1 then

@@ -11,6 +11,7 @@ local MAX_XRAY_OCCLUDERS_PER_TARGET = 8
 local XRAY_OCCLUDER_PADDING = 20
 local BRIGHTNESS_CACHE_CELL_SIZE = 16
 local PIXEL_BATCH_LIMIT = 512
+local PARALLEL_SORT_MIN_ITEMS = 128
 
 local xraySoftShader = love.graphics.newShader("scripts/shaders/xraySoft.glsl")
 local xrayStencilShader = love.graphics.newShader("scripts/shaders/xrayStencilAlpha.glsl")
@@ -38,6 +39,13 @@ local fastSrcFlicker = {}
 local fastSrcCount = 0
 local brightnessCellCache = {}
 local xrayTargetOccluders = {}
+local sortThread
+local sortRequests
+local sortResults
+local sortRequestId = 0
+local pendingSortId
+local pendingSortQueue
+local pendingSortCount
 
 local function sortDrawQueue(a, b)
     if a.priority == b.priority then
@@ -206,6 +214,35 @@ local function calcTileInterpolatedBrightness(object, brightness, minBrightness)
     return TileLightInterpolator:apply(object, brightness, minBrightness, calcCachedBrightness)
 end
 
+function WorldRenderer.prepareTileLighting(game)
+    local queue = game and game.drawQueue
+    if not queue then return end
+    local minBrightness = getGeneralShadow().minBrightness or 1
+    if minBrightness >= 1 then return end
+
+    buildFastLightSources(game:getLightSources())
+    for _, item in ipairs(queue) do
+        local object = item.object
+        if object and object.isTile == true then
+            local x = object.xWorld or object.x
+            local y = object.yWorld or object.y
+            local brightness = x and y and calcCachedBrightness(object, x, y, minBrightness) or minBrightness
+            object.preparedLightBrightness = calcTileInterpolatedBrightness(object, brightness, minBrightness)
+            object.preparedLightFrame = game.renderFrameId
+            object.preparedLightMinimum = minBrightness
+        end
+    end
+end
+
+local function getDrawBrightness(game, object, x, y, minBrightness)
+    if object.isTile == true and object.preparedLightFrame == game.renderFrameId
+        and object.preparedLightMinimum == minBrightness then
+        return object.preparedLightBrightness
+    end
+    local brightness = x and y and calcCachedBrightness(object, x, y, minBrightness) or minBrightness
+    return calcTileInterpolatedBrightness(object, brightness, minBrightness)
+end
+
 local function drawFootsteps(game)
     local brightnessByFootstep = game.footstepBrightnessCache or {}
     game.footstepBrightnessCache = brightnessByFootstep
@@ -266,8 +303,7 @@ local function drawGroundQueueObjects(game)
             local obj = item.object
             local ox = obj.xWorld or obj.x
             local oy = obj.yWorld or obj.y
-            local brt = ox and oy and calcCachedBrightness(obj, ox, oy, minBrightness) or minBrightness
-            brt = calcTileInterpolatedBrightness(obj, brt, minBrightness)
+            local brt = getDrawBrightness(game, obj, ox, oy, minBrightness)
             local r = sr + ivr * brt
             local g = sg + ivg * brt
             local b = sb + ivb * brt
@@ -293,8 +329,7 @@ local function drawGroundQueueObjects(game)
         if minBrightness < 1 and object.affectedByLight then
             local ox = object.xWorld or object.x
             local oy = object.yWorld or object.y
-            local brt = ox and oy and calcCachedBrightness(object, ox, oy, minBrightness) or minBrightness
-            brt = calcTileInterpolatedBrightness(object, brt, minBrightness)
+            local brt = getDrawBrightness(game, object, ox, oy, minBrightness)
             local color = generalShadow.color or {0, 0, 0}
             local sr, sg, sb = color[1] or 0, color[2] or 0, color[3] or 0
             tintR = sr + (1 - sr) * brt
@@ -346,8 +381,7 @@ local function drawQueueObjects(game)
             local obj = item.object
             local ox = obj.xWorld or obj.x
             local oy = obj.yWorld or obj.y
-            local brt = ox and oy and calcCachedBrightness(obj, ox, oy, minBrightness) or minBrightness
-            brt = calcTileInterpolatedBrightness(obj, brt, minBrightness)
+            local brt = getDrawBrightness(game, obj, ox, oy, minBrightness)
             local r = sr + ivr * brt
             local g = sg + ivg * brt
             local b = sb + ivb * brt
@@ -596,7 +630,7 @@ local function drawXrayTargets(game)
     love.graphics.setColor(previousR, previousG, previousB, previousA)
 end
 
-local function prepareDrawQueues(game)
+local function prepareDrawQueues(game, drawQueue)
     local groundItems = game.groundDrawItems or {}
     local objectItems = game.objectDrawItems or {}
     local tilesetShadowItems = game.tilesetShadowItems or {}
@@ -618,8 +652,8 @@ local function prepareDrawQueues(game)
     for i = #xrayTargets, 1, -1 do xrayTargets[i] = nil end
     for i = #xrayOccluders, 1, -1 do xrayOccluders[i] = nil end
 
-    for i = 1, #game.drawQueue do
-        local item = game.drawQueue[i]
+    for i = 1, #drawQueue do
+        local item = drawQueue[i]
         local object = item.object
         if object.isGroundLayer then
             groundItems[#groundItems + 1] = item
@@ -647,6 +681,120 @@ local function prepareDrawQueues(game)
             xrayTargets[i] = nil
         end
     end
+end
+
+local function ensureSortWorker()
+    if sortThread then
+        return sortThread:getError() == nil
+    end
+
+    local ok, thread, requests, results = pcall(function()
+        local requestChannel = love.thread.newChannel()
+        local resultChannel = love.thread.newChannel()
+        local worker = love.thread.newThread("scripts/render/drawQueueSortWorker.lua")
+        worker:start(requestChannel, resultChannel)
+        return worker, requestChannel, resultChannel
+    end)
+    if not ok then
+        return false
+    end
+
+    sortThread, sortRequests, sortResults = thread, requests, results
+    return true
+end
+
+function WorldRenderer.queueSort(game)
+    local queue = game and game.drawQueue
+    if not queue or #queue < PARALLEL_SORT_MIN_ITEMS or not ensureSortWorker() then
+        pendingSortId = nil
+        return
+    end
+
+    local keys = {}
+    for i = 1, #queue do
+        local item = queue[i]
+        keys[i * 2 - 1] = item.priority
+        keys[i * 2] = item.object and item.object.drawSortOrder or 0
+    end
+
+    sortRequestId = sortRequestId + 1
+    pendingSortId = sortRequestId
+    pendingSortQueue = queue
+    pendingSortCount = #queue
+    sortRequests:clear()
+    sortRequests:push({id = sortRequestId, keys = keys})
+end
+
+local function hasValidSortIndices(indices, count)
+    if not indices or #indices ~= count then return false end
+    local seen = {}
+    for i = 1, count do
+        local index = indices[i]
+        if type(index) ~= "number" or index % 1 ~= 0 or index < 1 or index > count or seen[index] then
+            return false
+        end
+        seen[index] = true
+    end
+    return true
+end
+
+local function getSortedDrawQueue(game)
+    local queue = game.drawQueue
+    local matchedIndices
+    if sortResults then
+        while true do
+            local result = sortResults:pop()
+            if not result then break end
+            if result.id == pendingSortId then
+                matchedIndices = result.indices
+            end
+        end
+    end
+
+    local validResult = matchedIndices and pendingSortQueue == queue
+        and pendingSortCount and pendingSortCount <= #queue
+        and hasValidSortIndices(matchedIndices, pendingSortCount)
+    if validResult then
+        local sortedQueue = {}
+        for i = 1, #matchedIndices do
+            sortedQueue[i] = queue[matchedIndices[i]]
+        end
+        if #queue > pendingSortCount then
+            local tail = {}
+            for i = pendingSortCount + 1, #queue do
+                tail[#tail + 1] = queue[i]
+            end
+            table.sort(tail, sortDrawQueue)
+            local merged = {}
+            local prefixIndex, tailIndex = 1, 1
+            while prefixIndex <= #sortedQueue and tailIndex <= #tail do
+                if sortDrawQueue(tail[tailIndex], sortedQueue[prefixIndex]) then
+                    merged[#merged + 1] = tail[tailIndex]
+                    tailIndex = tailIndex + 1
+                else
+                    merged[#merged + 1] = sortedQueue[prefixIndex]
+                    prefixIndex = prefixIndex + 1
+                end
+            end
+            while prefixIndex <= #sortedQueue do
+                merged[#merged + 1] = sortedQueue[prefixIndex]
+                prefixIndex = prefixIndex + 1
+            end
+            while tailIndex <= #tail do
+                merged[#merged + 1] = tail[tailIndex]
+                tailIndex = tailIndex + 1
+            end
+            sortedQueue = merged
+        end
+        pendingSortId = nil
+        return sortedQueue
+    end
+
+    pendingSortId = nil
+    if #queue > 1 then
+        table.sort(queue, sortDrawQueue)
+    end
+    return queue
 end
 
 local function drawLightSprites(game)
@@ -725,15 +873,11 @@ function WorldRenderer.draw(game)
     Ground:draw(Player)
     drawLightSprites(game)
 
-    if #game.drawQueue > 1 then
-        table.sort(game.drawQueue, sortDrawQueue)
-    end
-    prepareDrawQueues(game)
-
     if not (CURRENT_LEVEL and CURRENT_LEVEL.enableTrails == false) then
         Trail:draw()
     end
     drawFootsteps(game)
+    prepareDrawQueues(game, getSortedDrawQueue(game))
     drawGroundQueueObjects(game)
     drawShadows(game)
     Player:drawSight()

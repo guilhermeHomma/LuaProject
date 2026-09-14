@@ -38,7 +38,6 @@ local LogoIntro = require("scripts/managers/menu/logoIntro")
 local TransitionManager = require("scripts.managers.transitionManager")
 local RoomScreenTransition = require("scripts/managers/roomScreenTransition")
 local AudioDeviceSync = require("scripts/managers/audioDeviceSync")
-local GlobalPalette = require("scripts.render.palettePostProcess")
 
 canvas = nil
 local menuCanvas = nil
@@ -189,8 +188,8 @@ local function presentCanvas(sourceCanvas, useRoomTransition)
 
     local crtConfig = GAME_FLAGS and GAME_FLAGS.crt or {}
     local crtEnabled = crtConfig.enabled == true
-    local brightness = math.min(math.max(tonumber(GAME_FLAGS and GAME_FLAGS.brightness) or 5, 0), 10)
-    local brightnessNeutral = math.abs(brightness - 5) < 0.001
+    local brightness = math.min(math.max(tonumber(GAME_FLAGS and GAME_FLAGS.brightness) or 0, -4), 4)
+    local brightnessNeutral = math.abs(brightness) < 0.001
 
     local spotlightEnabled = 0
     if state == STATES.game and Game.spot and Game.spot.enabled and camera then
@@ -252,7 +251,7 @@ local function presentCanvas(sourceCanvas, useRoomTransition)
     presentationShader:send("u_crtCurvature", crtConfig.curvature or 0.055)
     presentationShader:send("u_crtVignette", crtConfig.vignette or 0.22)
     presentationShader:send("u_crtChromatic", crtConfig.chromatic or 0.55)
-    presentationShader:send("u_brightness", GlobalPalette:isEnabled() and 5 or brightness)
+    presentationShader:send("u_brightness", brightness)
     presentationShader:send("u_center", zeroVec2)
     presentationShader:send("u_radius", spotlightEnabled == 1 and Game.spot.radius * scale or 0)
     presentationShader:send("u_feather", spotlightEnabled == 1 and Game.spot.feather or 0)
@@ -419,8 +418,16 @@ function playerDeath()
     state=STATES.gameDead
 end
 
+local function isPlayerFallIntroInProgress()
+    return Game.pendingPlayerFallIntro
+        or (Player and Player.fallIntro and Player.fallIntro.active)
+end
+
 local function pauseGameOnBackground()
     if state ~= STATES.game then
+        return
+    end
+    if isPlayerFallIntroInProgress() then
         return
     end
 
@@ -434,6 +441,7 @@ function quitToMenu()
         Music:closeGame()
         Game:close()
         state = STATES.mainMenu
+        MainMenu:beginEntry()
     end
     TransitionManager:startTransition(function() callback() end, 14, 3)
 end
@@ -443,6 +451,7 @@ function quitToMenuImmediate()
     Music:closeGame()
     Game:close()
     state = STATES.mainMenu
+    MainMenu:beginEntry()
     if TransitionManager then
         TransitionManager.alpha = 0
         TransitionManager.targetAlpha = 0
@@ -450,6 +459,8 @@ function quitToMenuImmediate()
         TransitionManager.isTransiting = false
         TransitionManager.targetDistortion = 0
         TransitionManager.distortion = 0
+        TransitionManager.alpha = 1
+        TransitionManager.speed = 5
     end
 end
 
@@ -533,6 +544,9 @@ end
 
 function changePause()
     if state == STATES.game or state == STATES.gamePause then
+        if state == STATES.game and isPlayerFallIntroInProgress() then
+            return
+        end
         state = (state == STATES.gamePause) and STATES.game or STATES.gamePause
 
         local isPaused = state == STATES.gamePause
@@ -668,12 +682,10 @@ function love.draw()
     love.graphics.setCanvas()
     RoomScreenTransition:captureOldFrame(canvas)
 
-    GlobalPalette:beginFrame()
     presentCanvas()
     if keepRoomUiFixed then
-        drawFixedRoomLayer(GlobalPalette:getCanvas())
+        drawFixedRoomLayer()
     end
-    GlobalPalette:resumeFrame()
     if isGameplayState() and Game and Game.drawStartupFade then
         Game:drawStartupFade()
     end
@@ -685,5 +697,4 @@ function love.draw()
     drawFPS()
 
     TransitionManager:drawFullscreen()
-    GlobalPalette:present()
 end

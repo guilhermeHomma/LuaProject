@@ -64,7 +64,7 @@ end
 
 function SettingsStorage:serialize(settings)
     return table.concat({
-        "v=1",
+        "v=2",
         "w=" .. tostring(settings.width or ""),
         "h=" .. tostring(settings.height or ""),
         "fs=" .. (settings.fullscreen and "1" or "0"),
@@ -73,7 +73,7 @@ function SettingsStorage:serialize(settings)
         "shake=" .. (settings.cameraShakeEnabled and "1" or "0"),
         "fps=" .. (settings.fpsEnabled and "1" or "0"),
         "lang=" .. tostring(settings.language or "en"),
-        "brightness=" .. tostring(settings.brightness or 5),
+        "brightness=" .. tostring(settings.brightness or 0),
         "master=" .. tostring(settings.masterVolume or 1),
         "music=" .. tostring(settings.musicVolume or 0.6),
     }, "\n")
@@ -88,7 +88,7 @@ function SettingsStorage:parse(data)
         end
     end
 
-    if result.v ~= "1" then
+    if result.v ~= "1" and result.v ~= "2" then
         return nil
     end
 

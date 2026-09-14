@@ -6,14 +6,14 @@ Fly.__index = Fly
 Fly.enemyTypeId = "fly"
 
 local FLY_COLLISION_RADIUS = 10
-local FLY_SPEED_MIN = 78
-local FLY_SPEED_MAX = 88
+local FLY_SPEED_MIN = 65
+local FLY_SPEED_MAX = 76
 local FLY_FLY_START_FRAME = 1
-local FLY_FLY_END_FRAME = 4
-local FLY_DEATH_HIT_FRAME = 5
-local FLY_DEAD_FRAME = 6
-local FLY_DEATH_HIT_TIME = 0.20
-local FLY_DEATH_DEAD_TIME = 0.90
+local FLY_FLY_END_FRAME = 5
+local FLY_DEATH_START_FRAME = 6
+local FLY_DEATH_END_FRAME = 9
+local FLY_DEATH_FRAME_DURATION = 0.085
+local FLY_DEATH_HOLD_TIME = 0.90
 local FLY_WALL_RANDOM_TURN_CHANCE = 0.45
 local FLY_WHOOSH_INTERVAL = 0.28
 local flyWhooshBase = love.audio.newSource("assets/sfx/effects/whoosh.mp3", "static")
@@ -46,7 +46,7 @@ end
 
 function Fly:new(x, y)
     local enemy = Zombie.new(self, x, y, FLY_SPEED_MIN + math.random() * (FLY_SPEED_MAX - FLY_SPEED_MIN))
-    enemy.totalLife = 24
+    enemy.totalLife = 22
     enemy.life = enemy.totalLife
     enemy.size = FLY_COLLISION_RADIUS
     enemy.dropPoints = 0
@@ -169,16 +169,16 @@ function Fly:updateDying(dt)
     self.glitchTimer = math.max(0, (self.glitchTimer or 0) - dt)
     self.whiteFlashTimer = math.max(0, (self.whiteFlashTimer or 0) - dt)
 
-    if self.flyDeathTimer < FLY_DEATH_HIT_TIME then
-        self.currentFrame = FLY_DEATH_HIT_FRAME
-    else
-        self.currentFrame = FLY_DEAD_FRAME
-    end
+    self.currentFrame = math.min(
+        FLY_DEATH_START_FRAME + math.floor(self.flyDeathTimer / FLY_DEATH_FRAME_DURATION),
+        FLY_DEATH_END_FRAME
+    )
     self.state = Zombie.states.idle
 
     addToDrawQueue(self.y + 2 + self.drawPriority, self)
 
-    if self.flyDeathTimer >= FLY_DEATH_HIT_TIME + FLY_DEATH_DEAD_TIME then
+    local animationDuration = (FLY_DEATH_END_FRAME - FLY_DEATH_START_FRAME + 1) * FLY_DEATH_FRAME_DURATION
+    if self.flyDeathTimer >= animationDuration + FLY_DEATH_HOLD_TIME then
         self.flyDying = false
         ZombieDeadParticle.spawnVanishBurst(self.x, self.y)
         Zombie.death(self)
@@ -196,8 +196,9 @@ function Fly:startDying()
     self.flyDeathTimer = 0
     self.canDamagePlayer = false
     self.state = Zombie.states.idle
-    self.currentFrame = FLY_DEATH_HIT_FRAME
+    self.currentFrame = FLY_DEATH_START_FRAME
     self.animationTimer = 0
+    self:spawnDeathDrops()
 end
 
 function Fly:turnAfterCollision(collidedX, collidedY)

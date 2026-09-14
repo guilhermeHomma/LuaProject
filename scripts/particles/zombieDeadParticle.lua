@@ -34,10 +34,12 @@ function ZombieParticle:new(x, y, sprite, options)
     particle.deadFrame = options.deadFrame or 8
     particle.frameWidth = options.frameWidth or 32
     particle.frameHeight = options.frameHeight or 32
-    particle.drawYOffset = options.drawYOffset or 3
+    particle.drawYOffset = options.drawYOffset ~= nil and options.drawYOffset or 3
     particle.drawScaleX = options.scaleX or 1
     particle.drawScaleY = options.scaleY or 1.4
     particle.drawShadowEnabled = options.drawShadowEnabled ~= false
+    particle.animationFrames = options.animationFrames
+    particle.animationFrameDuration = options.animationFrameDuration or 0.15
     DamageStretch:init(particle, 0.1, 0.1)
     particle.deathStretchStarted = false
 
@@ -117,9 +119,18 @@ function ZombieParticle:draw()
     local frameHeight = self.frameHeight or 32
     self.quadDead = self.quadDead or love.graphics.newQuad((self.deadFrame - 1) * frameWidth, 0, frameWidth, frameHeight, sheetWidth, sheetHeight)
     self.quadHit = self.quadHit or love.graphics.newQuad((self.hitFrame - 1) * frameWidth, 0, frameWidth, frameHeight, sheetWidth, sheetHeight)
-    local quad = self.quadDead
-    if self.timer < 0.2 then
-        quad = self.quadHit
+    local quad
+    if self.animationFrames then
+        local frameIndex = math.min(math.floor(self.timer / self.animationFrameDuration) + 1, #self.animationFrames)
+        self.animationQuads = self.animationQuads or {}
+        quad = self.animationQuads[frameIndex]
+        if not quad then
+            local frame = self.animationFrames[frameIndex]
+            quad = love.graphics.newQuad((frame - 1) * frameWidth, 0, frameWidth, frameHeight, sheetWidth, sheetHeight)
+            self.animationQuads[frameIndex] = quad
+        end
+    else
+        quad = self.timer < 0.2 and self.quadHit or self.quadDead
     end
     love.graphics.draw(
         self.sprite,

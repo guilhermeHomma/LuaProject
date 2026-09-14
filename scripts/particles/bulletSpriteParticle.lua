@@ -40,6 +40,7 @@ function BulletSpriteParticle:new(x, y, height, spritePath, angle, lifetime, sca
     particle.spritePath = spritePath
     particle.angle = angle or 0
     particle.scale = scale or 0.75
+    particle.parallelKind = "bulletSprite"
     return particle
 end
 

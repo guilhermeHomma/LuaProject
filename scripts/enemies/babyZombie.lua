@@ -19,7 +19,7 @@ end
 
 function babyZombie:new(x, y)
     local zombie = Zombie.new(self, x, y)
-    zombie.speed = math.random(72, 83)
+    zombie.speed = math.random(68, 75)
     zombie.damageTimer = 0.14
     zombie.totalLife = 25
     zombie.skipWalkParticles = true
@@ -37,7 +37,7 @@ function babyZombie:getSprite()
 end
 
 function babyZombie:getSpriteKey()
-    return "assets/sprites/enemy/zombie/enemy-baby.png"
+    return "assets/sprites/enemy/zombie/zombie/zombiebaby.png"
 end
 
 

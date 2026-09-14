@@ -267,6 +267,7 @@ function Store:performBuy()
             Game:startCardChoice(self.xWorld, self.yWorld - 16, {
                 allowRare = true,
                 allowWeaponCards = true,
+                fixedPositions = true,
             })
         end
     else

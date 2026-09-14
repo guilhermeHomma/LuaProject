@@ -18,6 +18,7 @@ function WalkP:new(x, y, lifetime)
 
     particle.speedDown = math.random(5, 10)
     particle.alpha = 0.7
+    particle.parallelKind = "walkBall"
     return particle
 end
 

@@ -8,7 +8,7 @@ setmetatable(pauseMenu, { __index = baseMenu })
 function pauseMenu:load()
     baseMenu.load(self)
     self.MenuTItle = Localization:t("menu.paused")
-    self.menuOptions = {"continue", "settings", "new_run", "main_menu"}
+    self.menuOptions = {"continue", "settings", "new_run", "main_menu", "exit_game"}
 end
 
 function pauseMenu:getOptionLabel(index)
@@ -31,6 +31,8 @@ function pauseMenu:onSelect()
         openRestartConfirm(STATES.gamePause)
     elseif self.selectedOption == 4 then
         openReturnToMenuConfirm(STATES.gamePause)
+    elseif self.selectedOption == 5 then
+        openQuitGameConfirm(STATES.gamePause)
     end
 end
 

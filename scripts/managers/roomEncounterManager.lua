@@ -204,6 +204,7 @@ end
 local function getRoomWaveConfig(config, waveConfig, room)
     local override = getRoomEncounterOverride(config, room)
     local result = copyTable(waveConfig) or {}
+    local waveEnemyTypes = waveConfig and waveConfig.useWaveEnemyTypes and copyTable(waveConfig.enemyTypes)
 
     if not override then
         return result
@@ -234,6 +235,9 @@ local function getRoomWaveConfig(config, waveConfig, room)
     end
     if config.enemyTypes then
         result.enemyTypes = copyTable(config.enemyTypes)
+    end
+    if waveEnemyTypes then
+        result.enemyTypes = waveEnemyTypes
     end
     if config.maxPerWave then
         result.maxPerWave = mergeTables(result.maxPerWave or {}, config.maxPerWave)
@@ -1066,7 +1070,9 @@ function RoomEncounterManager:spawnCurrentRoomWave(currentRoom, encounterConfig)
     end
 
     state.normalEncounterEnemyTotal = (state.normalEncounterEnemyTotal or 0) + spawnedEnemyCount
-    self:spawnAdditionalEncounterWave(currentRoom, encounterConfig, spawnedEnemyCount, spawnedPositions)
+    if waveConfig.allowAdditionalWave ~= false then
+        self:spawnAdditionalEncounterWave(currentRoom, encounterConfig, spawnedEnemyCount, spawnedPositions)
+    end
 
     self.drawtext = Localization:t("game.wave", { wave = waveIndex })
     self.textAlphaTarget = 1

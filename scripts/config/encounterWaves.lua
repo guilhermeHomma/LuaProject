@@ -6,10 +6,10 @@ local EncounterWaves = {
         count = {
             min = 2,
             max = 2,
-            perDifficulty = 1,
+            perDifficulty = 0.5,
         },
         enemyTypes = {
-            { id = "zombie", weight = 6 },
+            { id = "zombie", weight = 12 },
             { id = "babyZombie", weight = 2 },
             { id = "noHead", weight = 4 },
         },
@@ -21,10 +21,10 @@ local EncounterWaves = {
         count = {
             min = 2,
             max = 2,
-            perDifficulty = 1,
+            perDifficulty = 0.5,
         },
         enemyTypes = {
-            { id = "zombie", weight = 5 },
+            { id = "zombie", weight = 10 },
             { id = "babyZombie", weight = 3 },
             { id = "noHead", weight = 4 },
         },
@@ -36,7 +36,7 @@ local EncounterWaves = {
         count = {
             min = 2,
             max = 2,
-            perDifficulty = 1,
+            perDifficulty = 0.5,
         },
         enemyTypes = {
             { id = "babyZombie", weight = 3 },
@@ -44,6 +44,21 @@ local EncounterWaves = {
         },
         maxPerWave = {
             bigZombie = 2,
+        },
+    },
+    {
+        id = "zombie_horde",
+        minDifficulty = 2,
+        chance = 2,
+        count = {
+            min = 4,
+            max = 5,
+            perDifficulty = 0.5,
+        },
+        useWaveEnemyTypes = true,
+        allowAdditionalWave = false,
+        enemyTypes = {
+            { id = "zombie", weight = 1 },
         },
     },
 }

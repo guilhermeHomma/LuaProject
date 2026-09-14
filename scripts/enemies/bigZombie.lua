@@ -91,7 +91,7 @@ end
 
 function BigZombie:new(x, y)
     local zombie = Zombie.new(self, x, y)
-    zombie.speed = math.random(62, 72)
+    zombie.speed = math.random(55, 62)
     zombie.damageTimer = 0.1
     zombie.totalLife = 65
     zombie.life = zombie.totalLife

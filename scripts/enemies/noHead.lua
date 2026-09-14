@@ -896,9 +896,10 @@ function NoHead:update(dt)
         targetX = self.roamTargetX or targetX
         targetY = self.roamTargetY or targetY
         self.path = nil
-    elseif self.pathUpdateCounter >= getScaledPathUpdateInterval(self) or self.path == nil or #self.path < 2 then
+        self.pendingPathRequest = nil
+    elseif self.pendingPathRequest or self.pathUpdateCounter >= getScaledPathUpdateInterval(self) or self.path == nil or #self.path < 2 then
         self.pathUpdateCounter = 0
-        local path, requested = EnemyDirector:requestPath(self.x, self.y, targetX, targetY)
+        local path, requested = EnemyDirector:requestPath(self.x, self.y, targetX, targetY, self)
         if requested then
             self.path = path
         end

@@ -18,6 +18,7 @@ local specialCornerSideTile = {
     [53] = 49,
     [54] = 47,
 }
+local boxVisualIndices = {14, 18, 57, 58}
 local function getBoxParticleDropKey(tile)
     local FloorManager = require("scripts/managers/floorManager")
     local room = FloorManager:getCurrentRoom()
@@ -80,8 +81,10 @@ function Tile:setTilemap(tilemap)
 end
 
 function Tile:new(x, y, quadIndex, collider)
-    if quadIndex == 14 and math.random() > 0.4 then
-        quadIndex = 18
+    local visualIndex = quadIndex
+    if quadIndex == 14 then
+        visualIndex = boxVisualIndices[math.random(#boxVisualIndices)]
+        quadIndex = (visualIndex == 18 or visualIndex == 58) and 18 or 14
     end
 
     if collider == nil then collider = true end
@@ -90,8 +93,8 @@ function Tile:new(x, y, quadIndex, collider)
     local tileSet = TileSet:getTileSet()
     local tileSize = TileSet.tileSize
 
-    tile.quad = tileSet[quadIndex]
-    tile.quad2 = tileSet[quadIndex]
+    tile.quad = tileSet[visualIndex]
+    tile.quad2 = tileSet[visualIndex]
     tile.quadIndex = quadIndex
     if tile.quadIndex == 1 or tile.quadIndex == 2 or tile.quadIndex == 3
         or tile.quadIndex == 31 or tile.quadIndex == 32 or tile.quadIndex == 33
@@ -118,7 +121,7 @@ function Tile:new(x, y, quadIndex, collider)
     tile.breakTimer = 0
     tile.breakDuration = 0.1
     if tile.quadIndex == 14 or tile.quadIndex == 18 then
-        tile.life = math.random(14, 20)
+        tile.life = math.random(12, 16)
         tile.hitFlashTimer = 0
         tile.hitFlashDuration = 0.08
         DamageStretch:init(tile, 0.12, 0.08)

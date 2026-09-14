@@ -13,6 +13,7 @@ local TransitionManager = require("scripts.managers.transitionManager")
 local Dash = require("scripts/player/dash")
 local CardPickupEffects = require("scripts/player/cardPickupEffects")
 local PlayerAnimation = require("scripts/player/playerAnimation")
+local AliceAnimation = require("scripts/player/aliceAnimation")
 local playerGlitchShader = love.graphics.newShader("scripts/shaders/playerGlitch.glsl")
 local footstepBase = love.audio.newSource("assets/sfx/footsteps/foot-steps-0.mp3", "static")
 local damageBase = love.audio.newSource("assets/sfx/player/ow-damage.mp3", "static")
@@ -73,31 +74,18 @@ function Player:load(camera, spawnX, spawnY)
     self.life = self.totalLife
     self.isAlive = true
     self.flipX = false
-    self.playerSheet = love.graphics.newImage("assets/sprites/player/alice/alice.png")
     self.playerShadow = love.graphics.newImage("assets/sprites/player/shadow.png")
     self.handImage = love.graphics.newImage("assets/sprites/player/hand.png")
-    self.idleHandSheet = love.graphics.newImage("assets/sprites/player/alice/hand.png")
     self.handImage:setFilter("nearest", "nearest")
-    self.idleHandSheet:setFilter("nearest", "nearest")
-    self.playerSheet:setFilter("nearest", "nearest")
     self.playerShadow:setFilter("nearest", "nearest")
     self.mouseAngle = 0
-    self.animations = {
-        idle = { frames = {0, 1}, duration = 2 },
-        walk = { frames = {2, 3, 4, 5}, duration = 0.52 }
-    }
-    self.currentAnimation = "idle"
-    self.currentFrame = 1
-    self.animationTimer = 0
-    self.idleHandFrame = 1
-    self.idleHandTimer = 0
+    AliceAnimation.load(self)
     self.SquareParticleTime = 0
     self.damageTimer = 4
     self.gun:load()
     self.moveX = 0
     self.moveY = 0
     self.sideChangeTimer = 0
-    self.quads = PlayerAnimation.createGridQuads(self.playerSheet, self.spriteSize, 3, 6)
     PlayerAnimation.load(self)
 
     self.damageAlha = 0
@@ -211,69 +199,22 @@ function Player:updateDamageVignette(dt)
 end
 
 function Player:updateAnimation(dt, moving)
-    local newAnimation = moving and "walk" or "idle"
     self.shadowTimer = self.shadowTimer + dt
+    local previousAnimationTimer = self.animationTimer or 0
+    local changedAnimation, _, runSteps = AliceAnimation.update(self, dt, moving)
 
-    if self.currentAnimation ~= newAnimation then
-        if self.SquareParticleTime > 1.2 and self.animationTimer >0.05 then
+    if changedAnimation then
+        if self.SquareParticleTime > 1.2 and previousAnimationTimer > 0.05 then
             local lifetime = math.random(190, 195) / 100
             local particle = WalkParticleSquare:new(self.x, self.y, lifetime)
             table.insert(Game.particles, particle)
             self.SquareParticleTime = 0
 
-            playClonedSound(footstepBase, 0.18, (2.5 + math.random() * 0.4) * GAME_PITCH)
-
         end
-        self.currentAnimation = newAnimation
-        self.currentFrame = 1
-        self.animationTimer = 0
-        self.idleHandFrame = 1
-        self.idleHandTimer = 0
     end
     self.SquareParticleTime = self.SquareParticleTime + dt
-    local anim = self.animations[self.currentAnimation]
 
-    if not moving then
-        self.currentFrame = 1
-        self.animationTimer = 0
-        self.idleHandTimer = self.idleHandTimer + dt
-        if self.idleHandTimer >= 0.6 then
-            self.idleHandTimer = self.idleHandTimer - 0.6
-            self.idleHandFrame = self.idleHandFrame == 1 and 2 or 1
-        end
-        return
-    end
-
-    local duration = anim.duration
-    if self.gun.showGun then duration = duration * 1.25 end
-    local frameTime = duration / #anim.frames
-
-    if self.currentAnimation == "idle" then
-        self.idleHandTimer = self.idleHandTimer + dt
-        if self.idleHandTimer >= 0.6 then
-            self.idleHandTimer = self.idleHandTimer - 0.6
-            self.idleHandFrame = self.idleHandFrame == 1 and 2 or 1
-        end
-    else
-        self.idleHandFrame = self.currentFrame
-        self.idleHandTimer = 0
-    end
-
-    if self.currentAnimation == "idle" and self.currentFrame == 2 then
-        frameTime = 0.1
-    end
-
-    self.animationTimer = self.animationTimer + dt
-    local advancedFrames = 0
-    while self.animationTimer >= frameTime and advancedFrames < 4 do
-        self.animationTimer = self.animationTimer - frameTime
-        self.currentFrame = self.currentFrame + 1
-        if self.currentFrame > #anim.frames then
-            self.currentFrame = 1
-        end
-        advancedFrames = advancedFrames + 1
-
-        if moving and self.currentFrame % 2 == 0 then
+    for _ = 1, runSteps do
             
             playClonedSound(footstepBase, 0.34, (0.7 + math.random() * 0.6) * GAME_PITCH)
             
@@ -287,10 +228,7 @@ function Player:updateAnimation(dt, moving)
                     table.insert(Game.particles, particle)
                 end
             end
-        end
     end
-
-
 end
 
 function Player:update(dt)
@@ -1180,17 +1118,17 @@ function Player:drawHand()
 
 end
 
-function Player:drawIdleHand(quad, scaleX, originX)
+function Player:drawAnimatedHand(image, quad, scaleX, originX)
     if self.gun.showGun then return end
 
     self:drawPlayerImage(
-        self.idleHandSheet,
+        image,
         quad,
         self.x,
         self.y,
         0,
         scaleX,
-        1.4,
+        1.3,
         originX,
         self.spriteSize
     )
@@ -1309,49 +1247,14 @@ function Player:draw()
         end
     end
 
-    local anim = self.animations[self.currentAnimation]
-    local frameIndex = anim.frames[self.currentFrame]
-    local handFrameIndex = frameIndex
-
-    local quad = self.quads[frameIndex + 1] -- +1 porque Lua começa em 1
-
-    local handQuad = quad
-
-    if self.moveX == 0 and self.moveY > 0  then
-        quad = self.quads[frameIndex + 1 + 6]
-        handQuad = quad
-
-    end
-
-    if self.moveX == 0 and self.moveY < 0  then
-        quad = self.quads[frameIndex + 1 + 12]
-        handQuad = quad
-
-    end
-
-    if self.currentAnimation == "idle" then
-        handFrameIndex = anim.frames[self.idleHandFrame]
-        handQuad = self.quads[handFrameIndex + 1]
-
-        if self.moveX == 0 and self.moveY > 0 then
-            handQuad = self.quads[handFrameIndex + 1 + 6]
-        end
-
-        if self.moveX == 0 and self.moveY < 0 then
-            handQuad = self.quads[handFrameIndex + 1 + 12]
-        end
-    end
+    local frameData = AliceAnimation.getCurrentFrame(self)
     
 
     local walkStretchX = 1
     local walkStretchY = 1
     if self.currentAnimation == "walk" then
-        local walkDuration = anim.duration
-        if self.gun.showGun then walkDuration = walkDuration * 1.25 end
-
-        local walkFrameTime = walkDuration / #anim.frames
-        local frameProgress = math.min(self.animationTimer / walkFrameTime, 1)
-        local loopProgress = ((self.currentFrame - 1) + frameProgress) / #anim.frames
+        local frameProgress = math.min(self.animationTimer / frameData.frameTime, 1)
+        local loopProgress = ((self.currentFrame - 1) + frameProgress) / frameData.frameCount
         local walkPulse = math.sin(loopProgress * math.pi * 4)
 
         walkStretchX = 1 + walkPulse * 0.025
@@ -1359,25 +1262,25 @@ function Player:draw()
     end
 
     local scaleX = (self.flipH and -1 or 1) * walkStretchX
-    local scaleY = 1.4 * walkStretchY
+    local scaleY = 1.3 * walkStretchY
     local originX = self.flipH and (self.spriteSize - self.spriteSize / 2) or (self.spriteSize / 2)
     
     local mouseX, mouseY = mousePosition()
 
     if mouseY > self.y then
 
-        self:drawPlayerImage(self.playerSheet, quad, self.x, self.y, 0, scaleX, scaleY, originX, self.spriteSize)
+        self:drawPlayerImage(frameData.bodyImage, frameData.bodyQuad, self.x, self.y, 0, scaleX, scaleY, originX, self.spriteSize)
         if self.gun.showGun then
             self:drawHand()
         else
-            self:drawIdleHand(handQuad, scaleX, originX)
+            self:drawAnimatedHand(frameData.handImage, frameData.handQuad, scaleX, originX)
         end
     else 
         if self.gun.showGun then
             self:drawHand()
         end
-        self:drawPlayerImage(self.playerSheet, quad, self.x, self.y, 0, scaleX, scaleY, originX, self.spriteSize)
-        self:drawIdleHand(handQuad, scaleX, originX)
+        self:drawPlayerImage(frameData.bodyImage, frameData.bodyQuad, self.x, self.y, 0, scaleX, scaleY, originX, self.spriteSize)
+        self:drawAnimatedHand(frameData.handImage, frameData.handQuad, scaleX, originX)
     end
 
     self:drawReloadBar()
@@ -1385,47 +1288,19 @@ function Player:draw()
 end
 
 function Player:getCurrentDrawQuads()
-    local anim = self.animations[self.currentAnimation]
-    local frameIndex = anim.frames[self.currentFrame]
-    local handFrameIndex = frameIndex
-    local quad = self.quads[frameIndex + 1]
-    local handQuad = quad
-
-    if self.moveX == 0 and self.moveY > 0 then
-        quad = self.quads[frameIndex + 1 + 6]
-        handQuad = quad
-    end
-
-    if self.moveX == 0 and self.moveY < 0 then
-        quad = self.quads[frameIndex + 1 + 12]
-        handQuad = quad
-    end
-
-    if self.currentAnimation == "idle" then
-        handFrameIndex = anim.frames[self.idleHandFrame]
-        handQuad = self.quads[handFrameIndex + 1]
-
-        if self.moveX == 0 and self.moveY > 0 then
-            handQuad = self.quads[handFrameIndex + 1 + 6]
-        end
-
-        if self.moveX == 0 and self.moveY < 0 then
-            handQuad = self.quads[handFrameIndex + 1 + 12]
-        end
-    end
-
-    return quad, handQuad
+    local frameData = AliceAnimation.getCurrentFrame(self)
+    return frameData.bodyQuad, frameData.handQuad, frameData.bodyImage, frameData.handImage
 end
 
 function Player:drawXray()
     if not self.isAlive then return end
 
-    local quad, handQuad = self:getCurrentDrawQuads()
+    local quad, handQuad, bodyImage, animatedHandImage = self:getCurrentDrawQuads()
     local scaleX = self.flipH and -1 or 1
-    local scaleY = 1.4
+    local scaleY = 1.3
     local originX = self.flipH and (self.spriteSize - self.spriteSize / 2) or (self.spriteSize / 2)
 
-    love.graphics.draw(self.playerSheet, quad, self.x, self.y, 0, scaleX, scaleY, originX, self.spriteSize)
+    love.graphics.draw(bodyImage, quad, self.x, self.y, 0, scaleX, scaleY, originX, self.spriteSize)
 
     if self.gun and self.gun.showGun and not Dialog.breakMovements then
         local handX = self.x + math.cos(self.mouseAngle) * 5
@@ -1457,7 +1332,7 @@ function Player:drawXray()
             )
         end
     elseif not self.gun or not self.gun.showGun then
-        love.graphics.draw(self.idleHandSheet, handQuad, self.x, self.y, 0, scaleX, 1.4, originX, self.spriteSize)
+        love.graphics.draw(animatedHandImage, handQuad, self.x, self.y, 0, scaleX, 1.3, originX, self.spriteSize)
     end
 end
 

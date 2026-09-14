@@ -799,14 +799,18 @@ function CardChoice:start(worldX, worldY, options)
 
     for i = 1, count do
         local card = available[i]
+        local targetX = firstX + (i - 1) * spacing
+        local targetY = baseHeight / 2 - 66
+        local fixedPosition = options.fixedPositions == true
         self.cards[#self.cards + 1] = {
             def = card,
-            x = self.sourceX,
-            y = self.sourceY,
-            startX = self.sourceX,
-            startY = self.sourceY,
-            targetX = firstX + (i - 1) * spacing,
-            targetY = baseHeight / 2 - 66,
+            x = fixedPosition and targetX or self.sourceX,
+            y = fixedPosition and targetY or self.sourceY,
+            startX = fixedPosition and targetX or self.sourceX,
+            startY = fixedPosition and targetY or self.sourceY,
+            targetX = targetX,
+            targetY = targetY,
+            fixedPosition = fixedPosition,
             timer = 0,
             delay = (i - 1) * 0.045,
             shufflePlayed = false,
@@ -865,8 +869,10 @@ function CardChoice:update(dt)
         local eased = easeOut(t)
         local previousCardX = card.x
         local previousCardY = card.y
-        card.x = card.startX + (card.targetX - card.startX) * eased
-        card.y = card.startY + (card.targetY - card.startY) * eased
+        if not card.fixedPosition then
+            card.x = card.startX + (card.targetX - card.startX) * eased
+            card.y = card.startY + (card.targetY - card.startY) * eased
+        end
         local particleAnchorDx = card.x - (previousCardX or card.x)
         local particleAnchorDy = card.y - (previousCardY or card.y)
 
@@ -1107,7 +1113,7 @@ end
 function CardChoice:drawCard(card, index)
     local alpha = self.drawAlpha or 1
     local time = love.timer.getTime()
-    local bob = math.sin(time * 1.4 + index) * 1.8
+    local bob = card.fixedPosition and 0 or math.sin(time * 1.4 + index) * 1.8
     local hover = card.hover or 0
     local leanX = (card.tiltX or 0) * hover
     local leanY = (card.tiltY or 0) * hover
@@ -1126,7 +1132,7 @@ function CardChoice:drawCard(card, index)
     local stretchX = 1 + pulse * cardStretchXAmount
     local stretchY = 1 - pulse * cardStretchYAmount
     local x = card.x
-    local y = card.y + bob - hover * 8
+    local y = card.y + bob - (card.fixedPosition and 0 or hover * 8)
     local def = card.def
     local cardImage = getCardBackImage(def)
     local artImage = getCardArtImage(def)

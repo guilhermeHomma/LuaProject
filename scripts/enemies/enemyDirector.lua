@@ -30,7 +30,25 @@ function EnemyDirector:canRequestPath()
     return self.pathRequestsThisFrame < self.pathRequestBudget
 end
 
-function EnemyDirector:requestPath(startX, startY, targetX, targetY)
+function EnemyDirector:requestPath(startX, startY, targetX, targetY, enemy)
+    local pending = enemy and enemy.pendingPathRequest
+    if pending then
+        local pendingPath, pendingHit = Tilemap:getPathBetweenWorldPoints(
+            pending.startX, pending.startY, pending.targetX, pending.targetY, { cacheOnly = true })
+        if pendingHit then
+            enemy.pendingPathRequest = nil
+            local currentMapX, currentMapY = Tilemap:worldToMap(startX, startY)
+            if pendingPath and pendingPath[1]
+                and pendingPath[1].x == currentMapX and pendingPath[1].y == currentMapY then
+                return pendingPath, true
+            end
+        elseif love.timer.getTime() - pending.time < 0.4 then
+            return nil, false
+        else
+            enemy.pendingPathRequest = nil
+        end
+    end
+
     local path, cacheHit = Tilemap:getPathBetweenWorldPoints(startX, startY, targetX, targetY, { cacheOnly = true })
     if cacheHit then
         return path, true
@@ -41,8 +59,20 @@ function EnemyDirector:requestPath(startX, startY, targetX, targetY)
     end
 
     self.pathRequestsThisFrame = (self.pathRequestsThisFrame or 0) + 1
+    if enemy and not (enemy.path and #enemy.path > 1) then
+        path = Tilemap:getPathBetweenWorldPoints(startX, startY, targetX, targetY, { forceSync = true })
+        return path, true
+    end
+
     path = Tilemap:getPathBetweenWorldPoints(startX, startY, targetX, targetY)
-    return path, true
+    if enemy and not path then
+        enemy.pendingPathRequest = {
+            startX = startX, startY = startY, targetX = targetX, targetY = targetY,
+            time = love.timer.getTime(),
+        }
+        return nil, false
+    end
+    return path, path ~= nil
 end
 
 function EnemyDirector:shouldUsePathfinding(enemy)

@@ -85,6 +85,7 @@ function BulletColorParticle:new(x, y, height, palette, options)
     particle.fadeOut = options.fadeOut == true
     particle.alpha = options.alpha or 1
     particle.isAlive = true
+    particle.parallelKind = "bulletColor"
     return particle
 end
 

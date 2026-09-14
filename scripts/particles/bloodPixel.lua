@@ -45,6 +45,7 @@ function BloodPixel:new(x, y, dx, dy, customPalette)
     particle.frozenColor = nil
     particle.isAlive = true
     particle.particleType = "bloodPixel"
+    particle.parallelKind = "bloodPixel"
     particle.updateInterval = bloodUpdateInterval
     particle.maxUpdateDt = bloodUpdateInterval * 2
     particle.updateAccumulator = bloodUpdateInterval

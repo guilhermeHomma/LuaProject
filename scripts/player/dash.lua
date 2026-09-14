@@ -242,12 +242,14 @@ function Dash:captureAfterimage()
         return
     end
 
-    local quad, handQuad = player:getCurrentDrawQuads()
+    local quad, handQuad, bodyImage, handImage = player:getCurrentDrawQuads()
     self.afterimages[#self.afterimages + 1] = {
         x = player.x,
         y = player.y + self:getVisualOffsetY(),
         quad = quad,
         handQuad = handQuad,
+        bodyImage = bodyImage,
+        handImage = handImage,
         flipH = player.flipH,
         stretch = self:getVisualStretch(),
         timer = 0,
@@ -451,9 +453,9 @@ function Dash:drawAfterimages(player)
             local scaleY = 1.5 * (1 + stretch)
             local originX = image.flipH and (player.spriteSize - player.spriteSize / 2) or (player.spriteSize / 2)
             self:beginTint(color, tintStrength)
-            love.graphics.draw(player.playerSheet, image.quad, image.x, image.y, 0, scaleX, scaleY, originX, player.spriteSize)
+            love.graphics.draw(image.bodyImage, image.quad, image.x, image.y, 0, scaleX, scaleY, originX, player.spriteSize)
             if image.handQuad and (not player.gun or not player.gun.showGun) then
-                love.graphics.draw(player.idleHandSheet, image.handQuad, image.x, image.y, 0, scaleX, scaleY, originX, player.spriteSize)
+                love.graphics.draw(image.handImage, image.handQuad, image.x, image.y, 0, scaleX, scaleY, originX, player.spriteSize)
             end
             self:endTint()
         end

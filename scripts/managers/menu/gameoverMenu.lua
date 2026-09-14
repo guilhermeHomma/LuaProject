@@ -10,7 +10,7 @@ setmetatable(gameOverMenu, { __index = baseMenu })
 function gameOverMenu:load()
     baseMenu.load(self)
     self.MenuTItle = Localization:t("menu.game_over")
-    self.menuOptions = {"new_run", "main_menu"}
+    self.menuOptions = {"new_run", "main_menu", "exit_game"}
     self.lockOnSelect = true
     self.entryInputDelay = 0
 end
@@ -51,6 +51,8 @@ function gameOverMenu:onSelect()
         loadGame()
     elseif self.selectedOption == 2 then
         openReturnToMenuConfirm(STATES.gameDead)
+    elseif self.selectedOption == 3 then
+        openQuitGameConfirm(STATES.gameDead)
     end
 end
 

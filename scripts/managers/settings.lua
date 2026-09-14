@@ -2,9 +2,9 @@ local Settings = {}
 local SettingsStorage = require("scripts/managers/settingsStorage")
 local Localization = require("scripts/managers/localization")
 
-local BRIGHTNESS_MIN = 0
-local BRIGHTNESS_MAX = 10
-local BRIGHTNESS_DEFAULT = 5
+local BRIGHTNESS_MIN = -4
+local BRIGHTNESS_MAX = 4
+local BRIGHTNESS_DEFAULT = 0
 
 local function clampInteger(value, minValue, maxValue)
     value = math.floor((tonumber(value) or minValue) + 0.5)
@@ -106,7 +106,13 @@ function Settings:loadSavedSettings()
     self.cameraShakeEnabled = saved.shake ~= "0"
     self.fpsEnabled = saved.fps == "1"
     self.language = saved.lang or self.language
-    self.brightness = clampInteger(saved.brightness or self.brightness, BRIGHTNESS_MIN, BRIGHTNESS_MAX)
+    local savedBrightness = tonumber(saved.brightness)
+    if savedBrightness then
+        if saved.v == "1" then
+            savedBrightness = (savedBrightness - 5) * 0.8
+        end
+        self.brightness = clampInteger(savedBrightness, BRIGHTNESS_MIN, BRIGHTNESS_MAX)
+    end
 
     local width = tonumber(saved.w)
     local height = tonumber(saved.h)

@@ -23,6 +23,7 @@ function Ball:new(x, y, height, dx, dy, lifetime, size, options)
     particle.speedDown = math.random(45, 55) * (options.speedDownMultiplier or 1)
     particle.dx = dx
     particle.dy = dy
+    particle.parallelKind = "ball"
     if options.rgbShift then
         --particle.rgbShift = RgbShiftDraw.createConfig(options.rgbShift)
     end

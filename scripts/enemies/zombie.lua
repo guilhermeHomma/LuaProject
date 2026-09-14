@@ -31,6 +31,10 @@ local enemyDamageBase = love.audio.newSource("assets/sfx/enemyDamage.mp3", "stat
 local coinDropBase = love.audio.newSource("assets/sfx/drops/coin-drop.mp3", "static")
 local footstepBase = love.audio.newSource("assets/sfx/footsteps/foot-steps-0.mp3", "static")
 
+local function usesFifteenFrameSheet(enemyTypeId)
+    return enemyTypeId == "zombie" or enemyTypeId == "babyZombie"
+end
+
 shadowSprite:setFilter("nearest", "nearest")
 
 local function getSharedSprite(path)
@@ -209,7 +213,7 @@ function Zombie:updateDeathRoamPause(dt)
 
     self.deathRoamPauseTimer = math.max(0, self.deathRoamPauseTimer - dt)
     self.state = Zombie.states.idle
-    self:animate(1, 2, dt)
+    self:animate(self.idleStartFrame or 1, self.idleEndFrame or 2, dt)
     return true
 end
 
@@ -287,9 +291,24 @@ function Zombie:new(x, y, speed)
     enemy.spriteShadow = shadowSprite
     enemy.mouthVariant = "zombie"
     
-    enemy.frameWidth = 32
-    enemy.frameHeight = 32
+    local hasNewSpriteSheet = usesFifteenFrameSheet(enemy.enemyTypeId)
+    enemy.frameWidth = hasNewSpriteSheet and 40 or 32
+    enemy.frameHeight = enemy.frameWidth
     enemy.frames = getSharedFrames(enemy.spriteKey, enemy.spriteSheet, enemy.frameWidth, enemy.frameHeight)
+    if hasNewSpriteSheet then
+        assert(#enemy.frames >= 15, "Zombie spritesheet precisa de 15 frames (5 idle, 6 run, 4 death): " .. enemy.spriteKey)
+        enemy.idleStartFrame, enemy.idleEndFrame = 1, 5
+        enemy.runStartFrame, enemy.runEndFrame = 6, 11
+        enemy.spriteStretch = 1.3
+        enemy.deathBodyParticleOptions = {
+            frameWidth = 40,
+            frameHeight = 40,
+            scaleY = 1.3,
+            drawYOffset = 0,
+            animationFrames = {12, 13, 14, 15},
+            animationFrameDuration = 0.08,
+        }
+    end
     enemy.noise = zombieNoiseBase:clone()
     enemy.pathUpdateInterval = 3
     enemy.pathUpdateCounter = love.math.random(0, enemy.pathUpdateInterval)
@@ -312,7 +331,8 @@ function Zombie:new(x, y, speed)
 
     enemy.currentFrame = 1
     enemy.animationTimer = 0
-    enemy.animationSpeed = 0.15
+    enemy.animationSpeed = hasNewSpriteSheet and 0.08 or 0.15
+    enemy.idleAnimationSpeed = hasNewSpriteSheet and 0.12 or nil
     enemy.stateTimer = 0
     enemy.idleDuration = math.random(7, 13) / 10
     enemy.walkDuration = math.random(4, 6)
@@ -356,23 +376,7 @@ function Zombie:new(x, y, speed)
 end
 
 function Zombie:getSpriteKey()
-    if math.random(1, 100) < 2 then
-        return "assets/sprites/enemy/zombie/enemy-paulo.png"
-    end
-    if math.random(1, 100) < 2 then
-        return "assets/sprites/enemy/zombie/enemy-ponei.png"
-    end
-    if math.random(1, 100) < 2 then
-        return "assets/sprites/enemy/zombie/enemy-jhone.png"
-    end
-    if math.random(1, 3) == 2 then
-        return "assets/sprites/enemy/zombie/enemy2.png"
-    end
-    if math.random(1, 3) == 2 then
-        return "assets/sprites/enemy/zombie/enemy3.png"
-    end
-
-    return "assets/sprites/enemy/zombie/enemy.png"
+    return "assets/sprites/enemy/zombie/zombie/zombie1.png"
 end
 
 function Zombie:getSprite()
@@ -537,7 +541,7 @@ function Zombie:update(dt)
         self.state = Zombie.states.idle
         self.velocityX = 0
         self.velocityY = 0
-        self:animate(1, 2, dt)
+        self:animate(self.idleStartFrame or 1, self.idleEndFrame or 2, dt)
         return
     end
 
@@ -569,10 +573,11 @@ function Zombie:update(dt)
         targetX = self.roamTargetX or targetX
         targetY = self.roamTargetY or targetY
         self.path = nil
-    elseif self.pathUpdateCounter >= getScaledPathUpdateInterval(self) or self.path == nil or #self.path < 2 then
+        self.pendingPathRequest = nil
+    elseif self.pendingPathRequest or self.pathUpdateCounter >= getScaledPathUpdateInterval(self) or self.path == nil or #self.path < 2 then
     --if (self.pathUpdateCounter >= self.pathUpdateInterval and self.state == Zombie.states.idle and Player.isAlive) or self.path == nil or #self.path < 2 then
         self.pathUpdateCounter = 0
-        local path, requested = EnemyDirector:requestPath(self.x, self.y, targetX, targetY)
+        local path, requested = EnemyDirector:requestPath(self.x, self.y, targetX, targetY, self)
         if requested then
             self.path = path
         end
@@ -647,7 +652,7 @@ function Zombie:update(dt)
     end
 
     if self.state == Zombie.states.idle or self.state == Zombie.states.damage then
-        self:animate(1, 2, dt)
+        self:animate(self.idleStartFrame or 1, self.idleEndFrame or 2, dt)
         if self.state == Zombie.states.damage then
             local movekbX = self.kbdx * dt * 0.05
             local movekbY = self.kbdy * dt * 0.05
@@ -659,9 +664,9 @@ function Zombie:update(dt)
 
     else
         if self.isVisuallyWalking then
-            self:animate(3, 6, dt)
+            self:animate(self.runStartFrame or 3, self.runEndFrame or 6, dt)
         else
-            self:animate(1, 2, dt)
+            self:animate(self.idleStartFrame or 1, self.idleEndFrame or 2, dt)
         end
 
         self.flipTimer = self.flipTimer + dt
@@ -945,14 +950,11 @@ function Zombie:takeDamage(damage, dx, dy)
     end
 end
 
-function Zombie:death()
-    if self.life > 0 or not self.isAlive then
+function Zombie:spawnDeathDrops()
+    if self.deathDropsSpawned then
         return
     end
-
-    if self.state == Zombie.states.damage then
-        return
-    end
+    self.deathDropsSpawned = true
 
     local playerDistance = distance(Player, self)
     local volume = getDistanceVolume(playerDistance, 0.4, 200)
@@ -962,6 +964,18 @@ function Zombie:death()
     end
 
     DropTemplates.spawnResolvedDrops(self.resolvedDrops, self.x, self.y, Game.objects)
+end
+
+function Zombie:death()
+    if self.life > 0 or not self.isAlive then
+        return
+    end
+
+    if self.state == Zombie.states.damage then
+        return
+    end
+
+    self:spawnDeathDrops()
 
     local deadDropMin = self.deadDropParticleMin or 2
     local deadDropMax = self.deadDropParticleMax or 4
@@ -995,18 +1009,32 @@ function Zombie:death()
 end
 
 function Zombie:animate(startFrame, endFrame, dt)
+    if self.currentFrame < startFrame or self.currentFrame > endFrame then
+        self.currentFrame = startFrame
+        self.animationTimer = 0
+    end
     self.animationTimer = self.animationTimer + dt
+    local frameDuration = startFrame == self.idleStartFrame
+        and self.idleAnimationSpeed or self.animationSpeed
 
     local advancedFrames = 0
-    while self.animationTimer >= self.animationSpeed and advancedFrames < 4 do
-        self.animationTimer = self.animationTimer - self.animationSpeed
+    while self.animationTimer >= frameDuration and advancedFrames < 4 do
+        self.animationTimer = self.animationTimer - frameDuration
         self.currentFrame = self.currentFrame + 1
         if self.currentFrame > endFrame then
             self.currentFrame = startFrame
         end
         advancedFrames = advancedFrames + 1
 
-        if self.state == Zombie.states.walk and (self.footstepEveryWalkFrame or self.currentFrame % 2 == 0) then --ok
+        local playFootstep = self.footstepEveryWalkFrame or self.currentFrame % 2 == 0
+        if self.runStartFrame then
+            playFootstep = playFootstep and startFrame == self.runStartFrame
+        end
+        if usesFifteenFrameSheet(self.enemyTypeId) then
+            playFootstep = startFrame == self.runStartFrame
+                and (self.currentFrame == self.runStartFrame + 2 or self.currentFrame == self.runStartFrame + 5)
+        end
+        if self.state == Zombie.states.walk and playFootstep then
 
             local playerDistance = self:playerDistance()
             if playerDistance <= 150 then
@@ -1050,7 +1078,7 @@ function Zombie:drawShadow()
 end
 
 function Zombie:drawMouth()
-    if self.state == Zombie.states.damage then
+    if usesFifteenFrameSheet(self.enemyTypeId) or self.state == Zombie.states.damage then
         return
     end
 
@@ -1087,7 +1115,7 @@ function Zombie:draw()
     end
     local xOffset = 0
     local scaleX = 1
-    local scaleY = stretch
+    local scaleY = self.spriteStretch or stretch
     local alpha = 1
     local yOffset = 0
     if self.flipH then
@@ -1108,7 +1136,7 @@ function Zombie:draw()
         local progress = 1 - self.spawnIntroTimer / self.spawnIntroDuration
         alpha = progress
         scaleX = scaleX * 1.1
-        scaleY = stretch * 1.1
+        scaleY = (self.spriteStretch or stretch) * 1.1
         yOffset = 2 * (1 - progress)
         love.graphics.setShader(whiteShader)
     elseif self.state == Zombie.states.damage then
@@ -1185,7 +1213,7 @@ function Zombie:drawXray()
 
     local xOffset = 0
     local scaleX = 1
-    local scaleY = stretch
+    local scaleY = self.spriteStretch or stretch
     if self.flipH then
         scaleX = -1
         xOffset = 1

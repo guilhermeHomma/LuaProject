@@ -13,8 +13,9 @@ local bulletSprite = love.graphics.newImage("assets/sprites/enemy/nohead/bullet.
 local bulletSpritePath = "assets/sprites/enemy/nohead/bullet.png"
 local bulletFrameSize = 16
 local bulletFrameCount = 4
-local bulletFrameDuration = 0.035
-local bulletAnimationDuration = bulletFrameDuration * bulletFrameCount
+local bulletFrameDuration = 0.04
+local bulletFirstFrameDuration = bulletFrameDuration / 2
+local bulletAnimationDuration = bulletFirstFrameDuration + bulletFrameDuration * (bulletFrameCount - 1)
 local bulletQuads = {}
 local defaultImpactShockwave = {
     enabled = true,
@@ -55,6 +56,15 @@ local function getBulletQuad(frameIndex)
     end
 
     return bulletQuads[frameIndex]
+end
+
+local function getBulletFrameIndex(elapsed, loop)
+    local time = loop and (elapsed % bulletAnimationDuration) or math.min(elapsed, bulletAnimationDuration)
+    if time < bulletFirstFrameDuration then
+        return 0
+    end
+    return math.min(bulletFrameCount - 1,
+        1 + math.floor((time - bulletFirstFrameDuration) / bulletFrameDuration))
 end
 
 local function drawBulletSprite(frameIndex, x, y, angle, scale, alpha)
@@ -373,21 +383,21 @@ function NoHeadBullet:draw()
     local arc = self.arcOffset or 0
     local drawX = self.x
     local drawY = self.y - self.height - arc
-    local frameIndex = math.floor(self.timer / bulletFrameDuration) % bulletFrameCount
+    local frameIndex = getBulletFrameIndex(self.timer, true)
     local vs = self.visualScale or 1.2
     local bodyAlpha = 1
     local bodyScale = vs
 
     if self.isDying then
         local progress = math.min(self.impactTimer / self.impactDuration, 1)
-        frameIndex = math.min(bulletFrameCount - 1, math.floor(progress * bulletFrameCount))
+        frameIndex = getBulletFrameIndex(progress * bulletAnimationDuration, false)
         bodyAlpha = 1 - progress
         bodyScale = vs + progress * 0.5
     end
 
     love.graphics.setColor(1, 1, 1, 1)
     for _, point in ipairs(self.spriteTrail) do
-        local trailFrame = math.min(bulletFrameCount - 1, math.floor(point.timer / bulletFrameDuration))
+        local trailFrame = getBulletFrameIndex(point.timer, false)
         local alpha = 1 - point.timer / bulletAnimationDuration
         drawBulletSprite(
             trailFrame,
@@ -413,7 +423,7 @@ end
 
 function NoHeadBullet:drawXray()
     local arc = self.arcOffset or 0
-    local frameIndex = math.floor(self.timer / bulletFrameDuration) % bulletFrameCount
+    local frameIndex = getBulletFrameIndex(self.timer, true)
     drawBulletSprite(
         frameIndex,
         self.x,

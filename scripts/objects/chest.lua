@@ -142,7 +142,7 @@ function Chest:new(x, y, chestType)
     chest.flashDuration = 0.32
     chest.hitFlashTimer = 0
     chest.hitFlashDuration = 0.08
-    chest.life = chest.chestType == "wood" and 10 or nil
+    chest.life = chest.chestType == "wood" and math.random(12, 16) or nil
     chest.isBreaking = false
     chest.breakTimer = 0
     chest.breakDuration = 0.1
@@ -283,7 +283,7 @@ function Chest:onshoot(damage, options)
 
     self.hitFlashTimer = self.hitFlashDuration
     DamageStretch:start(self)
-    self.life = forceBreak and 0 or ((self.life or 10) - (damage or 1))
+    self.life = forceBreak and 0 or ((self.life or 12) - (damage or 1))
     if self.life > 0 then
         return true
     end

@@ -28,6 +28,7 @@ local WorldRenderer = require("scripts/render/worldRenderer")
 local RoomEncounterManager = require("scripts/managers/roomEncounterManager")
 local RoomFlowManager = require("scripts/managers/roomFlowManager")
 local PlayerAnimation = require("scripts/player/playerAnimation")
+local ParallelParticles = require("scripts/particles/parallelParticles")
 
 RoomEncounterManager.attach(Game)
 RoomFlowManager.attach(Game)
@@ -816,6 +817,9 @@ end
 
 function Game:updateParticleList(dt)
     local list = self.particles or {}
+    local useParallel = ParallelParticles:beginFrame(list)
+    local canDispatch = useParallel and not ParallelParticles:isPending()
+    local batchItems, batchParticles = {}, {}
     local i = #list
     while i >= 1 do
         local item = list[i]
@@ -824,15 +828,44 @@ function Game:updateParticleList(dt)
                 item:queueDraw()
             end
 
-            if item.updateInterval then
-                item.updateAccumulator = (item.updateAccumulator or 0) + dt
-                if item.updateAccumulator >= item.updateInterval then
-                    local updateDt = math.min(item.updateAccumulator, item.maxUpdateDt or item.updateAccumulator)
-                    item.updateAccumulator = 0
-                    item:update(updateDt)
+            if useParallel and item.parallelKind then
+                if not item.queueDraw then
+                    local offset = item.parallelKind == "ball" and (item.drawPriorityOffset or 5)
+                        or item.parallelKind == "bulletSprite" and 4
+                        or (item.parallelKind == "walkBall" or item.parallelKind == "walkSquare") and 5 or 6
+                    addToDrawQueue(item.drawPriorityY or (item.y + offset), item)
+                end
+                item.parallelAccumDt = (item.parallelAccumDt or 0) + dt
+                if canDispatch then
+                    local updateDt = item.parallelAccumDt
+                    if item.updateInterval then
+                        item.updateAccumulator = (item.updateAccumulator or 0) + updateDt
+                        updateDt = 0
+                        if item.updateAccumulator >= item.updateInterval then
+                            updateDt = math.min(item.updateAccumulator, item.maxUpdateDt or item.updateAccumulator)
+                            item.updateAccumulator = 0
+                        end
+                    end
+                    item.parallelAccumDt = 0
+                    if updateDt > 0 then
+                        local snapshot = ParallelParticles:makeItem(item, updateDt)
+                        batchItems[#batchItems + 1] = snapshot
+                        batchParticles[snapshot.id] = item
+                    end
                 end
             else
-                item:update(dt)
+                local updateDt = dt + (item.parallelAccumDt or 0)
+                item.parallelAccumDt = nil
+                if item.updateInterval then
+                    item.updateAccumulator = (item.updateAccumulator or 0) + updateDt
+                    if item.updateAccumulator >= item.updateInterval then
+                        updateDt = math.min(item.updateAccumulator, item.maxUpdateDt or item.updateAccumulator)
+                        item.updateAccumulator = 0
+                        item:update(updateDt)
+                    end
+                else
+                    item:update(updateDt)
+                end
             end
         end
 
@@ -846,6 +879,9 @@ function Game:updateParticleList(dt)
         end
 
         i = i - 1
+    end
+    if canDispatch then
+        ParallelParticles:dispatch(batchItems, batchParticles)
     end
 end
 
@@ -999,6 +1035,8 @@ function Game:updateManagers(dt)
     HeartSound:update(dt)
     Tilemap:update(dt)
     self:checkRoomTransition(dt)
+    WorldRenderer.queueSort(self)
+    WorldRenderer.prepareTileLighting(self)
     PointsManager:update(dt)
     CardChoice:update(dt)
     camera:update(dt)
@@ -1006,6 +1044,7 @@ end
 
 function Game:update(dt)
     ACTIVE_LIGHT_MANAGER = self
+    self.renderFrameId = (self.renderFrameId or 0) + 1
     self.drawQueue = self.drawQueue or {}
     for i = #self.drawQueue, 1, -1 do
         self.drawQueue[i] = nil
@@ -1076,6 +1115,9 @@ function Game:update(dt)
         self:updateFootsteps(worldDt)
         self:updateWeaponShockwaves(worldDt)
         self:updateManagers(worldDt)
+    end
+    if showingThanks then
+        WorldRenderer.queueSort(self)
     end
 end
 

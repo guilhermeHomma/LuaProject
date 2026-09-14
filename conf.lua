@@ -21,24 +21,22 @@ local function mergeDefaults(defaults, overrides)
 end
 
 local DEFAULT_GAME_FLAGS = {
-    skipIntro = true,
+    skipIntro = false,
     log = false,
     logFloorGeneration = false,
     weaponTestLevel = false,
     experimentalZombieStressTest = false,
     cameraShake = true,
-    brightness = 5,
+    brightness = 0,
     vsync = false,
     performanceOverlay = false,
-    globalPalette = false,
-    globalPaletteMode = "list",
     crt = {
         enabled = true,
         intensity = 0.9,
-        scanline = 0.45,
+        scanline = 0.25,
         curvature = 0.005,
         vignette = 0.5,
-        chromatic = 0.86,
+        chromatic = 0.26,
         fast = true,
     },
     levelTest = {

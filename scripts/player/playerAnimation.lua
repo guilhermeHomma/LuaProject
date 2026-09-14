@@ -4,7 +4,7 @@ local BloodPixel = require("scripts/particles/bloodPixel")
 local impactSoundBase = love.audio.newSource("assets/sfx/effects/impact-hit.mp3", "static")
 
 local fallConfig = {
-    sheetPath = "assets/sprites/player/alice/fall.png",
+    sheetPath = "assets/sprites/player/alice/fall/fall.png",
     frameSize = 40,
     frameTime = 0.1,
     startOffsetY = -320,
@@ -42,27 +42,6 @@ local function playClonedSound(baseSource, volume, pitch)
     setSourceVolume(sound, (volume or 1) * (SOUND_VOLUME or 1))
     sound:setPitch((pitch or 1) * (GAME_PITCH or 1))
     sound:play()
-end
-
-function PlayerAnimation.createGridQuads(image, frameSize, rowCount, columnCount)
-    local quads = {}
-    local sheetWidth = image:getWidth()
-    local sheetHeight = image:getHeight()
-
-    for row = 0, rowCount - 1 do
-        for column = 0, columnCount - 1 do
-            quads[#quads + 1] = love.graphics.newQuad(
-                column * frameSize,
-                row * frameSize,
-                frameSize,
-                frameSize,
-                sheetWidth,
-                sheetHeight
-            )
-        end
-    end
-
-    return quads
 end
 
 function PlayerAnimation.createStripQuads(image, frameSize)
@@ -120,7 +99,7 @@ function PlayerAnimation.startFallIntro(player)
     player.moveY = 1
     player.currentAnimation = "idle"
     player.currentFrame = 1
-    player.idleHandFrame = 1
+    player.animationTimer = 0
 end
 
 function PlayerAnimation.isFallIntroActive(player)
@@ -215,7 +194,6 @@ local function updateWakeup(player, intro)
         player.moveY = 1
         player.currentAnimation = "idle"
         player.currentFrame = 1
-        player.idleHandFrame = 1
         player.animationTimer = 0
     end
 end
@@ -259,7 +237,7 @@ function PlayerAnimation.drawFallIntro(player)
     end
 
     local scaleX = player.flipH and -1 or 1
-    local scaleY = 1.4
+    local scaleY = 1.3
     local originX = player.flipH and (player.spriteSize - player.spriteSize / 2) or (player.spriteSize / 2)
     player:drawPlayerImage(
         player.fallSheet,

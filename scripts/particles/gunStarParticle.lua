@@ -9,6 +9,7 @@ function GunStarParticle:new(x, y, height, scale, spritePath)
     local particle = Particle.new(self, x, y, height or 0, scale or 1, GunStarDraw.getAnimationDuration())
     particle.scale = scale or 1
     particle.spritePath = spritePath
+    particle.parallelKind = "gunStar"
     return particle
 end
 

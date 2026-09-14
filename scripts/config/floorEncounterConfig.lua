@@ -4,36 +4,36 @@ local FloorEncounterConfig = {}
 
 FloorEncounterConfig.enemyPools = {
     florestEarly = {
-        { id = "zombie", weight = 8 },
+        { id = "zombie", weight = 16 },
         { id = "babyZombie", weight = 3 },
         { id = "noHead", weight = 3 },
     },
     florestMid = {
-        { id = "zombie", weight = 6 },
+        { id = "zombie", weight = 12 },
         { id = "babyZombie", weight = 4 },
         { id = "noHead", weight = 3 },
         { id = "bigZombie", weight = 1 },
     },
     florestLate = {
-        { id = "zombie", weight = 4 },
+        { id = "zombie", weight = 8 },
         { id = "babyZombie", weight = 5 },
         { id = "noHead", weight = 4 },
         { id = "bigZombie", weight = 2 },
     },
     caveEarly = {
-        { id = "zombie", weight = 2 },
+        { id = "zombie", weight = 4 },
         { id = "babyZombie", weight = 5 },
         { id = "noHead", weight = 4 },
         { id = "bigZombie", weight = 2 },
     },
     caveMid = {
-        { id = "zombie", weight = 1 },
+        { id = "zombie", weight = 2 },
         { id = "babyZombie", weight = 5 },
         { id = "noHead", weight = 4 },
         { id = "bigZombie", weight = 3 },
     },
     caveLate = {
-        { id = "zombie", weight = 1 },
+        { id = "zombie", weight = 2 },
         { id = "babyZombie", weight = 4 },
         { id = "noHead", weight = 5 },
         { id = "bigZombie", weight = 4 },
@@ -75,8 +75,8 @@ FloorEncounterConfig.floors = {
     [2] = createFloorEncounter({
         difficulty = 2,
         spawnEntryAvoidDistanceTiles = 6,
-        totalWaves = {min = 2, max = 4},
-        simultaneousWaves = {min = 2, max = 2},
+        totalWaves = {min = 2, max = 3},
+        simultaneousWaves = {min = 1, max = 2},
         enemyPool = "florestMid",
         maxPerWave = {
             noHead = 2,
@@ -86,7 +86,7 @@ FloorEncounterConfig.floors = {
     [3] = createFloorEncounter({
         difficulty = 2,
         spawnEntryAvoidDistanceTiles = 6,
-        totalWaves = {min = 3, max = 4},
+        totalWaves = {min = 2, max = 3},
         simultaneousWaves = {min = 2, max = 2},
         enemyPool = "florestLate",
         maxPerWave = {
@@ -98,7 +98,7 @@ FloorEncounterConfig.floors = {
         difficulty = 3,
         spawnEntryAvoidDistanceTiles = 6,
         totalWaves = {min = 3, max = 4},
-        simultaneousWaves = {min = 2, max = 3},
+        simultaneousWaves = {min = 2, max = 2},
         enemyPool = "caveEarly",
         maxPerWave = {
             noHead = 3,
@@ -108,8 +108,8 @@ FloorEncounterConfig.floors = {
     [5] = createFloorEncounter({
         difficulty = 4,
         spawnEntryAvoidDistanceTiles = 7,
-        totalWaves = {min = 3, max = 5},
-        simultaneousWaves = {min = 2, max = 3},
+        totalWaves = {min = 3, max = 4},
+        simultaneousWaves = {min = 2, max = 2},
         enemyPool = "caveMid",
         maxPerWave = {
             noHead = 3,
@@ -119,8 +119,8 @@ FloorEncounterConfig.floors = {
     [6] = createFloorEncounter({
         difficulty = 5,
         spawnEntryAvoidDistanceTiles = 7,
-        totalWaves = {min = 4, max = 5},
-        simultaneousWaves = {min = 2, max = 3},
+        totalWaves = {min = 3, max = 4},
+        simultaneousWaves = {min = 2, max = 2},
         enemyPool = "caveLate",
         maxPerWave = {
             noHead = 4,

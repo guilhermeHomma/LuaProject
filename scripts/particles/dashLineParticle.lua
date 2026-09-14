@@ -77,6 +77,7 @@ function DashLineParticle:new(x, y, dirX, dirY, line, config)
     particle.fadePower = getLineValue(line, config, "fadePower") or defaultConfig.fadePower
     particle.timer = 0
     particle.isAlive = true
+    particle.parallelKind = "dashLine"
     particle.isGroundLayer = true
     particle.affectedByLight = false
     particle.drawPriority = y + 0.35
