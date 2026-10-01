@@ -76,7 +76,7 @@ function Spider:new(x, y)
     enemy.randomPathTiles = 6
     enemy.randomPathIdleTimer = 0.6
     enemy.randomPathPauseTimer = math.random() * 0.35
-    enemy.animationSpeed = 0.1
+    enemy.animationSpeed = 0.08
     enemy.idleStartFrame, enemy.idleEndFrame = IDLE_FIRST, IDLE_LAST
     enemy.runStartFrame, enemy.runEndFrame = RUN_FIRST, RUN_LAST
     enemy.deathBodyParticleOptions = {

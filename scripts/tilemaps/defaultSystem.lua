@@ -9,6 +9,10 @@ local AmbientDust = require("scripts/objects/ambientDust")
 local VisualThemes = require("scripts/config/visualThemes")
 local PathCache = require("scripts/tilemaps/pathCache")
 local AsyncPathfinder = require("scripts/tilemaps/asyncPathfinder")
+local UpperWalls = require("scripts/tilemaps/upperWalls")
+local Tombstones = require("scripts/tilemaps/tombstones")
+local Stones = require("scripts/tilemaps/stones")
+local ElevatorGeometry = require("scripts/objects/elevatorGeometry")
 local Grid = require("jumperj.grid")
 local Pathfinder = require("jumperj.pathfinder")
 
@@ -36,6 +40,8 @@ require "scripts.objects.pole"
 require "scripts.objects.counter"
 require "scripts.objects.container"
 local Chest = require("scripts.objects.chest")
+local Tombstone = require("scripts/objects/tombstone")
+local Stone = require("scripts/objects/stone")
 local FloorPath = require("scripts.objects.floorPath")
 
 tileSet = require("scripts.objects.tileset")
@@ -363,7 +369,8 @@ local function getNonWalkableBigGrassSpawnChance()
 end
 
 local function isGrassBlockingObjectTile(tile)
-    return tile == TILE_CHEST
+    return tile == Stones.TILE or tile == Tombstones.FLOOR_TILE or tile == Tombstones.WALL_TILE
+        or tile == TILE_CHEST
         or tile == TILE_CHEST_MARKER
         or tile == TILE_STORE
         or tile == TILE_BOX
@@ -939,9 +946,13 @@ local function chooseChestType(x, y)
 end
 
 local function applyOptionalObjectSpawnChances()
+    local room = FloorManager:getCurrentRoom()
+    local isBossRoom = room and (room.isBossRoom or room.templateId == "boss_32x32")
     for y = 1, #tilemap do
         for x = 1, #tilemap[y] do
-            if tilemap[y][x] == 2 then
+            if isBossRoom and (tilemap[y][x] == 2 or tilemap[y][x] == Stones.TILE) then
+                tilemap[y][x] = TILE_FLOOR
+            elseif tilemap[y][x] == 2 then
                 if not shouldKeepOptionalObject("box", x, y) then
                     tilemap[y][x] = TILE_FLOOR
                 end
@@ -1075,7 +1086,7 @@ local function canRenderGrassEntry(entry, blockedTiles)
     end
 
     local tile = tilemap[entry.y] and tilemap[entry.y][entry.x]
-    if not tile then
+    if not tile or isGrassBlockingObjectTile(tile) then
         return false
     end
     if not hasWalkableTileWithin(entry.x, entry.y, GRASS_WALKABLE_RADIUS) then
@@ -1168,22 +1179,18 @@ end
 
 local function ensureEndRoomElevatorPosition(room)
     local state = room and room.state
-    if not (room and room.isEndRoom and state) then
+    local startRoomId = CURRENT_LEVEL and CURRENT_LEVEL.floorConfig and CURRENT_LEVEL.floorConfig.startRoomId or "0:0"
+    local isArrival = room and room.id == startRoomId and (CURRENT_LEVEL.currentFloorIndex or 1) >= 2
+    if not (room and (room.isEndRoom or isArrival) and state) then
         return nil
     end
 
-    if not state.elevatorPosition then
-        local centerX = tilemap and #(tilemap[1] or {}) / 2 or 16
-        local centerY = tilemap and #tilemap / 2 or 16
-        local worldX = tilemapWorldX + (centerX - 0.5) * tileSize
-        local worldY = tilemapWorldY + centerY * tileSize
-        local offsetX = math.random(0, 1) == 0 and -tileSize / 2 or tileSize / 2
-        local offsetY = math.random(0, 1) == 0 and -tileSize / 2 or tileSize / 2
-        state.elevatorPosition = {
-            x = worldX + offsetX,
-            y = worldY + tileSize * 2 + offsetY,
-        }
-    end
+    local centerX = tilemap and #(tilemap[1] or {}) / 2 or 16
+    local centerY = tilemap and #tilemap / 2 or 16
+    state.elevatorPosition = {
+        x = tilemapWorldX + (centerX - 0.5) * tileSize,
+        y = tilemapWorldY + centerY * tileSize + tileSize * 2.5,
+    }
 
     return state.elevatorPosition
 end
@@ -1195,16 +1202,9 @@ local function buildEndRoomElevatorBaseLookup(room)
         return lookup
     end
 
-    local pattern = {
-        "xxxxx",
-        "xxxxx",
-        "xxxxx",
-        "xxxxx",
-    }
-    local rows = #pattern
-    local cols = #pattern[1]
-    local left = position.x - cols * tileSize / 2
-    local top = position.y - rows * tileSize
+    local base = ElevatorGeometry.base(position.x, position.y)
+    local rows, cols = base.height / tileSize, base.width / tileSize
+    local left, top = base.x, base.y
 
     for rowIndex = 1, rows do
         for colIndex = 1, cols do
@@ -1221,7 +1221,7 @@ end
 local function buildFloorPathState()
     local room = FloorManager:getCurrentRoom()
     local state = room and room.state
-    local floorPathVersion = 5
+    local floorPathVersion = 8
     if not state then
         return {}
     end
@@ -1247,17 +1247,14 @@ local function buildFloorPathState()
     local branchMax = config.branchMax or 5
     local looseChance = config.looseChance or 0.006
     local used = {}
-    local elevatorClearCenterX = room and room.isEndRoom and (#(tilemap[1] or {}) + 1) / 2 or nil
-    local elevatorClearCenterY = room and room.isEndRoom and (#tilemap + 1) / 2 or nil
+    local elevatorBaseLookup = buildEndRoomElevatorBaseLookup(room)
 
     local function addPathTile(x, y)
         local key = getTileKey(x, y)
         if used[key] or not (tilemap[y] and canDrawFloorPathOnTile(tilemap[y][x])) then
             return false
         end
-        if elevatorClearCenterX
-            and math.abs(x - elevatorClearCenterX) <= 2
-            and math.abs(y - elevatorClearCenterY) <= 2 then
+        if elevatorBaseLookup[key] then
             return false
         end
 
@@ -2131,6 +2128,20 @@ local function isSpecialStoneWallRoom(room)
 end
 
 function DefaultTilemap:createTile(x, y, tile, collider)
+    if tile == Stones.TILE then
+        local state = FloorManager:getCurrentRoomState()
+        local variant = 1
+        for _, entry in ipairs(state and state.stones or {}) do
+            if entry.x == x and entry.y == y then
+                variant = entry.variant
+                break
+            end
+        end
+        return Stone:new(x, y, variant)
+    end
+    if tile == Tombstones.FLOOR_TILE or tile == Tombstones.WALL_TILE then
+        return Tombstone:new(x, y, tile == Tombstones.WALL_TILE)
+    end
     if tile == TILE_CHEST then
         local state = FloorManager:getCurrentRoomState()
         local chestType = state and state.chestTypes and state.chestTypes[getTileKey(x, y)]
@@ -2339,6 +2350,8 @@ function DefaultTilemap:load()
     applyPersistedRoomState()
     applyOptionalObjectSpawnChances()
     applyRoomShopState()
+    local upperWallMap, upperWallBlocked = {}, {}
+    local roomForUpperWalls = FloorManager:getCurrentRoom()
     if tilemapConfig.centerOrigin then
         tilemapWorldX = -(self.mapWidth * tileSize) / 2 + tileSize / 2
         tilemapWorldY = -(self.mapHeight * tileSize) / 2 + tileSize / 2
@@ -2346,6 +2359,82 @@ function DefaultTilemap:load()
         local origin = tilemapConfig.tilemapOrigin or GameConfig.tilemapOrigin
         tilemapWorldX = origin.x
         tilemapWorldY = origin.y
+    end
+    local floorPathEntries = roomForUpperWalls and roomForUpperWalls.isCardRoom and {} or buildFloorPathState()
+    if visualTheme.id == "florest" and not (roomForUpperWalls and roomForUpperWalls.isCardRoom) then
+        upperWallMap, upperWallBlocked = UpperWalls.build(tilemap,
+            roomForUpperWalls and roomForUpperWalls.id, function(x, y)
+                return shouldCreateTileObject(1, x, y)
+            end)
+    end
+    if roomForUpperWalls then
+        local reserved = {}
+        local excluded = {}
+        local elevatorTiles = buildEndRoomElevatorBaseLookup(roomForUpperWalls)
+        for y, row in ipairs(tilemap) do
+            for x in ipairs(row) do
+                if elevatorTiles[getTileKey(x, y)] then reserved[y .. ":" .. x] = true end
+            end
+        end
+        for _, entry in ipairs(floorPathEntries) do
+            excluded[entry.y .. ":" .. entry.x] = true
+        end
+        local savedState = roomForUpperWalls.state or {}
+        for _, entries in ipairs({savedState.grassTiles or {}, savedState.bigGrassTiles or {}}) do
+            for _, entry in ipairs(entries) do
+                excluded[entry.y .. ":" .. entry.x] = true
+                local visualY = entry.y + math.floor(((entry.options and -(entry.options.yOffset or 0)) or entry.offsetY or 0) / tileSize + 0.5)
+                excluded[visualY .. ":" .. entry.x] = true
+            end
+        end
+        local function reserve(point)
+            if not (point and point.x and point.y) then return end
+            local x, y = math.floor(point.x + 1.5), math.floor(point.y + 1.5)
+            reserved[y .. ":" .. x] = true
+        end
+        for _, point in pairs(roomForUpperWalls.spawnPoints or {}) do reserve(point) end
+        if roomForUpperWalls.width and roomForUpperWalls.height then
+            reserve({x = roomForUpperWalls.width / 2, y = roomForUpperWalls.height / 2})
+        end
+        for direction, enabled in pairs(roomForUpperWalls.doors or {}) do
+            local slot = RoomBuilder:getDoorSlot(roomForUpperWalls, direction)
+            reserve(slot and slot.playerSpawn)
+            if enabled then
+                for _, point in ipairs(slot and slot.doorTiles or {}) do
+                    local doorX, doorY = RoomBuilder:toMapPosition(point)
+                    for dy = -2, 2 do
+                        for dx = -2, 2 do
+                            excluded[(doorY + dy) .. ":" .. (doorX + dx)] = true
+                        end
+                    end
+                    local inward = {north = {0, 1}, south = {0, -1}, east = {-1, 0}, west = {1, 0}}
+                    local vector = inward[direction]
+                    if vector then
+                        for step = 1, 4 do
+                            reserved[(doorY + vector[2] * step) .. ":" .. (doorX + vector[1] * step)] = true
+                        end
+                    end
+                end
+            end
+        end
+        local function canPlaceObject(x, y)
+            return shouldCreateTileObject(1, x, y)
+        end
+        if visualTheme.id == "florest" and not roomForUpperWalls.isCardRoom then
+            Tombstones.populate(tilemap, upperWallMap, roomForUpperWalls, canPlaceObject, reserved, excluded)
+        end
+        local level = FloorManager.level
+        local startRoomId = level and level.floorConfig and level.floorConfig.startRoomId or "0:0"
+        if visualTheme.id == "florest"
+            and roomForUpperWalls.id ~= startRoomId
+            and not roomForUpperWalls.isChestRoom
+            and not roomForUpperWalls.isHeartRoom
+            and not roomForUpperWalls.isEndRoom
+            and not roomForUpperWalls.isCardRoom
+            and not roomForUpperWalls.isBossRoom
+            and roomForUpperWalls.templateId ~= "boss_32x32" then
+            Stones.populate(tilemap, roomForUpperWalls, canPlaceObject, reserved, excluded)
+        end
     end
 
     tileSet:createTileSet(visualTheme.tileset)
@@ -2384,10 +2473,21 @@ function DefaultTilemap:load()
         roomState.bigGrassTiles = {}
     end
 
-    local floorPathEntries = isCardRoom and {} or buildFloorPathState()
     local floorPathLookup = buildEntryLookup(floorPathEntries)
     local elevatorBaseLookup = buildEndRoomElevatorBaseLookup(FloorManager:getCurrentRoom())
     local grassBlockLookup = {}
+    for y, row in ipairs(tilemap) do
+        for x, value in ipairs(row) do
+            if value == Stones.TILE or value == Tombstones.FLOOR_TILE or value == Tombstones.WALL_TILE then
+                grassBlockLookup[getTileKey(x, y)] = true
+            end
+        end
+    end
+    for y, row in ipairs(upperWallBlocked) do
+        for x in pairs(row) do
+            grassBlockLookup[getTileKey(x, y)] = true
+        end
+    end
     for key in pairs(floorPathLookup) do
         grassBlockLookup[key] = true
     end
@@ -2474,6 +2574,14 @@ function DefaultTilemap:load()
                         createdTile.walkableGroundDistance = distance
                         createdTile.nonWalkableDarkness = darkness
                     end
+                    if (createdTile.treeIndex or createdTile.isTombstone) and upperWallMap[y] and upperWallMap[y][x] == 1 then
+                        local base = Tile:new(x, y, 5, false)
+                        base.nonWalkableDarkness = createdTile.nonWalkableDarkness
+                        self.tiles[#self.tiles + 1] = base
+                        createdTile.isOnUpperWall = true
+                        createdTile.yWorld = createdTile.yWorld - tileSize
+                        createdTile.ySortOffset = math.max(createdTile.ySortOffset or 0, 10) + tileSize
+                    end
                     self.tiles[#self.tiles + 1] = createdTile
                     self.tileLookup[getTileKey(x, y)] = createdTile
                     self.tileLookupByMap[y] = self.tileLookupByMap[y] or {}
@@ -2493,18 +2601,30 @@ function DefaultTilemap:load()
     end
 
     local renderedGrassTiles = {}
+    local visibleBigGrassState, visibleGrassState = {}, {}
+    local function claimGrassTile(entry, isBig)
+        local offset = isBig and -((entry.options or {}).yOffset or 0) or (entry.offsetY or 0)
+        local visualY = entry.y + math.floor(offset / tileSize + 0.5)
+        local sourceKey = getTileKey(entry.x, entry.y)
+        local visualKey = getTileKey(entry.x, visualY)
+        if renderedGrassTiles[sourceKey] or renderedGrassTiles[visualKey]
+            or grassBlockLookup[visualKey] or not canRenderGrassEntry(entry, grassBlockLookup) then
+            return false
+        end
+        renderedGrassTiles[sourceKey], renderedGrassTiles[visualKey] = true, true
+        return true
+    end
     for _, entry in ipairs(bigGrassState) do
-        local key = getTileKey(entry.x, entry.y)
-        if not renderedGrassTiles[key] and canRenderGrassEntry(entry, grassBlockLookup) then
+        if claimGrassTile(entry, true) then
+            visibleBigGrassState[#visibleBigGrassState + 1] = entry
             local worldX, worldY = self:mapToWorld(entry.x, entry.y)
             self.bigGrass[#self.bigGrass + 1] = BigGrass:new(worldX, worldY, entry.options)
-            renderedGrassTiles[key] = true
         end
     end
 
     for _, entry in ipairs(grassState) do
-        local key = getTileKey(entry.x, entry.y)
-        if not renderedGrassTiles[key] and canRenderGrassEntry(entry, grassBlockLookup) then
+        if claimGrassTile(entry, false) then
+            visibleGrassState[#visibleGrassState + 1] = entry
             local worldX, worldY = self:mapToWorld(entry.x, entry.y)
             self.grass[#self.grass + 1] = Grass:new(
                 worldX + (entry.offsetX or 0),
@@ -2512,7 +2632,32 @@ function DefaultTilemap:load()
                 entry.tile,
                 {index = entry.index}
             )
-            renderedGrassTiles[key] = true
+        end
+    end
+
+    if roomState then
+        roomState.bigGrassTiles = visibleBigGrassState
+        roomState.grassTiles = visibleGrassState
+    end
+
+    -- Decorative tiles share wall rendering and lighting, but stay out of
+    -- collision/pathfinding lookups and the ground-light occluder list.
+    for y, row in ipairs(upperWallMap) do
+        for x, value in ipairs(row) do
+            if value == 1 then
+                local index = autoTile(x, y, upperWallMap)
+                if isSpecialStoneWallRoom(currentRoom) then
+                    index = specialWallByBaseIndex[index] or index
+                elseif wallVariantLookup[getTileKey(x, y)] then
+                    index = wallVariantByBaseIndex[index] or index
+                end
+                local upper = Tile:new(x, y, index, false)
+                upper.isDecorativeUpperWall = true
+                upper.upperWallDrawPriority = upper.yWorld + 11
+                upper.yWorld = upper.yWorld - tileSize
+                upper.nonWalkableDarkness, upper.walkableGroundDistance = getNonWalkableTileDarkness(x, y)
+                self.tiles[#self.tiles + 1] = upper
+            end
         end
     end
 

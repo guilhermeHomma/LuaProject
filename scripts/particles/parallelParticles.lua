@@ -60,13 +60,17 @@ local function applyResult(batch, updates)
     end
 end
 
+function ParallelParticles:reset(list)
+    currentList = list
+    generation = generation + 1
+    pending = nil
+    if requests then requests:clear() end
+    if results then results:clear() end
+end
+
 function ParallelParticles:beginFrame(list)
     if currentList ~= list then
-        currentList = list
-        generation = generation + 1
-        pending = nil
-        if requests then requests:clear() end
-        if results then results:clear() end
+        self:reset(list)
     end
 
     if results then

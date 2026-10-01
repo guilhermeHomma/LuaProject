@@ -3,6 +3,7 @@ local RoomFlowManager = {}
 local Tilemap = require("scripts/tilemap")
 local FloorManager = require("scripts/managers/floorManager")
 local RoomScreenTransition = require("scripts/managers/roomScreenTransition")
+local ParallelParticles = require("scripts/particles/parallelParticles")
 
 local TILE_WORLD_SIZE = 16
 local ENTRY_MOVE_DISTANCE = TILE_WORLD_SIZE * 2.25
@@ -380,15 +381,15 @@ function RoomFlowManager:loadRoomFromDirection(direction)
     end
 
     self.objects = {}
-    for index = #(self.particles or {}), 1, -1 do
-        local particleType = self.particles[index].particleType
-        if particleType == "boxParticle"
-            or particleType == "bloodDecal"
-            or particleType == "leafParticle"
-            or particleType == "spiderWeb" then
-            table.remove(self.particles, index)
-        end
+    for _, particle in ipairs(self.particles or {}) do
+        if not particle.roomDecals then particle.isAlive = false end
     end
+    self.particles = {}
+    ParallelParticles:reset(self.particles)
+    self.drawQueue = {}
+    self.groundDecalQueue = {}
+    self.footsteps = {}
+    self.weaponShockwaves = {}
 
     Tilemap:load()
     Tilemap:setDoorOpen(entryDirection, true)

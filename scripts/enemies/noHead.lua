@@ -3,7 +3,7 @@ local Tilemap = require("scripts/tilemap")
 local EnemyDirector = require("scripts/enemies/enemyDirector")
 local NoHeadBullet = require("scripts/enemies/noHeadBullet")
 local GunStarParticle = require("scripts/particles/gunStarParticle")
-local WalkParticle = require("scripts/particles/walkParticle")
+local WalkParticle = require("scripts/particles/walkDust")
 
 local NoHead = setmetatable({}, {__index = Zombie})
 NoHead.__index = NoHead
@@ -591,9 +591,8 @@ function NoHead:spawnCooldownDust(dt)
     self.cooldownDustTimer = (self.cooldownDustTimer or 0) + dt
     while self.cooldownDustTimer >= 0.055 do
         self.cooldownDustTimer = self.cooldownDustTimer - 0.055
-        local particle = WalkParticle:new(self.x + math.random(-3, 3), self.y + math.random(-2, 2), 0.32 + math.random() * 0.12)
+        local particle = WalkParticle:new(self.x + math.random(-3, 3), self.y + math.random(-2, 2))
         particle.alpha = 0.42
-        particle.radius = 0.22
         table.insert(Game.particles, particle)
     end
 end

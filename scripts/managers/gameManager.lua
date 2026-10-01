@@ -192,6 +192,8 @@ function Game:resetRuntimeState()
     self.playerCombatRoomsEntered = 0
     self.roomFadeAlpha = 0
     self.floorChanging = false
+    self.elevatorSequence = nil
+    self.elevatorFadeAlpha = 0
     self.hitStopTimer = 0
     self.hitStopDuration = 0
     self.hitStopRecoveryTimer = 0
@@ -489,21 +491,26 @@ function Game:canLeaveCurrentRoom()
 end
 
 function Game:startFloorIntro(floorIndex, onComplete)
-    Dialog.breakMovements = true
-    setBattleMusicActive(false)
-    if Music and Music.closeForFloorIntro then
-        Music:closeForFloorIntro()
-    elseif Music and Music.closeGame then
-        Music:closeGame()
-    end
-    FloorIntroManager:startFloor(floorIndex, function()
-        FloorIntroManager:startFloorOverlay(floorIndex)
-        Dialog.breakMovements = self.playerRoomEntryMove ~= nil
-        RoomFlowManager.queuePlayerTransitionFrame({ x = 0, y = 0 }, false)
-        if onComplete then
-            onComplete()
+    FloorIntroManager.floorIntro = nil
+    FloorIntroManager.floorOverlay = nil
+    if STATES and STATES.game then state = STATES.game end
+    if floorIndex >= 2 then
+        self.pendingPlayerFallIntro = false
+        self.spot.enabled = false
+        for _, object in ipairs(self.objects) do
+            if object.isArrivalElevator then
+                Dialog.breakMovements = true
+                object:start(function()
+                    Dialog.breakMovements = false
+                    if onComplete then onComplete() end
+                end)
+                if camera then camera:snapToCurrentMode() end
+                return
+            end
         end
-    end)
+    end
+    Dialog.breakMovements = false
+    if onComplete then onComplete() end
 end
 
 function Game:startMusicWhenReady()
@@ -553,6 +560,8 @@ function Game:loadFloor(floorIndex, onIntroComplete)
     self.playerCombatRoomsEntered = 0
     self.roomFadeAlpha = 0
     self.floorChanging = false
+    self.elevatorSequence = nil
+    self.elevatorFadeAlpha = 0
     self.sPSoundPlayed = false
     self.sPSoundPlayedOutro = false
     self.timer = 0
@@ -586,6 +595,8 @@ end
 
 function Game:startThanksScreen()
     self.floorChanging = false
+    self.elevatorSequence = nil
+    self.elevatorFadeAlpha = 0
     Dialog.breakMovements = true
     setBattleMusicActive(false)
     if Music and Music.closeGame then
@@ -824,10 +835,6 @@ function Game:updateParticleList(dt)
     while i >= 1 do
         local item = list[i]
         if item and item.isAlive then
-            if item.queueDraw then
-                item:queueDraw()
-            end
-
             if useParallel and item.parallelKind then
                 if not item.queueDraw then
                     local offset = item.parallelKind == "ball" and (item.drawPriorityOffset or 5)
@@ -866,6 +873,10 @@ function Game:updateParticleList(dt)
                 else
                     item:update(updateDt)
                 end
+            end
+            -- Classify after updating: a particle that landed belongs to the floor now.
+            if item.isAlive and item.queueDraw then
+                item:queueDraw()
             end
         end
 
@@ -1065,6 +1076,25 @@ function Game:update(dt)
     self.lightSourcesCacheDirty = true
     self.fogTime = self.fogTime + dt
 
+    if self.elevatorSequence then
+        local sequence = self.elevatorSequence
+        local finished = sequence:updateSequence(dt)
+        self:updateParticleList(dt)
+        Tilemap:update(dt)
+        WorldRenderer.queueSort(self)
+        WorldRenderer.prepareTileLighting(self)
+        if finished then
+            self.elevatorSequence = nil
+            self.elevatorFadeAlpha = 0
+            if sequence.isArrivalElevator then
+                if sequence.onComplete then sequence.onComplete() end
+            else
+                self:enterElevator()
+            end
+        end
+        return
+    end
+
     self:updateSpotlight(dt)
     self:updateAmbientTimers(dt)
     self:updatePitch(dt)
@@ -1216,7 +1246,7 @@ function Game:cricketNoise()
 end
 
 function Game:drawRoomFade()
-    local alpha = self.roomFadeAlpha or 0
+    local alpha = math.max(self.roomFadeAlpha or 0, self.elevatorFadeAlpha or 0)
     if alpha <= 0 then
         return
     end
@@ -1305,6 +1335,7 @@ function DisableWalkTutorial()
 end
 
 function Game:keypressed(key)
+    if self.elevatorSequence then return end
     if CardChoice:isActive() and CardChoice:keypressed(key) then
         return
     end
@@ -1356,6 +1387,7 @@ function Game:keypressed(key)
 end
 
 function Game:mousepressed(x, y, button)
+    if self.elevatorSequence then return false end
     if CardChoice:isActive() then
         return CardChoice:mousepressed(x, y, button)
     end

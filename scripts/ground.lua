@@ -2,6 +2,7 @@ local LightConfig = require("scripts/config/lightConfig")
 local Tilemap = require("scripts/tilemap")
 local FloorManager = require("scripts/managers/floorManager")
 local VisualThemes = require("scripts/config/visualThemes")
+local ElevatorGeometry = require("scripts/objects/elevatorGeometry")
 local unpackValues = table.unpack or unpack
 local MAX_GROUND_LIGHTS = 32
 local MAX_GROUND_LIGHT_OCCLUDERS = 8
@@ -368,8 +369,27 @@ function Ground:draw(player)
         PERF.groundRepeats = repeatX * repeatY
     end
 
-    self.quad:setViewport(0, 0, drawWidth, drawHeight, self.width, self.height)
-    love.graphics.draw(self.image, self.quad, drawLeft, drawTop)
+    local room = FloorManager:getCurrentRoom()
+    local position = room and room.state and room.state.elevatorPosition
+    local function drawRegion(x, y, width, height)
+        if width <= 0 or height <= 0 then return end
+        self.quad:setViewport(x - drawLeft, y - drawTop, width, height, self.width, self.height)
+        love.graphics.draw(self.image, self.quad, x, y)
+    end
+    if position then
+        local base = ElevatorGeometry.base(position.x, position.y)
+        local right, bottom = drawLeft + drawWidth, drawTop + drawHeight
+        local leftCut = math.max(drawLeft, math.min(right, base.x))
+        local rightCut = math.max(drawLeft, math.min(right, base.x + base.width))
+        local topCut = math.max(drawTop, math.min(bottom, base.y))
+        local bottomCut = math.max(drawTop, math.min(bottom, base.y + base.height))
+        drawRegion(drawLeft, drawTop, drawWidth, topCut - drawTop)
+        drawRegion(drawLeft, bottomCut, drawWidth, bottom - bottomCut)
+        drawRegion(drawLeft, topCut, leftCut - drawLeft, bottomCut - topCut)
+        drawRegion(rightCut, topCut, right - rightCut, bottomCut - topCut)
+    else
+        drawRegion(drawLeft, drawTop, drawWidth, drawHeight)
+    end
 
     love.graphics.setShader()
 end

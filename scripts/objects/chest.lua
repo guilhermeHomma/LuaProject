@@ -14,7 +14,8 @@ require("scripts/utils")
 local sprite = love.graphics.newImage("assets/sprites/chest/woodchest.png")
 local cardSprite = love.graphics.newImage("assets/sprites/chest/simplecardchest.png")
 local whiteShader = love.graphics.newShader("scripts/shaders/whiteShader.glsl")
-local openSoundBase = love.audio.newSource("assets/sfx/particles/break-box.mp3", "static")
+local openSoundBase = love.audio.newSource("assets/sfx/particles/wood-chest.mp3", "static")
+local damageWoodBase = love.audio.newSource("assets/sfx/particles/damage-wood.mp3", "static")
 local shadowQuad = nil
 local frameWidth = 16
 local frameHeight = 32
@@ -285,6 +286,11 @@ function Chest:onshoot(damage, options)
     DamageStretch:start(self)
     self.life = forceBreak and 0 or ((self.life or 12) - (damage or 1))
     if self.life > 0 then
+        local dx = Player.x - self.xWorld
+        local dy = Player.y - self.yWorld
+        local playerDistance = math.sqrt(dx * dx + dy * dy)
+        local volume = getDistanceVolume(playerDistance, 0.3, 200)
+        playClonedSound(damageWoodBase, volume, (0.95 + math.random() * 0.1) * GAME_PITCH)
         return true
     end
 

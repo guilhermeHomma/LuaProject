@@ -323,7 +323,14 @@ local function drawGroundQueueObjects(game)
         buildFastLightSources(lightSources)
     end
 
-    table.sort(game.groundDecalQueue or {}, function(a, b) return (a.drawPriority or 0) < (b.drawPriority or 0) end)
+    -- Decals stay below settled droplets; creation order breaks equal-depth ties.
+    -- Sorting only by y was unstable when overlapping particles were added/removed.
+    table.sort(game.groundDecalQueue or {}, function(a, b)
+        local layerA = a.particleType == "bloodDecal" and 0 or 1
+        local layerB = b.particleType == "bloodDecal" and 0 or 1
+        if layerA ~= layerB then return layerA < layerB end
+        return (a.groundDrawOrder or 0) < (b.groundDrawOrder or 0)
+    end)
     for _, object in ipairs(game.groundDecalQueue or {}) do
         local tintR, tintG, tintB = 1, 1, 1
         if minBrightness < 1 and object.affectedByLight then
@@ -345,6 +352,7 @@ local function drawGroundQueueObjects(game)
             addPixelBatchObject(object, tintR, tintG, tintB, 1)
         else
             flushPixelBatch()
+            love.graphics.setColor(tintR, tintG, tintB, 1)
             object:draw()
         end
 

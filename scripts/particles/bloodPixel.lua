@@ -5,6 +5,7 @@ BloodPixel.castsShadow = false
 local bloodPixelScale = 1.35
 local maxBloodPixels = 72
 local bloodUpdateInterval = 1 / 30
+local nextDrawOrder = 0
 
 local palette = {
     {0.46, 0.12, 0.10, 1},
@@ -14,7 +15,8 @@ local palette = {
     {0.50, 0.15, 0.13, 1},
 }
 
-function BloodPixel:new(x, y, dx, dy, customPalette)
+function BloodPixel:new(x, y, dx, dy, customPalette, scaleMultiplier, options)
+    options = options or {}
     local particle = setmetatable({}, BloodPixel)
     local activePalette = customPalette or palette
     local angle = math.atan2(dy or 0, dx or 0)
@@ -36,7 +38,10 @@ function BloodPixel:new(x, y, dx, dy, customPalette)
     particle.heightVelocity = 18 + math.random() * 18
     particle.gravity = 128 + math.random() * 30
     particle.timer = 0
-    particle.lifeTime = 3 + math.random() * 3
+    local lifeTimeMin = options.lifeTimeMin or 3
+    local lifeTimeMax = options.lifeTimeMax or 6
+    particle.lifeTime = lifeTimeMin + math.random() * (lifeTimeMax - lifeTimeMin)
+    particle.fadeDuration = math.min(options.fadeDuration or 2, particle.lifeTime)
     particle.grounded = false
     particle.groundedTimer = 0
     particle.colorFreezeDelay = 0.16
@@ -45,6 +50,9 @@ function BloodPixel:new(x, y, dx, dy, customPalette)
     particle.frozenColor = nil
     particle.isAlive = true
     particle.particleType = "bloodPixel"
+    nextDrawOrder = nextDrawOrder + 1
+    particle.groundDrawOrder = nextDrawOrder
+    particle.pixelScale = bloodPixelScale * (scaleMultiplier or 1)
     particle.parallelKind = "bloodPixel"
     particle.updateInterval = bloodUpdateInterval
     particle.maxUpdateDt = bloodUpdateInterval * 2
@@ -112,38 +120,70 @@ function BloodPixel:getBatchDrawInfo()
         color = activePalette[colorIndex]
     end
 
+    local fadeStart = self.lifeTime - self.fadeDuration
+    local progress = math.max(0, math.min(1, (self.timer - fadeStart) / self.fadeDuration))
+    local alpha = 1 - progress * progress * (3 - 2 * progress)
+
     return
         math.floor(self.x + 0.5),
         math.floor(self.y - self.height + 0.5),
-        bloodPixelScale,
+        self.pixelScale or bloodPixelScale,
         color[1],
         color[2],
         color[3],
-        1
+        alpha
 end
 
-function BloodPixel.spawnBurst(x, y, dx, dy, minCount, maxCount, customPalette)
+function BloodPixel.spawnBurst(x, y, dx, dy, minCount, maxCount, customPalette, scaleMultiplier, options)
     if not (Game and Game.particles) then
         return
     end
 
     local count = math.random(minCount or 4, maxCount or minCount or 4)
     local activeCount = 0
-    local bloodPixelIndexes = {}
-    for index, particle in ipairs(Game.particles) do
-        if particle.particleType == "bloodPixel" then
+    for _, particle in ipairs(Game.particles) do
+        if particle.particleType == "bloodPixel" and particle.isAlive then
             activeCount = activeCount + 1
-            bloodPixelIndexes[activeCount] = index
         end
     end
 
-    local overflow = math.max(0, activeCount + count - maxBloodPixels)
-    for index = math.min(overflow, activeCount), 1, -1 do
-        table.remove(Game.particles, bloodPixelIndexes[index])
-    end
+    -- Let existing blood finish fading instead of removing visible particles at the cap.
+    count = math.min(count, math.max(0, maxBloodPixels - activeCount))
 
     for _ = 1, count do
-        table.insert(Game.particles, BloodPixel:new(x, y, dx, dy, customPalette))
+        table.insert(Game.particles, BloodPixel:new(x, y, dx, dy, customPalette, scaleMultiplier, options))
+    end
+end
+
+function BloodPixel.spawnRadial(x, y, count, customPalette, scaleMultiplier, options)
+    if not (Game and Game.particles) then return end
+    options = options or {}
+    local activeCount = 0
+    local bloodIndexes = {}
+    for index, particle in ipairs(Game.particles) do
+        if particle.particleType == "bloodPixel" and particle.isAlive then
+            activeCount = activeCount + 1
+            bloodIndexes[#bloodIndexes + 1] = index
+        end
+    end
+    count = math.min(count or 16, maxBloodPixels)
+    local overflow = math.max(0, activeCount + count - maxBloodPixels)
+    for index = math.min(overflow, #bloodIndexes), 1, -1 do
+        table.remove(Game.particles, bloodIndexes[index])
+    end
+    local startAngle = math.random() * math.pi * 2
+    for index = 1, count do
+        local angle = startAngle + (index - 1) * math.pi * 2 / count
+            + (math.random() - 0.5) * (options.angleJitter or 0.16)
+        local speedMin = options.speedMin or 24
+        local speedMax = options.speedMax or 48
+        local speed = speedMin + math.random() * (speedMax - speedMin)
+        local particle = BloodPixel:new(x, y, 0, 0, customPalette, scaleMultiplier, options)
+        particle.vx = math.cos(angle) * speed
+        particle.vy = math.sin(angle) * speed * 0.65
+        particle.heightVelocity = (options.heightVelocityMin or 22)
+            + math.random() * ((options.heightVelocityMax or 42) - (options.heightVelocityMin or 22))
+        Game.particles[#Game.particles + 1] = particle
     end
 end
 

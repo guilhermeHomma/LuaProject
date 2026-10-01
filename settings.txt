@@ -1,12 +1,12 @@
 v=2
-w=1600
-h=900
+w=1280
+h=720
 fs=0
 vs=0
 crt=1
 shake=1
-fps=1
+fps=0
 lang=pt
 brightness=0
-master=0.5
-music=0.7
+master=1
+music=1

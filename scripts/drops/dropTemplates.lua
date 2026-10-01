@@ -11,7 +11,7 @@ DropTemplates.enemies = {
             { id = "bullets", amount = 1, weight = 1 },
         },
         extraDrops = {
-            { id = "life", amount = 1, chance = 0.004 },
+            { id = "life", amount = 1, chance = 0.012 },
         },
     },
     babyZombie = {
@@ -24,7 +24,7 @@ DropTemplates.enemies = {
             { id = "bullets", amount = 1, weight = 1 },
         },
         extraDrops = {
-            { id = "life", amount = 1, chance = 0.004 },
+            { id = "life", amount = 1, chance = 0.012 },
         },
     },
     bigZombie = {
@@ -36,7 +36,7 @@ DropTemplates.enemies = {
             { id = "bullets", amount = 1, weight = 3 },
         },
         extraDrops = {
-            { id = "life", amount = 1, chance = 0.008 },
+            { id = "life", amount = 1, chance = 0.024 },
         },
     },
     noHead = {
@@ -48,7 +48,7 @@ DropTemplates.enemies = {
             { id = "bullets", amount = 1, weight = 1 },
         },
         extraDrops = {
-            { id = "life", amount = 1, chance = 0.004 },
+            { id = "life", amount = 1, chance = 0.012 },
         },
     },
     spider = {
@@ -58,7 +58,7 @@ DropTemplates.enemies = {
             { id = "none", weight = 10 },
         },
         extraDrops = {
-            { id = "life", amount = 1, chance = 0.002 },
+            { id = "life", amount = 1, chance = 0.006 },
         },
     },
     fly = {
@@ -68,13 +68,14 @@ DropTemplates.enemies = {
             { id = "none", weight = 10 },
         },
         extraDrops = {
-            { id = "life", amount = 1, chance = 0.002 },
+            { id = "life", amount = 1, chance = 0.006 },
         },
     },
 }
 
 DropTemplates.objects = {
     chest = {
+        lifeChanceMultiplier = 3,
         drops = {
             { id = "coins", amount = 3, weight = 15 },
             { id = "coins", amount = 2, weight = 20 },
@@ -185,11 +186,15 @@ function DropTemplates.getAmount(entry)
     return math.max(0, math.floor(resolveRangeValue(entry.amount or entry.qty or entry.count, 1)))
 end
 
-function DropTemplates.chooseWeighted(entries, context)
+function DropTemplates.chooseWeighted(entries, context, lifeChanceMultiplier)
     local totalWeight = 0
+    local lifeWeight = 0
     for _, entry in ipairs(entries or {}) do
         if DropTemplates.canDrop(entry.id or entry.kind or entry.type, context) then
             totalWeight = totalWeight + DropTemplates.getWeight(entry)
+            if normalizeId(entry.id or entry.kind or entry.type) == "life" then
+                lifeWeight = lifeWeight + DropTemplates.getWeight(entry)
+            end
         end
     end
 
@@ -197,11 +202,16 @@ function DropTemplates.chooseWeighted(entries, context)
         return nil
     end
 
+    local targetLifeWeight = math.min(totalWeight, lifeWeight * (lifeChanceMultiplier or 1))
+    local lifeScale = lifeWeight > 0 and targetLifeWeight / lifeWeight or 1
+    local otherScale = totalWeight > lifeWeight and (totalWeight - targetLifeWeight) / (totalWeight - lifeWeight) or 1
     local roll = math.random() * totalWeight
     for _, entry in ipairs(entries or {}) do
         if DropTemplates.canDrop(entry.id or entry.kind or entry.type, context) then
-            roll = roll - DropTemplates.getWeight(entry)
-            if roll <= 0 then
+            local isLife = normalizeId(entry.id or entry.kind or entry.type) == "life"
+            local weight = DropTemplates.getWeight(entry) * (isLife and lifeScale or otherScale)
+            roll = roll - weight
+            if weight > 0 and roll <= 0 then
                 return entry
             end
         end
@@ -253,7 +263,7 @@ function DropTemplates.resolve(config, context)
         return result
     end
 
-    addResolvedDrop(result, DropTemplates.chooseWeighted(config.drops or config.dropTemplate, context), context)
+    addResolvedDrop(result, DropTemplates.chooseWeighted(config.drops or config.dropTemplate, context, config.lifeChanceMultiplier), context)
 
     for _, entry in ipairs(config.extraDrops or {}) do
         local chance = getEntryChance(entry, context)

@@ -76,7 +76,7 @@ function babyZombie:takeDamage(damage, dx, dy)
         if self.soundTimer <= 1 then
             self.soundTimer = 1.1
         end
-        playClonedSound(damageBase, 1.2, (1 + math.random() * 0.1) * GAME_PITCH)
+        playClonedSound(damageBase, 1.8, (1 + math.random() * 0.1) * GAME_PITCH)
     end
 end
 

@@ -153,7 +153,7 @@ function BigZombie:takeDamage(damage, dx, dy)
         if self.soundTimer <= 1 then
             self.soundTimer = 1.1
         end
-        playClonedSound(damageBase, 1.05, (0.9 + math.random() * 0.1) * GAME_PITCH)
+        playClonedSound(damageBase, 1.575, (0.9 + math.random() * 0.1) * GAME_PITCH)
         return
     end
 
@@ -169,7 +169,7 @@ function BigZombie:takeDamage(damage, dx, dy)
         if self.soundTimer <= 1 then
             self.soundTimer = 1.1
         end
-        playClonedSound(damageBase, 1.2, (0.9 + math.random() * 0.1) * GAME_PITCH)
+        playClonedSound(damageBase, 1.8, (0.9 + math.random() * 0.1) * GAME_PITCH)
     end
 end
 

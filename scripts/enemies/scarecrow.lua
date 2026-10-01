@@ -125,7 +125,7 @@ function Scarecrow:takeDamage(damage, dx, dy)
     self.life = self.life - (damage or 10)
     local hitBloodMin, hitBloodMax = getHitBloodRange()
     BloodPixel.spawnBurst(self.x, self.y - 8, 0, -1, hitBloodMin, hitBloodMax, strawBloodPalette)
-    playClonedSound(enemyDamageBase, 0.8, (1 + math.random() * 0.1) * GAME_PITCH)
+    playClonedSound(enemyDamageBase, 1.2, (1 + math.random() * 0.1) * GAME_PITCH)
 
     if self.life <= 0 then
         self.isBreaking = true

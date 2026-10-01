@@ -5,8 +5,8 @@ local DamageStretch = require("scripts/effects/damageStretch")
 local BoxBreakBurst = require("scripts/effects/boxBreakBurst")
 local DropTemplates = require("scripts/drops/dropTemplates")
 local breakBoxBase = love.audio.newSource("assets/sfx/particles/break-box.mp3", "static")
+local damageWoodBase = love.audio.newSource("assets/sfx/particles/damage-wood.mp3", "static")
 local coinDropBase = love.audio.newSource("assets/sfx/drops/coin-drop.mp3", "static")
-local shadowQuad = nil
 local whiteShader = love.graphics.newShader("scripts/shaders/whiteShader.glsl")
 local centerTilePriorityOffset = {
     [5] = true,
@@ -147,6 +147,9 @@ function Tile:update(dt)
 end
 
 function Tile:getDrawPriority()
+    if self.upperWallDrawPriority then
+        return self.upperWallDrawPriority
+    end
     if self.quadIndex == 14 or self.quadIndex == 18 then
         return self.yWorld - 0.1
     end
@@ -165,6 +168,9 @@ function Tile:onshoot(damage)
         DamageStretch:start(self)
         self.life = (self.life or 30) - (damage or 10)
         if self.life > 0 then
+            local volume = getDistanceVolume(distance(Player, self), 0.15, 400)
+            playClonedSound(damageWoodBase, volume, (0.7
+            + math.random() * 0.2) * GAME_PITCH)
             return true
         end
 
@@ -217,8 +223,8 @@ function Tile:explodeBox()
 
     local playerDistance = distance(Player, self)
     
-    local volume = getDistanceVolume(playerDistance, 0.3, 200)
-    playClonedSound(breakBoxBase, volume, (0.9 + math.random() * 0.1) * GAME_PITCH)
+    local volume = getDistanceVolume(playerDistance, 0.3, 400)
+    playClonedSound(breakBoxBase, volume, (0.7 + math.random() * 0.2) * GAME_PITCH)
 
     playerDistance = distance(Player, self)
     volume = getDistanceVolume(playerDistance, 0.4, 200)
@@ -238,6 +244,15 @@ function Tile:explodeBox()
             return drop
         end)
     end
+end
+
+function Tile:drawGroundBase(yOffset)
+    local r, g, b, a = love.graphics.getColor()
+    local tint = getTileTint(self)
+    local tileSize = TileSet.tileSize
+    love.graphics.setColor(r * tint, g * tint, b * tint, a)
+    love.graphics.draw(TileSet.tilesetImage, TileSet:getTileSet()[5], self.xWorld, self.yWorld + (yOffset or 0), 0, 1, 1, tileSize / 2, tileSize)
+    love.graphics.setColor(r, g, b, a)
 end
 
 function Tile:draw()
@@ -312,22 +327,6 @@ function Tile:drawDebug()
         love.graphics.rectangle("line", self.xWorld-8, self.yWorld-16, 16, 16)
         love.graphics.setColor(1, 1, 1, 1)
     end
-end
-
-function Tile:drawShadow()
-    if self.touchesWalkableGround ~= true then
-        return
-    end
-
-    if self.quadIndex == 5 or self.quadIndex == 15 or self.quadIndex == 35 then
-        return
-    end
-
-    local tilesetImage = TileSet.tilesetImage
-    if not shadowQuad then
-        shadowQuad = love.graphics.newQuad(110, 14, 20, 20, TileSet.sheetWidth, TileSet.sheetHeight)
-    end
-    love.graphics.draw(tilesetImage, shadowQuad, self.xWorld, self.yWorld, 0, 1, 1, 10, 16)
 end
 
 function Tile:getXrayOccluderBox()

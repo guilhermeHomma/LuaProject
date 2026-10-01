@@ -4,7 +4,7 @@ local Player = {}
 
 local Bullet = require("scripts/bullet")
 local BallParticle = require("scripts/particles/ballParticle")
-local WalkParticle = require("scripts/particles/walkParticle")
+local WalkParticle = require("scripts/particles/walkDust")
 local WalkParticleSquare = require("scripts/particles/walkParticleSquare")
 local BloodPixel = require("scripts/particles/bloodPixel")
 local BloodDecal = require("scripts/particles/bloodDecal")
@@ -14,6 +14,7 @@ local Dash = require("scripts/player/dash")
 local CardPickupEffects = require("scripts/player/cardPickupEffects")
 local PlayerAnimation = require("scripts/player/playerAnimation")
 local AliceAnimation = require("scripts/player/aliceAnimation")
+local ElevatorGeometry = require("scripts/objects/elevatorGeometry")
 local playerGlitchShader = love.graphics.newShader("scripts/shaders/playerGlitch.glsl")
 local footstepBase = love.audio.newSource("assets/sfx/footsteps/foot-steps-0.mp3", "static")
 local damageBase = love.audio.newSource("assets/sfx/player/ow-damage.mp3", "static")
@@ -122,7 +123,7 @@ function Player:isDashing()
 end
 
 function Player:isActionLocked()
-    return self:isDashing() or PlayerAnimation.isFallIntroActive(self)
+    return (Game and Game.elevatorSequence ~= nil) or self:isDashing() or PlayerAnimation.isFallIntroActive(self)
 end
 
 function Player:getDashVisualOffsetY()
@@ -215,19 +216,24 @@ function Player:updateAnimation(dt, moving)
     self.SquareParticleTime = self.SquareParticleTime + dt
 
     for _ = 1, runSteps do
-            
-            playClonedSound(footstepBase, 0.34, (0.7 + math.random() * 0.6) * GAME_PITCH)
-            
-            local lifetime = math.random(45, 55) / 100
-            local particle = WalkParticle:new(self.x, self.y, lifetime)
+        playClonedSound(footstepBase, 0.34, (0.7 + math.random() * 0.6) * GAME_PITCH)
+    end
 
-            if math.random() > 0.1 then
+    if moving then
+        local interval = 0.16
+        self.walkParticleTimer = (self.walkParticleTimer or 0) + dt
+        if changedAnimation then
+            self.walkParticleTimer = math.max(self.walkParticleTimer, interval)
+        end
+        if self.walkParticleTimer >= interval then
+            self.walkParticleTimer = self.walkParticleTimer % interval
+            for side = -1, 1, 2 do
+                local particle = WalkParticle:new(self.x + side * math.random(3, 5), self.y + math.random(0, 2))
                 table.insert(Game.particles, particle)
-                if math.random() > 0.5 then
-                    local particle = WalkParticle:new(self.x + 2, self.y + 2, lifetime)
-                    table.insert(Game.particles, particle)
-                end
             end
+        end
+    else
+        self.walkParticleTimer = 0
     end
 end
 
@@ -511,7 +517,10 @@ function Player:checkDamage()
         local dy = enemy.y - self.y
         local distance = math.sqrt(dx * dx + dy * dy)
 
-        if enemy.canDamagePlayer ~= false and distance < 10 then
+        local contactRadius = enemy.contactDamageRadius and (enemy.contactDamageRadius + self:getCollisionBox().size / 2) or 10
+        local overlaps = distance < contactRadius
+        if enemy.overlapsPlayer then overlaps = enemy:overlapsPlayer(self) end
+        if enemy.isAlive ~= false and enemy.canDamagePlayer ~= false and overlaps then
             --enemy.life = 0
             --enemy:death()
             local damageDx = self.x - enemy.x
@@ -1008,10 +1017,23 @@ function Player:drawSight()
     self.gun:drawSight()
 end
 
-function Player:drawShadow()
+function Player:getShadowElevator()
+    if not Game then return nil end
+    if Game.elevatorSequence then return Game.elevatorSequence end
+    for _, object in ipairs(Game.objects or {}) do
+        if object.isElevator and object.isAlive ~= false
+            and ElevatorGeometry.contains(ElevatorGeometry.base(object.x, object.y), self.x, self.y) then
+            return object
+        end
+    end
+end
+
+function Player:drawShadow(onElevator)
     if not self.isAlive then
         return
     end
+    -- Elevator surfaces are drawn after the normal ground-shadow pass.
+    if not onElevator and self:getShadowElevator() then return end
 
     local alpha = PlayerAnimation.getFallIntroShadowAlpha(self)
     if alpha <= 0 then
@@ -1267,6 +1289,16 @@ function Player:draw()
     
     local mouseX, mouseY = mousePosition()
 
+    local elevator = Game and Game.elevatorSequence
+    if elevator then
+        love.graphics.push()
+        love.graphics.translate(elevator.shakeX or 0, -(elevator.platformOffset or 0) + (elevator.shakeY or 0))
+    end
+
+    if self:getShadowElevator() then
+        self:drawShadow(true)
+    end
+
     if mouseY > self.y then
 
         self:drawPlayerImage(frameData.bodyImage, frameData.bodyQuad, self.x, self.y, 0, scaleX, scaleY, originX, self.spriteSize)
@@ -1281,6 +1313,10 @@ function Player:draw()
         end
         self:drawPlayerImage(frameData.bodyImage, frameData.bodyQuad, self.x, self.y, 0, scaleX, scaleY, originX, self.spriteSize)
         self:drawAnimatedHand(frameData.handImage, frameData.handQuad, scaleX, originX)
+    end
+
+    if elevator then
+        love.graphics.pop()
     end
 
     self:drawReloadBar()

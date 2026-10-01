@@ -3,16 +3,16 @@ BloodDecal.__index = BloodDecal
 BloodDecal.castsShadow = false
 
 require("scripts/utils")
+local Config = require("scripts/config/bloodDecalConfig")
 
 local bloodSpritePath = "assets/sprites/enemy/blood"
 local bloodSprites = {}
 local splatBase = love.audio.newSource("assets/sfx/enemies/splat.mp3", "static")
 local bloodPixelSize = 1
 local centerFillRadius = 0.22
-local maxBloodDecals = 24
-local fadeOutDuration = 5
 local bloodDecalUpdateInterval = 1 / 30
 local deferredPixelBatchSize = 80
+local nextDrawOrder = 0
 
 local function createBloodSprite(path)
     local imageData = love.image.newImageData(path)
@@ -187,7 +187,14 @@ local function drawPixelBatch(decal, pixels, startIndex, maxCount)
         end
 
         decal.drawnPixels[key] = true
-        love.graphics.setColor(pixel.r, pixel.g, pixel.b, pixel.a * (alpha or 1))
+        if decal.color then
+            -- Preserve subtle texture without multiplying the tint by dark red blood.
+            local shade = 0.85 + 0.15 * math.max(pixel.r, pixel.g, pixel.b)
+            love.graphics.setColor(decal.color[1] * shade, decal.color[2] * shade,
+                decal.color[3] * shade, pixel.a * (alpha or 1))
+        else
+            love.graphics.setColor(pixel.r, pixel.g, pixel.b, pixel.a * (alpha or 1))
+        end
         love.graphics.rectangle(
             "fill",
             drawX + decal.staticCanvasOffsetX,
@@ -240,13 +247,17 @@ function BloodDecal:new(x, y, damageDx, damageDy, options)
     decal.x = x
     decal.y = y
     decal.sprite = bloodSprites[math.random(1, #bloodSprites)]
+    decal.color = options.color
+    nextDrawOrder = nextDrawOrder + 1
+    decal.groundDrawOrder = nextDrawOrder
     decal.rotation = getSourceAngle(x, y, damageDx, damageDy)
     decal.scale = randomRange(1.3, 1.7) * (options.scaleMultiplier or 1)
     decal.timer = 0
-    decal.lifeTime = 35
+    decal.lifeTime = math.huge
+    decal.fadeDuration = options.fadeDuration or Config.fadeDuration
     decal.revealDuration = 0.16
     decal.flashDuration = 0.12
-    decal.fadeStart = decal.lifeTime - fadeOutDuration
+    decal.fadeStart = math.huge
     decal.alpha = 1
     decal.isAlive = true
     decal.particleType = "bloodDecal"
@@ -260,6 +271,30 @@ function BloodDecal:new(x, y, damageDx, damageDy, options)
     playSplat(x, y, options)
 
     return decal
+end
+
+function BloodDecal:startFading()
+    if self.retiring then return end
+    self.retiring = true
+    self.fadeStart = self.timer
+    self.lifeTime = self.timer + self.fadeDuration
+end
+
+-- Room state owns the stains; their canvases and fade progress survive revisits.
+function BloodDecal.restoreRoom(state, particles)
+    if not (state and particles) then return end
+    local present = {}
+    for _, particle in ipairs(particles) do present[particle] = true end
+    local decals = state.bloodDecals or {}
+    for index = #decals, 1, -1 do
+        local decal = decals[index]
+        if not decal.isAlive then
+            table.remove(decals, index)
+        elseif not present[decal] then
+            particles[#particles + 1] = decal
+            present[decal] = true
+        end
+    end
 end
 
 function BloodDecal:queueDraw()
@@ -288,6 +323,15 @@ function BloodDecal:update(dt)
 
     if self.timer >= self.lifeTime then
         self.isAlive = false
+        if self.roomDecals then
+            for index = #self.roomDecals, 1, -1 do
+                if self.roomDecals[index] == self then
+                    table.remove(self.roomDecals, index)
+                    break
+                end
+            end
+            self.roomDecals = nil
+        end
     end
 end
 
@@ -317,24 +361,30 @@ function BloodDecal.spawn(x, y, damageDx, damageDy, options)
         return
     end
 
-    local oldestIndex = nil
-    local oldestTimer = -math.huge
-    local count = 0
-    for index, particle in ipairs(Game.particles) do
-        if particle.particleType == "bloodDecal" then
-            count = count + 1
-            if (particle.timer or 0) > oldestTimer then
-                oldestTimer = particle.timer or 0
-                oldestIndex = index
+    local persistentCount, oldest = 0, nil
+    for _, particle in ipairs(Game.particles) do
+        if particle.particleType == "bloodDecal" and particle.isAlive then
+            if not particle.retiring then
+                persistentCount = persistentCount + 1
+                if not oldest or particle.groundDrawOrder < oldest.groundDrawOrder then
+                    oldest = particle
+                end
             end
         end
     end
 
-    if count >= maxBloodDecals and oldestIndex then
-        table.remove(Game.particles, oldestIndex)
+    if persistentCount >= Config.maxPersistentPerRoom and oldest then
+        oldest:startFading()
     end
-
-    table.insert(Game.particles, BloodDecal:new(x, y, damageDx, damageDy, options))
+    local decal = BloodDecal:new(x, y, damageDx, damageDy, options)
+    local state = require("scripts/managers/floorManager"):getCurrentRoomState()
+    if state then
+        state.bloodDecals = state.bloodDecals or {}
+        decal.roomDecals = state.bloodDecals
+        state.bloodDecals[#state.bloodDecals + 1] = decal
+    end
+    Game.particles[#Game.particles + 1] = decal
+    return decal
 end
 
 return BloodDecal

@@ -8,9 +8,12 @@ local BabyZombie = require("scripts/enemies/babyZombie")
 local BigZombie = require("scripts/enemies/bigZombie")
 local NoHead = require("scripts/enemies/noHead")
 local Spider = require("scripts/enemies/spider")
+local SlimeBoss = require("scripts/enemies/slimeBoss")
+local BloodDecal = require("scripts/particles/bloodDecal")
 local Fly = require("scripts/enemies/fly")
 local Scarecrow = require("scripts/enemies/scarecrow")
 local Elevator = require("scripts/objects/elevator")
+local ElevatorArrival = require("scripts/objects/elevatorArrival")
 local SpiderWeb = require("scripts/particles/spiderWeb")
 local Localization = require("scripts/managers/localization")
 local CardDrop = require("scripts/drops/card")
@@ -498,6 +501,14 @@ local function getEnemySpawnPosition(enemyId, reference, minDistance, avoidPoint
     return nil, nil
 end
 
+local function scaleEnemyCount(config, count)
+    local scaled = count * (config.enemyCountMultiplier or 1)
+    local whole = math.floor(scaled)
+    -- Fractional enemies become a chance of one extra, preserving the average.
+    if scaled > whole and math.random() < scaled - whole then whole = whole + 1 end
+    return math.max(1, whole)
+end
+
 local function getEncounterEnemyCount(config, waveConfig)
     local countConfig = waveConfig.count or config.count or {}
     local currentRoom = FloorManager:getCurrentRoom()
@@ -514,7 +525,7 @@ local function getEncounterEnemyCount(config, waveConfig)
     minCount = math.max(1, math.floor(minCount * multiplier + add + 0.5))
     maxCount = math.max(minCount, math.floor(maxCount * multiplier + add + 0.5))
 
-    return math.random(minCount, maxCount)
+    return scaleEnemyCount(config, math.random(minCount, maxCount))
 end
 
 local function chooseEnemyType(config, waveConfig, spawnedCounts)
@@ -729,17 +740,13 @@ function RoomEncounterManager:spawnEndRoomElevator(currentRoom)
     local map = Tilemap:getTilemap()
     currentRoom.state = currentRoom.state or {}
     local state = currentRoom.state
-    if not (state and state.elevatorPosition) then
-        local centerX = map and #(map[1] or {}) / 2 or 16
-        local centerY = map and #map / 2 or 16
-        local worldX, worldY = Tilemap:mapToWorld(centerX + 0.5, centerY + 0.5)
-        local offsetX = math.random(0, 1) == 0 and -TILE_WORLD_SIZE / 2 or TILE_WORLD_SIZE / 2
-        local offsetY = math.random(0, 1) == 0 and -TILE_WORLD_SIZE / 2 or TILE_WORLD_SIZE / 2
-        state.elevatorPosition = {
-            x = worldX + offsetX,
-            y = worldY + TILE_WORLD_SIZE * 2 + offsetY,
-        }
-    end
+    local centerX = map and #(map[1] or {}) / 2 or 16
+    local centerY = map and #map / 2 or 16
+    local worldX, worldY = Tilemap:mapToWorld(centerX + 0.5, centerY + 0.5)
+    state.elevatorPosition = {
+        x = worldX,
+        y = worldY + TILE_WORLD_SIZE * 2.5,
+    }
 
     local position = state and state.elevatorPosition
     self.objects[#self.objects + 1] = Elevator:new(position.x, position.y)
@@ -874,6 +881,13 @@ function RoomEncounterManager:setupCurrentRoom(options)
         return
     end
 
+    BloodDecal.restoreRoom(state, self.particles)
+
+    if isStartRoom(currentRoom) and (CURRENT_LEVEL.currentFloorIndex or 1) >= 2 and state.elevatorPosition then
+        local position = state.elevatorPosition
+        self.objects[#self.objects + 1] = ElevatorArrival:new(position.x, position.y)
+    end
+
     if not options.deferMinimapReveal then
         state.visited = true
         state.discovered = true
@@ -915,6 +929,20 @@ function RoomEncounterManager:setupCurrentRoom(options)
         if currentRoom.isCardRoom then
             self:spawnCardRoomDrop(currentRoom)
         end
+        return
+    end
+
+    if currentRoom.isBossRoom then
+        self.enemies = {}
+        self.nearbyEnemies = {}
+        if not state.cleared then
+            local map = Tilemap:getTilemap()
+            local x, y = Tilemap:mapToWorld((#map[1] + 1) / 2, (#map + 1) / 2)
+            self.enemies[1] = SlimeBoss:new(x, y)
+            state.encounterSpawned = true
+            state.encounterCompleted = false
+        end
+        self:updateBattleMusicForCurrentRoom()
         return
     end
 
@@ -1006,7 +1034,7 @@ end
 
 function RoomEncounterManager:spawnCurrentRoomWave(currentRoom, encounterConfig)
     local state = currentRoom and currentRoom.state
-    if not state or currentRoom.isShopRoom or currentRoom.isCardRoom or currentRoom.isEndRoom
+    if not state or currentRoom.isShopRoom or currentRoom.isCardRoom or currentRoom.isEndRoom or currentRoom.isBossRoom
         or currentRoom.isChestRoom or currentRoom.templateId == "chest_32x32"
         or currentRoom.isHeartRoom or currentRoom.templateId == "heart_32x32" then
         return
@@ -1027,7 +1055,7 @@ function RoomEncounterManager:spawnCurrentRoomWave(currentRoom, encounterConfig)
     state.encounterWaveIndex = waveIndex
     local fixedWave = getEarlyCombatRoomWave(currentRoom, waveIndex)
     local waveConfig = fixedWave or getRoomWaveConfig(encounterConfig, chooseEncounterWave(encounterConfig, currentRoom), currentRoom)
-    local enemyCount = fixedWave and #fixedWave.enemies or getEncounterEnemyCount(encounterConfig, waveConfig)
+    local enemyCount = fixedWave and scaleEnemyCount(encounterConfig, #fixedWave.enemies) or getEncounterEnemyCount(encounterConfig, waveConfig)
     local spawnMinDistance = getEncounterSpawnMinDistanceForWave(encounterConfig, waveIndex)
     local spawnedPositions = {}
     local spawnedCounts = {}
@@ -1044,7 +1072,7 @@ function RoomEncounterManager:spawnCurrentRoomWave(currentRoom, encounterConfig)
 
     state.encounterSpawned = true
     for spawnIndex = 1, enemyCount do
-        local enemyId = fixedWave and fixedWave.enemies[spawnIndex] or chooseEnemyType(encounterConfig, waveConfig, spawnedCounts)
+        local enemyId = fixedWave and fixedWave.enemies[(spawnIndex - 1) % #fixedWave.enemies + 1] or chooseEnemyType(encounterConfig, waveConfig, spawnedCounts)
         local factory = EnemyFactories[enemyId] or EnemyFactories.zombie
         local spawnAvoidPoints = getEncounterSpawnAvoidPoints(encounterConfig, waveIndex, spawnedPositions, self.enemies)
         local x, y = getEnemySpawnPosition(enemyId, Player, spawnMinDistance, spawnAvoidPoints)
@@ -1188,7 +1216,7 @@ function RoomEncounterManager:spawnEncounterWavesUntilFull(currentRoom, encounte
         return
     end
     if currentRoom.templateId == "start_32x32" or isStartRoom(currentRoom)
-        or currentRoom.isEndRoom or currentRoom.isChestRoom or currentRoom.isHeartRoom then
+        or currentRoom.isEndRoom or currentRoom.isBossRoom or currentRoom.isChestRoom or currentRoom.isHeartRoom then
         return
     end
 

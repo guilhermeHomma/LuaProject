@@ -5,6 +5,7 @@ TileSet = require("scripts.objects.tileset")
 local LeafParticle = require("scripts/particles/leafParticle")
 local FloorManager = require("scripts/managers/floorManager")
 local TreeConfig = require("scripts/config/treeConfig")
+local DRAW_PRIORITY_OFFSET = -4
 
 local treeSheetImage = love.graphics.newImage("assets/sprites/florest/three.png")
 local bigThreeImage = love.graphics.newImage("assets/sprites/objects/bigthree.png")
@@ -357,7 +358,7 @@ function TreeTile:update(dt)
         end
     end
 
-    addToDrawQueue(self.yWorld + 1 + self.yAdd + (self.ySortOffset or 0), self, false)
+    addToDrawQueue(self.yWorld + 1 + self.yAdd + (self.ySortOffset or 0) + DRAW_PRIORITY_OFFSET, self, false)
     self:updateLeaves(dt)
     --print(self.shaderDirection)
 end
@@ -437,18 +438,14 @@ end
 
 function TreeTile:draw()
 
-    local tileSet = TileSet:getTileSet()
-    local tileSize = TileSet.tileSize
-    local tilesetImage = TileSet.tilesetImage
-
     local image, quad, frameUV = getTreeSprite(self)
     local originX, originY, spriteWidth, spriteHeight = getTreeSpriteMetrics(self)
 
-    applyTreeShader(spriteWidth, spriteHeight, frameUV)
-
-    if not self.collider then
-        love.graphics.draw(tilesetImage, tileSet[5], self.xWorld, self.yWorld , 0, 1, 1, tileSize/2, tileSize)
+    if not self.collider and not self.isOnUpperWall then
+        self:drawGroundBase()
     end
+
+    applyTreeShader(spriteWidth, spriteHeight, frameUV)
 
     local box = getTreeFadeBox(self, originX, originY, spriteWidth)
 

@@ -60,6 +60,10 @@ function getDistanceVolume(distance, maxVolume, maxDistance)
     if maxVolume == nil then maxVolume = 1 end
     if maxDistance == nil then maxDistance = 200 end
 
+    distance = distance - 80
+
+    if distance <= 0 then distance = 0 end
+
     if distance >= maxDistance then
         return 0
     end
@@ -184,12 +188,12 @@ function autoTile(x, y, tilemap) -- grass wall
 
     local function isNotSolid(y, x)
         local v = tilemap[y] and tilemap[y][x]
-        return v ~= 1 and v ~= 3 and v ~= 14 and v ~= 11 and v ~= 10 and v ~= 12
+        return v ~= 1 and v ~= 3 and v ~= 14 and v ~= 11 and v ~= 10 and v ~= 12 and v ~= 17
     end
 
     local function isSolid(y, x)
         local v = tilemap[y] and tilemap[y][x]
-        return v == 1 or v == 3 or v == 14 or v == 11 or v == 10 or v == 12
+        return v == 1 or v == 3 or v == 14 or v == 11 or v == 10 or v == 12 or v == 17
     end
 
     if x == 1 or y == 1 or x == #tilemap[y] or y == #tilemap then 

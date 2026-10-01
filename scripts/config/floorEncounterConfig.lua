@@ -53,6 +53,7 @@ end
 
 FloorEncounterConfig.base = {
     enabled = true,
+    enemyCountMultiplier = 1.2,
     startRoom = false,
     spawnMinDistanceTiles = 5,
     spawnEntryAvoidDistanceTiles = 5,

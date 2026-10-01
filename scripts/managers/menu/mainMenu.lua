@@ -38,7 +38,7 @@ end
 
 function MainMenu:load()
     baseMenu.load(self)
-    self.MenuTItle = "mobize"
+    self.MenuTItle = "Alice zero"
     self.menuOptions = {"start_game", "settings", "exit_game"}
     self.fontTitle = Fonts:logo("mainLogo")
     self.lockOnSelect = true

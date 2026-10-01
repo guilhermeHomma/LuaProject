@@ -76,6 +76,7 @@ local function createRoom(roomConfig, level)
         heartRoomVariant = roomConfig.heartRoomVariant,
         heartDropCount = roomConfig.heartDropCount,
         isEndRoom = roomConfig.isEndRoom == true or templateId == "end_32x32",
+        isBossRoom = roomConfig.isBossRoom == true or templateId == "boss_32x32",
         state = roomConfig.state or {
             visited = false,
             discovered = false,
@@ -232,6 +233,7 @@ local function canExpandRoom(room)
 end
 
 local function canAddConnectionToRoom(room)
+    if room and (room.isEndRoom or room.isBossRoom) then return false end
     return not (room and room.pathEnd == true and getRoomConnectionCount(room) <= 1)
 end
 
@@ -330,6 +332,20 @@ local function getDirectionsAwayFromStart(room)
     return ordered
 end
 
+local function findBossPlacement(x, y, generateConfig, occupiedCells)
+    if not generateConfig.bossRoomTemplateId then return nil end
+    for _, direction in ipairs(getDirectionsAwayFromStart({gridX = x, gridY = y})) do
+        local config = directions[direction]
+        local bossX, bossY = x + config.dx, y + config.dy
+        if not occupiedCells[getRoomId(bossX, bossY)] then
+            local placement = RoomSelector.chooseTemplatePlacement(
+                {[config.opposite] = true}, {templateIds = {generateConfig.bossRoomTemplateId}},
+                bossX, bossY, occupiedCells)
+            if placement then return {x = bossX, y = bossY, direction = direction, placement = placement} end
+        end
+    end
+end
+
 local function createEndRoomFromAnchor(anchorRoom, generateConfig, generatedRooms, roomIds, occupiedCells)
     local endTemplateId = generateConfig and generateConfig.endRoomTemplateId
     if not (endTemplateId and anchorRoom) then
@@ -356,7 +372,8 @@ local function createEndRoomFromAnchor(anchorRoom, generateConfig, generatedRoom
                     occupiedCells
                 )
 
-                if placement then
+                local bossPlacement = placement and findBossPlacement(x, y, generateConfig, occupiedCells)
+                if placement and (not generateConfig.bossRoomTemplateId or bossPlacement) then
                     local room = createGeneratedRoom(x, y, placement)
                     room.isEndRoom = true
                     room.pathEnd = true
@@ -370,6 +387,19 @@ local function createEndRoomFromAnchor(anchorRoom, generateConfig, generatedRoom
                     anchorRoom.neighbors[direction] = room.id
 
                     appendGeneratedRoom(generatedRooms, roomIds, occupiedCells, room)
+                    if bossPlacement then
+                        local direction = bossPlacement.direction
+                        local opposite = directions[direction].opposite
+                        local bossRoom = createGeneratedRoom(bossPlacement.x, bossPlacement.y, bossPlacement.placement)
+                        bossRoom.isBossRoom = true
+                        bossRoom.pathEnd = true
+                        bossRoom.distanceFromStart = room.distanceFromStart + 1
+                        bossRoom.doors[opposite] = true
+                        bossRoom.neighbors[opposite] = room.id
+                        room.doors[direction] = true
+                        room.neighbors[direction] = bossRoom.id
+                        appendGeneratedRoom(generatedRooms, roomIds, occupiedCells, bossRoom)
+                    end
                     return room
                 end
             end
@@ -386,7 +416,7 @@ local function createEndRoom(generateConfig, generatedRooms, roomIds, occupiedCe
 
     local candidates = {}
     for _, room in ipairs(generatedRooms or {}) do
-        if not room.isShopRoom and not room.isCardRoom and not room.isEndRoom then
+        if not room.isShopRoom and not room.isCardRoom and not room.isEndRoom and not room.isBossRoom then
             candidates[#candidates + 1] = room
         end
     end
@@ -424,7 +454,7 @@ local function createEndRoom(generateConfig, generatedRooms, roomIds, occupiedCe
     end
 
     for _, room in ipairs(generatedRooms or {}) do
-        if not room.isEndRoom then
+        if not room.isEndRoom and not room.isBossRoom then
             local endRoom = createEndRoomFromAnchor(room, generateConfig, generatedRooms, roomIds, occupiedCells)
             if endRoom then
                 return endRoom
@@ -613,7 +643,7 @@ local function createCardRooms(generateConfig, generatedRooms, roomIds, occupied
     local function getSortedCardAnchors()
         local candidates = {}
         for _, room in ipairs(generatedRooms) do
-            if not room.isShopRoom and not room.isCardRoom and not room.isEndRoom then
+            if not room.isShopRoom and not room.isCardRoom and not room.isEndRoom and not room.isBossRoom then
                 candidates[#candidates + 1] = {
                     room = room,
                     score = getSpreadScore(room),
@@ -670,27 +700,35 @@ local function isLargeGeneratedRoom(room)
         and ((room.gridWidth or 1) > 1 or (room.gridHeight or 1) > 1)
 end
 
-local function getLargeGeneratedRoomCount(rooms)
-    local count = 0
+local function getGeneratedRoomSizeCounts(rooms)
+    local large, elongated = 0, 0
     for _, room in ipairs(rooms or {}) do
         if room and room.templateId == "large_48x48" then
-            count = count + 1
+            large = large + 1
+        elseif room and (room.templateId == "wide_48x32" or room.templateId == "tall_32x48") then
+            elongated = elongated + 1
         end
     end
-    return count
+    return large, elongated
 end
 
-local function applyLargeRoomLimit(generateConfig, generatedRooms)
-    local limit = generateConfig and generateConfig.largeRoomLimit
-    if not limit or getLargeGeneratedRoomCount(generatedRooms) < limit then
-        return generateConfig
-    end
-
+local function applyRoomSizePlan(generateConfig, generatedRooms)
+    local large, elongated = getGeneratedRoomSizeCounts(generatedRooms)
+    local needsLarge = large < (generateConfig.largeRoomLimit or 0)
+    local needsElongated = elongated < (generateConfig.elongatedRoomLimit or 0)
     local limitedConfig = copyTable(generateConfig)
-    limitedConfig.templateWeights = limitedConfig.templateWeights or {}
-    limitedConfig.endTemplateWeights = limitedConfig.endTemplateWeights or {}
-    limitedConfig.templateWeights.large_48x48 = 0
-    limitedConfig.endTemplateWeights.large_48x48 = 0
+    limitedConfig.templateIds = {}
+    -- Place the floor's selected sizes first, then use only small rooms.
+    -- This makes the chance apply to the floor, rather than to each room.
+    for _, id in ipairs(generateConfig.templateIds or {"basic_32x32", "wide_48x32", "tall_32x48", "large_48x48"}) do
+        local isLarge = id == "large_48x48"
+        local isElongated = id == "wide_48x32" or id == "tall_32x48"
+        if (needsLarge and isLarge)
+            or (not needsLarge and needsElongated and isElongated)
+            or (not needsLarge and not needsElongated and not isLarge and not isElongated) then
+            limitedConfig.templateIds[#limitedConfig.templateIds + 1] = id
+        end
+    end
     return limitedConfig
 end
 
@@ -773,13 +811,13 @@ local function addOppositeExitFromLargeRoom(room, generateConfig, generatedRooms
         return tryConnectRooms(room, targetRoom, exitDirection, exitCell, {x = x, y = y})
     end
 
-    if targetRoom then
+    if targetRoom or (generateConfig.baseRoomLimit and #generatedRooms >= generateConfig.baseRoomLimit) then
         return false
     end
 
     local placement = RoomSelector.chooseTemplatePlacement(
         {[directionConfig.opposite] = true},
-        applyLargeRoomLimit(generateConfig, generatedRooms),
+        applyRoomSizePlan(generateConfig, generatedRooms),
         x,
         y,
         occupiedCells
@@ -852,7 +890,7 @@ local function getElongatedRoomConnectionCell(room, direction)
     return selected
 end
 
-local function addExitFromElongatedRoomCell(room, cell, generatedRooms, roomIds, occupiedCells)
+local function addExitFromElongatedRoomCell(room, cell, generatedRooms, roomIds, occupiedCells, roomLimit)
     for _, direction in ipairs(shuffledDirectionsList()) do
         local directionConfig = directions[direction]
         local x = cell.x + directionConfig.dx
@@ -863,7 +901,7 @@ local function addExitFromElongatedRoomCell(room, cell, generatedRooms, roomIds,
             if targetRoom and canAddConnectionToRoom(targetRoom)
                 and tryConnectRooms(room, targetRoom, direction, cell, {x = x, y = y}) then
                 return true
-            elseif not targetRoom then
+            elseif not targetRoom and (not roomLimit or #generatedRooms < roomLimit) then
                 local placement = RoomSelector.chooseTemplatePlacement(
                     {[directionConfig.opposite] = true},
                     {templateIds = {"basic_32x32"}},
@@ -894,7 +932,7 @@ local function addExitFromElongatedRoomCell(room, cell, generatedRooms, roomIds,
     return false
 end
 
-local function ensureElongatedRoomsUseBothCells(generatedRooms, roomIds, occupiedCells)
+local function ensureElongatedRoomsUseBothCells(generatedRooms, roomIds, occupiedCells, roomLimit)
     local snapshot = {}
     for _, room in ipairs(generatedRooms or {}) do
         if room.templateId == "wide_48x32" or room.templateId == "tall_32x48" then
@@ -913,7 +951,7 @@ local function ensureElongatedRoomsUseBothCells(generatedRooms, roomIds, occupie
 
         for _, cell in ipairs(getOccupiedCells(room)) do
             if not connectedCells[getRoomId(cell.x, cell.y)] then
-                if addExitFromElongatedRoomCell(room, cell, generatedRooms, roomIds, occupiedCells) then
+                if addExitFromElongatedRoomCell(room, cell, generatedRooms, roomIds, occupiedCells, roomLimit) then
                     connectedCells[getRoomId(cell.x, cell.y)] = true
                 end
             end
@@ -945,6 +983,7 @@ local function convertRandomSmallRoomToChestRoom(generateConfig, generatedRooms)
             and not room.isShopRoom
             and not room.isCardRoom
             and not room.isEndRoom
+            and not room.isBossRoom
             and not room.isChestRoom then
             candidates[#candidates + 1] = room
         end
@@ -1010,6 +1049,7 @@ local function convertRandomSmallRoomToHeartRoom(generateConfig, generatedRooms)
             and not room.isCardRoom
             and not room.isChestRoom
             and not room.isEndRoom
+            and not room.isBossRoom
             and not room.isHeartRoom then
             candidates[#candidates + 1] = room
         end
@@ -1045,8 +1085,10 @@ end
 
 local function createGraphRooms(generateConfig)
     generateConfig = copyTable(generateConfig)
-    local secondLargeRoomChance = math.max(0, math.min(generateConfig.secondLargeRoomChance or 0.05, 1))
-    generateConfig.largeRoomLimit = math.random() < secondLargeRoomChance and 2 or 1
+    local largeRoomChance = math.max(0, math.min(generateConfig.largeRoomChance or 0.20, 1))
+    local elongatedRoomChance = math.max(0, math.min(generateConfig.elongatedRoomChance or 0.60, 1))
+    generateConfig.largeRoomLimit = math.random() < largeRoomChance and 1 or 0
+    generateConfig.elongatedRoomLimit = math.random() < elongatedRoomChance and 1 or 0
 
     local battleRoomCount = generateConfig.battleRoomCount
     local roomCount = battleRoomCount and (math.floor(battleRoomCount) + 1) or (generateConfig.roomCount or 8)
@@ -1054,6 +1096,7 @@ local function createGraphRooms(generateConfig)
     local shopRoomCount = generateConfig.shopRoomCount
     local hasMandatoryShop = generateConfig.shopRoomTemplateId ~= nil
     local normalRoomCount = hasMandatoryShop and not shopRoomCount and math.max(1, roomCount - 1) or roomCount
+    generateConfig.baseRoomLimit = normalRoomCount
     local endRoomCount = generateConfig.endRoomCount or (generateConfig.endRoomTemplateId and 1 or 0)
     local generatedRooms = {}
     local roomIds = {}
@@ -1093,7 +1136,7 @@ local function createGraphRooms(generateConfig)
                     placementConfig = copyTable(generateConfig)
                     placementConfig.useEndTemplateWeights = true
                 end
-                placementConfig = applyLargeRoomLimit(placementConfig, generatedRooms)
+                placementConfig = applyRoomSizePlan(placementConfig, generatedRooms)
                 local placement = RoomSelector.chooseTemplatePlacement(newRoomDoors, placementConfig, x, y, occupiedCells)
 
                 if placement then
@@ -1124,12 +1167,23 @@ local function createGraphRooms(generateConfig)
         end
     end
 
-    if battleRoomCount then
-        assert(#generatedRooms >= normalRoomCount, "Could not place requested battle rooms")
+    -- Fill any shortfall with small rooms when random expansion stalls.
+    local fallbackAttempts = 0
+    while #generatedRooms < normalRoomCount and fallbackAttempts < normalRoomCount * 16 do
+        fallbackAttempts = fallbackAttempts + 1
+        local existingCount = #generatedRooms
+        for index = 1, existingCount do
+            local room = generatedRooms[index]
+            for _, cell in ipairs(getOccupiedCells(room)) do
+                if #generatedRooms >= normalRoomCount then break end
+                addExitFromElongatedRoomCell(room, cell, generatedRooms, roomIds, occupiedCells, normalRoomCount)
+            end
+        end
     end
+    assert(#generatedRooms == normalRoomCount, "Could not place requested base rooms")
 
     addOppositeExitsForLargeRooms(generateConfig, generatedRooms, roomIds, occupiedCells)
-    ensureElongatedRoomsUseBothCells(generatedRooms, roomIds, occupiedCells)
+    ensureElongatedRoomsUseBothCells(generatedRooms, roomIds, occupiedCells, normalRoomCount)
 
     if hasMandatoryShop then
         local targetShopCount = shopRoomCount or 1
@@ -1156,6 +1210,7 @@ local function createGraphRooms(generateConfig)
             and not room.isCardRoom
             and not room.isHeartRoom
             and not room.isEndRoom
+            and not room.isBossRoom
             and not (room.pathEnd and getRoomConnectionCount(room) <= 1)
 
         if canAddExtraConnections then

@@ -21,7 +21,7 @@ local function mergeDefaults(defaults, overrides)
 end
 
 local DEFAULT_GAME_FLAGS = {
-    skipIntro = false,
+    skipIntro = true,
     log = false,
     logFloorGeneration = false,
     weaponTestLevel = false,
@@ -30,6 +30,7 @@ local DEFAULT_GAME_FLAGS = {
     brightness = 0,
     vsync = false,
     performanceOverlay = false,
+    debugCollisions = false, -- true para mostrar os desenhos de debug das colisoes.
     crt = {
         enabled = true,
         intensity = 0.9,
@@ -54,7 +55,7 @@ local DEFAULT_GAME_FLAGS = {
 GAME_FLAGS = mergeDefaults(DEFAULT_GAME_FLAGS, GAME_FLAGS)
 GAME_FLAGS.logFloorGeneration = GAME_FLAGS.logFloorGeneration or GAME_FLAGS.log == true
 
-GAME_VERSION = "0.1.23a"
+GAME_VERSION = "0.1.25a"
 
 function love.conf(t)
     local Levels = require("scripts/config/levels")

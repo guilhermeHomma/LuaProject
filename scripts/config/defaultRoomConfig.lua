@@ -86,8 +86,8 @@ DefaultRoomConfig.floorLevels = {
     createFloorLevel({
         id = 1,
         difficulty = 1,
-        roomCount = {min = 8, max = 12},
-        cardRoomCount = {min = 3, max = 3},
+        roomCount = {min = 4, max = 5},
+        cardRoomCount = {min = 1, max = 1},
         theme = "florest",
         startRoomUseDefault = true,
         grassConfig = {
@@ -100,8 +100,8 @@ DefaultRoomConfig.floorLevels = {
     createFloorLevel({
         id = 2,
         difficulty = 2,
-        roomCount = {min = 10, max = 14},
-        cardRoomCount = {min = 2, max = 3},
+        roomCount = {min = 5, max = 6},
+        cardRoomCount = {min = 1, max = 1},
         theme = "florest",
         startRoomUseDefault = true,
         grassConfig = {
@@ -114,8 +114,8 @@ DefaultRoomConfig.floorLevels = {
     createFloorLevel({
         id = 3,
         difficulty = 2,
-        roomCount = {min = 11, max = 15},
-        cardRoomCount = {min = 2, max = 3},
+        roomCount = {min = 5, max = 6},
+        cardRoomCount = {min = 1, max = 1},
         theme = "florest",
         startRoomUseDefault = true,
         grassConfig = {
@@ -128,8 +128,8 @@ DefaultRoomConfig.floorLevels = {
     createFloorLevel({
         id = 4,
         difficulty = 3,
-        roomCount = {min = 10, max = 14},
-        cardRoomCount = {min = 2, max = 3},
+        roomCount = {min = 6, max = 7},
+        cardRoomCount = {min = 1, max = 2},
         theme = "cave",
         cardRoomTheme = "florest",
         startRoomUseDefault = false,
@@ -143,8 +143,8 @@ DefaultRoomConfig.floorLevels = {
     createFloorLevel({
         id = 5,
         difficulty = 4,
-        roomCount = {min = 11, max = 15},
-        cardRoomCount = {min = 2, max = 3},
+        roomCount = {min = 6, max = 7},
+        cardRoomCount = {min = 2, max = 2},
         theme = "cave",
         cardRoomTheme = "florest",
         startRoomUseDefault = false,
@@ -158,8 +158,8 @@ DefaultRoomConfig.floorLevels = {
     createFloorLevel({
         id = 6,
         difficulty = 5,
-        roomCount = {min = 12, max = 16},
-        cardRoomCount = {min = 2, max = 3},
+        roomCount = {min = 7, max = 8},
+        cardRoomCount = {min = 2, max = 2},
         theme = "cave",
         cardRoomTheme = "florest",
         startRoomUseDefault = false,
@@ -228,6 +228,10 @@ DefaultRoomConfig.objectSpawnChancesByTemplate = {
         box = 0,
         chest = 0,
     },
+    boss_32x32 = {
+        box = 0,
+        chest = 0,
+    },
 }
 
 DefaultRoomConfig.floorPathTiles = {
@@ -278,11 +282,13 @@ DefaultRoomConfig.floorConfig = {
         heartRoomCooldownFloors = 2,
         heartRoomFreeVariantChance = 0.50,
         endRoomTemplateId = "end_32x32",
+        bossRoomTemplateId = "boss_32x32",
         cardRoomChance = 1.0,
         cardRoomCount = {min = 2, max = 3},
-        chestRoomChance = 0.02,
+        chestRoomChance = 0.04,
         largeRoomOppositeExit = true,
-        secondLargeRoomChance = 0.05,
+        largeRoomChance = 0.20,
+        elongatedRoomChance = 0.60,
         templateIds = DefaultRoomConfig.roomTemplateSets.florest.templateIds,
         templateWeights = DefaultRoomConfig.roomTemplateSets.florest.templateWeights,
         endRoomChance = 0.35,

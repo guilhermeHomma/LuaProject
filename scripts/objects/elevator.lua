@@ -3,22 +3,33 @@ Elevator.__index = Elevator
 
 local LightConfig = require("scripts/config/lightConfig")
 local Localization = require("scripts/managers/localization")
+local Geometry = require("scripts/objects/elevatorGeometry")
+local ElevatorSmoke = require("scripts/particles/elevatorSmoke")
+local startSound = love.audio.newSource("assets/sfx/elevator/start-elevator.mp3", "static")
+local loopSound = love.audio.newSource("assets/sfx/elevator/elevator-loop.mp3", "static")
 local unpackValues = table.unpack or unpack
 
-local image = love.graphics.newImage("assets/sprites/objects/elevator/elevator-structure.png")
-image:setFilter("nearest", "nearest")
-
-local sheetWidth, sheetHeight = image:getDimensions()
-local frameWidth = sheetWidth / 2
-local frameHeight = sheetHeight
+local images = {}
+for part, filename in pairs({back = "elevator-structure-back", front = "elevator-structure-front", ground = "elevator-ground", groundBack = "elevator-ground-back"}) do
+    images[part] = love.graphics.newImage("assets/sprites/objects/elevator/" .. filename .. ".png")
+    images[part]:setFilter("nearest", "nearest")
+end
+local frameWidth, frameHeight = images.back:getDimensions()
+local platformImage = love.graphics.newImage("assets/sprites/objects/elevator/elevator-sheet.png")
+platformImage:setFilter("nearest", "nearest")
+local platformQuads = {
+    love.graphics.newQuad(0, 0, 96, 88, 192, 88),
+    love.graphics.newQuad(96, 0, 96, 88, 192, 88),
+}
 local TILE_SIZE = 16
 local LIGHT_RADIUS = TILE_SIZE * 9
 local MAX_LIGHTS = 8
 local DEFAULT_COLLISION_PATTERN = {
-    "ccccc",
-    "cxxxc",
-    "cxxxc",
-    "cxxxc",
+    "cccccc",
+    "cxxxxc",
+    "cxxxxc",
+    "cxxxxc",
+    "cxxxxc",
 }
 
 local lightShader = love.graphics.newShader([[
@@ -59,9 +70,6 @@ vec4 effect(vec4 color, Image tex, vec2 texCoord, vec2 screenCoord) {
 }
 ]])
 
-local backQuad = love.graphics.newQuad(0, 0, frameWidth, frameHeight, sheetWidth, sheetHeight)
-local frontQuad = love.graphics.newQuad(frameWidth, 0, frameWidth, frameHeight, sheetWidth, sheetHeight)
-
 local function makePart(elevator, part)
     local isFrontPart = part == "front"
     return {
@@ -70,6 +78,7 @@ local function makePart(elevator, part)
         xWorld = elevator.xWorld,
         yWorld = elevator.yWorld,
         isAlive = true,
+        isGroundLayer = part == "groundBack",
         isXrayOccluder = isFrontPart,
         xraySortY = elevator.y,
         getXrayOccluderBox = function()
@@ -106,6 +115,11 @@ function Elevator:new(x, y, options)
     elevator.additiveStrengths = {}
     elevator.backPart = makePart(elevator, "back")
     elevator.frontPart = makePart(elevator, "front")
+    elevator.groundPart = makePart(elevator, "ground")
+    elevator.groundBackPart = makePart(elevator, "groundBack")
+    elevator.platformPart = makePart(elevator, "platform")
+    elevator.platformOffset = 0
+    elevator.platformTimer = 0
     return elevator
 end
 
@@ -191,15 +205,15 @@ function Elevator:isPlayerNear()
         return false
     end
 
-    local dx = Player.x - self.x
-    local dy = Player.y - self.y
-    local distanceLimit = self.interactionDistance or 34
-    return dx * dx + dy * dy <= distanceLimit * distanceLimit
+    return Geometry.contains(Geometry.interaction(self.x, self.y), Player.x, Player.y)
 end
 
 function Elevator:update(dt)
-    addToDrawQueue(self.y - TILE_SIZE * 3, self.backPart, false)
+    addToDrawQueue(self.y - 72, self.platformPart, false)
+    addToDrawQueue(self.y - TILE_SIZE * 5, self.groundBackPart, false)
+    addToDrawQueue(self.y - TILE_SIZE * 5, self.backPart, false)
     addToDrawQueue(self.y, self.frontPart, false)
+    addToDrawQueue(self.y - TILE_SIZE, self.groundPart, false)
 
     if self.triggered then
         return
@@ -211,8 +225,85 @@ function Elevator:update(dt)
     end
 end
 
+function Elevator:updateSequence(dt)
+    local center = Geometry.interaction(self.x, self.y)
+    local centerX, centerY = center.x + center.width / 2, center.y + center.height / 2
+    Player.velocityX, Player.velocityY = 0, 0
+    Player.gun.showGun = false
+    if self.sequencePhase == "centering" then
+        local dx, dy = centerX - Player.x, centerY - Player.y
+        local distance = math.sqrt(dx * dx + dy * dy)
+        local step = 45 * dt
+        if distance <= step then
+            Player.x, Player.y = centerX, centerY
+            self.sequencePhase = "starting"
+            self.startTimer = 0
+            self.riseTimer = 0
+            self.shakePhase = 0
+            self.startSound = startSound:clone()
+            self.startSound:setVolume(SOUND_VOLUME or 1)
+            self.startSound:play()
+            ElevatorSmoke.emit(self, 12)
+        else
+            Player.x, Player.y = Player.x + dx / distance * step, Player.y + dy / distance * step
+            Player.moveX, Player.moveY = dx, dy
+        end
+        Player:updateAnimation(dt, self.sequencePhase == "centering")
+    else
+        local riseDt = dt
+        if self.sequencePhase == "starting" then
+            self.startTimer = self.startTimer + dt
+            riseDt = math.max(0, self.startTimer - 0.5)
+            if self.startTimer >= 0.5 then
+                self.sequencePhase = "rising"
+            end
+        end
+        self.riseTimer = self.riseTimer + riseDt
+        if self.sequencePhase == "rising" and self.riseTimer < 3.6 then
+            if not self.loopSound then
+                self.loopSound = loopSound:clone()
+                self.nextLoopTime = 0
+            end
+            if self.riseTimer >= self.nextLoopTime then
+                self.loopSound:stop()
+                self.loopSound:setVolume(SOUND_VOLUME or 1)
+                self.loopSound:setPitch(0.97 + math.random() * 0.06)
+                self.loopSound:play()
+                self.nextLoopTime = (math.floor(self.riseTimer / 1.2) + 1) * 1.2
+            end
+        end
+        -- Fade the vibration out completely during the first second of ascent.
+        local shakeProgress = math.min(1, self.riseTimer)
+        local shakeAmplitude = 0.05 * (1 - shakeProgress * shakeProgress * (3 - 2 * shakeProgress))
+        local shakeHz = 1.5 + 1.5 * math.exp(-self.riseTimer * 2)
+        self.shakePhase = self.shakePhase + dt * shakeHz * math.pi * 2
+        self.shakeX = math.sin(self.shakePhase) * shakeAmplitude
+        self.shakeY = math.sin(self.shakePhase * 1.17) * shakeAmplitude
+        -- Integral of a smooth acceleration from 3 to 65 pixels/second over 2 seconds.
+        local t = math.min(self.riseTimer, 2)
+        local u = t / 2
+        self.platformOffset = 3 * t + 124 * (u ^ 3 - 0.5 * u ^ 4)
+            + math.max(0, self.riseTimer - 2) * 65
+        self.platformTimer = self.platformTimer + dt
+        Player.x, Player.y = centerX, centerY
+        Player:updateAnimation(dt, false)
+        Game.elevatorFadeAlpha = math.min(1, math.max(0, (self.riseTimer - 2.8) / 0.8))
+    end
+    if self.sequencePhase ~= "centering" then
+        Player.moveX, Player.moveY, Player.flipH = 0, 1, false
+    end
+    self:update(dt)
+    local playerSortY = self.sequencePhase == "rising" and centerY or Player.y
+    addToDrawQueue(playerSortY + 6, Player)
+    local finished = (Game.elevatorFadeAlpha or 0) >= 1
+    if finished and self.loopSound then
+        self.loopSound:stop()
+    end
+    return finished
+end
+
 function Elevator:getLightCenter()
-    return self.x, self.y - TILE_SIZE * 2
+    return self.x, self.y - TILE_SIZE * 2.5
 end
 
 function Elevator:getScreenLightCenter(source)
@@ -270,33 +361,48 @@ end
 function Elevator:keypressed(key)
     if key == "f" and not self.triggered and self:isPlayerNear() then
         self.triggered = true
-        if Game and Game.enterElevator then
-            Game:enterElevator()
-        end
+        self.sequencePhase = "centering"
+        Game.elevatorSequence = self
+        Game.elevatorFadeAlpha = 0
+        Game.textAlpha, Game.textAlphaTarget = 0, 0
     end
 end
 
 function Elevator:getXrayOccluderBox()
     return {
         x = self.x - frameWidth / 2,
-        y = self.y - frameHeight,
+        y = self.y - frameHeight + TILE_SIZE,
         width = frameWidth,
         height = frameHeight,
     }
 end
 
 function Elevator:drawXrayOccluder(part)
-    local quad = part == "front" and frontQuad or backQuad
+    local image = images[part]
     love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.draw(image, quad, self.x, self.y, 0, 1, 1, frameWidth / 2, frameHeight)
+    love.graphics.draw(image, self.x, self.y, 0, 1, 1, frameWidth / 2, frameHeight - TILE_SIZE)
 end
 
 function Elevator:drawPart(part)
-    local quad = part == "front" and frontQuad or backQuad
+    if part == "platform" then
+        local image = self.platformImage or platformImage
+        local quads = self.platformQuads or platformQuads
+        self:sendLightShader()
+        love.graphics.setShader(lightShader)
+        love.graphics.setColor(1, 1, 1, 1)
+        local frame = math.floor(self.platformTimer / 0.12) % #quads + 1
+        love.graphics.draw(image, quads[frame], self.x + (self.shakeX or 0), self.y + TILE_SIZE - self.platformOffset + (self.shakeY or 0), 0, 1, 1, 48, 88)
+        love.graphics.setShader()
+        return
+    end
+    self:drawStructureImage(images[part])
+end
+
+function Elevator:drawStructureImage(image)
     self:sendLightShader()
     love.graphics.setShader(lightShader)
     love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.draw(image, quad, self.x, self.y, 0, 1, 1, frameWidth / 2, frameHeight)
+    love.graphics.draw(image, self.x, self.y, 0, 1, 1, frameWidth / 2, frameHeight - TILE_SIZE)
     love.graphics.setShader()
 end
 

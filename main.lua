@@ -45,7 +45,7 @@ local fixedLayerCanvas = nil
 STATES = {mainMenu = 1, game = 2, gamePause = 3, gameDead = 4, gameIntro = 5, startLogo = 6, settings = 7, confirm = 8, floorIntro = 9}
 state = STATES.startLogo
 
-DEBUG = false
+DEBUG = GAME_FLAGS and GAME_FLAGS.debugCollisions == true or false
 FPS = false
 PERF.enabled = false
 

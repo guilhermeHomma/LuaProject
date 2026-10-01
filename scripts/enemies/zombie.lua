@@ -8,7 +8,7 @@ local Tilemap = require("scripts/tilemap")
 local EnemyDirector = require("scripts/enemies/enemyDirector")
 local whiteShader = love.graphics.newShader("scripts/shaders/whiteShader.glsl")
 local glitchShader = love.graphics.newShader("scripts/shaders/playerGlitch.glsl")
-local WalkParticle = require("scripts/particles/walkParticle")
+local WalkParticle = require("scripts/particles/walkDust")
 local DamageStretch = require("scripts/effects/damageStretch")
 local ZombieMouthConfig = require("scripts/enemies/zombieMouthConfig")
 local BloodPixel = require("scripts/particles/bloodPixel")
@@ -946,7 +946,7 @@ function Zombie:takeDamage(damage, dx, dy)
         local pitchMin = self.damageSoundPitchMin or 1
         local pitchMax = self.damageSoundPitchMax or 1.1
         local pitch = pitchMin + math.random() * (pitchMax - pitchMin)
-        playClonedSound(damageSoundBase, self.damageSoundVolume or 1, pitch * (GAME_PITCH or 1))
+        playClonedSound(damageSoundBase, (self.damageSoundVolume or 1) * 1.5, pitch * (GAME_PITCH or 1))
     end
 end
 
@@ -1047,11 +1047,10 @@ function Zombie:animate(startFrame, endFrame, dt)
                 end
 
                 if not self.skipWalkParticles and math.random() > 0.6 then
-                    local lifetime = math.random(45, 55) / 100
-                    local particle = WalkParticle:new(self.x, self.y, lifetime)
+                    local particle = WalkParticle:new(self.x, self.y)
                     table.insert(Game.particles, particle)
                     if math.random() > 0.5 then
-                        local particle = WalkParticle:new(self.x + 2, self.y + 1, lifetime)
+                        local particle = WalkParticle:new(self.x + 2, self.y + 1)
                         table.insert(Game.particles, particle)
                     end
                 end

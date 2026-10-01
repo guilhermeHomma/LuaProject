@@ -97,14 +97,11 @@ function Pole:drawXrayOccluder()
 end
 
 function Pole:draw()
-    local tileSet = TileSet:getTileSet()
-    local tileSize = TileSet.tileSize
-    local tilesetImage = TileSet.tilesetImage
     local config = LightConfig:getWorldLightConfig("pole") or poleLightConfig
     local anim = config.animation or animationConfig
 
     if not self.collider then
-        love.graphics.draw(tilesetImage, tileSet[5], self.xWorld, self.yWorld + 1, 0, 1, 1, tileSize/2, tileSize)
+        self:drawGroundBase(1)
     end
     love.graphics.draw(
         sprite,
